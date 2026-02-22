@@ -9,6 +9,7 @@ import {OrderType, TimeInForce} from "../../services/broker-account/broker-accou
 import {NullableString} from "../../utils/nullable-types";
 import {Check} from "../../utils/type-checking";
 import {IOptionsStrategyLegViewModel} from "../../models/options-strategy-leg.view-model.interface";
+import {useServices} from "../../hooks/use-services.hook";
 
 const ContentBox = styled.div`
     display: flex;
@@ -331,10 +332,12 @@ const ValueEditorComponent: React.FC<ValueEditorComponentProps> = observer((prop
 interface SendOrderDialogComponentProps {
     isOpen: boolean;
     strategy: IOptionsStrategyViewModel;
+    symbol: string;
     onDitDismiss: () => void;
 }
 
 export const SendOrderDialogComponent: React.FC<SendOrderDialogComponentProps> = observer((props) => {
+    const services = useServices();
     const [limitPrice, setLimitPrice] = React.useState<NullableString>(null);
     const [quantity, setQuantity] = React.useState<number>(1);
     const [orderType] = React.useState<OrderType>("Limit");
@@ -356,11 +359,44 @@ export const SendOrderDialogComponent: React.FC<SendOrderDialogComponentProps> =
             timeInForce: timeInForce
         }
 
+        const resolvedPrice = limitPrice ? parseFloat(limitPrice) : props.strategy.credit;
         if(limitPrice) {
-            orderParams.price = parseFloat(limitPrice);
+            orderParams.price = resolvedPrice;
         }
 
         await props.strategy.sendOrder(orderParams);
+
+        // Log the trade
+        const firstLeg = props.strategy.legs[0];
+        const dte = firstLeg?.option?.daysToExpiration ?? 0;
+        const icType = services.settings.strategyFilters.icType;
+
+        await services.tradeLog.logTrade({
+            symbol: props.symbol,
+            strategyName: props.strategy.strategyName,
+            dte,
+            credit: resolvedPrice,
+            maxProfit: props.strategy.maxProfit,
+            maxLoss: props.strategy.maxLoss,
+            pop: props.strategy.pop,
+            expectedValue: props.strategy.expectedValue,
+            alpha: props.strategy.alpha,
+            delta: props.strategy.delta,
+            theta: props.strategy.theta,
+            riskRewardRatio: props.strategy.riskRewardRatio,
+            quantity,
+            limitPrice: resolvedPrice,
+            bpe: props.strategy.maxLoss * quantity,
+            icType,
+            legs: props.strategy.legs.map(leg => ({
+                action: leg.legType,
+                optionType: leg.option.optionType,
+                strikePrice: leg.option.strikePrice,
+                expirationDate: leg.option.expirationDate,
+                midPrice: leg.option.midPrice,
+            })),
+        });
+
         props.onDitDismiss();
     }
 

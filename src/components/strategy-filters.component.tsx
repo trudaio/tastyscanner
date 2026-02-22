@@ -3,6 +3,7 @@ import { observer } from "mobx-react";
 import {useServices} from "../hooks/use-services.hook";
 import {IonChip, IonRadio, IonRadioGroup, IonRange, IonToggle} from "@ionic/react";
 import styled from "styled-components";
+import {IcType} from "../services/settings/settings.service.interface";
 
 const FiltersContainerBox = styled.div`
     display: flex;
@@ -251,6 +252,52 @@ export const StrategyFiltersComponent: React.FC = observer(() => {
                     After earnings
                 </IonRadio>
 
+            </ByEarningDateRadioGroupBox>
+
+            <SeparatorBox/>
+
+            <SingleValueEditorComponent label="Min POP (%)"
+                                        min={0}
+                                        max={90}
+                                        value={filters.minPop}
+                                        formatValue={value => value === 0 ? 'Off' : `${value}%`}
+                                        onValueChanged={value => filters.minPop = value}/>
+
+            <SeparatorBox/>
+
+            <SingleValueEditorComponent label="Min Expected Value ($/contract)"
+                                        min={-200}
+                                        max={200}
+                                        value={filters.minExpectedValue}
+                                        formatValue={value => value === 0 ? 'Off' : `${value > 0 ? '+' : ''}$${value}`}
+                                        onValueChanged={value => filters.minExpectedValue = value}/>
+
+            <SeparatorBox/>
+
+            <SingleValueEditorComponent label="Min Alpha (% of risk)"
+                                        min={-100}
+                                        max={100}
+                                        value={filters.minAlpha}
+                                        formatValue={value => value === 0 ? 'Off' : `${value > 0 ? '+' : ''}${value}%`}
+                                        onValueChanged={value => filters.minAlpha = value}/>
+
+            <SeparatorBox/>
+
+            <FilterLabelBox>
+                IC Type
+            </FilterLabelBox>
+
+            <ByEarningDateRadioGroupBox value={filters.icType}
+                                        onIonChange={e => filters.icType = e.detail.value as IcType}>
+                <IonRadio value={"symmetric"} labelPlacement="end">
+                    Symmetric — equal wings
+                </IonRadio>
+                <IonRadio value={"bullish"} labelPlacement="end">
+                    Bullish — wider put wing
+                </IonRadio>
+                <IonRadio value={"bearish"} labelPlacement="end">
+                    Bearish — wider call wing
+                </IonRadio>
             </ByEarningDateRadioGroupBox>
 
         </FiltersContainerBox>

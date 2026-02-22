@@ -10,6 +10,7 @@ import {IIronCondorAnalyticsService} from "./iron-condor-analytics/iron-condor-a
 import {IWatchlistDataService} from "./watchlist-data/watchlist-data.service.interface";
 import {ITradingDashboardService} from "./trading-dashboard/trading-dashboard.interface";
 import {IIronCondorSaviorService} from "./iron-condor-savior/iron-condor-savior.interface";
+import {ITradeLogService} from "./trade-log/trade-log.interface";
 
 export interface IServiceFactory {
     readonly tickers: ITickersService;
@@ -24,4 +25,5 @@ export interface IServiceFactory {
     readonly watchlistData: IWatchlistDataService;
     readonly tradingDashboard: ITradingDashboardService;
     readonly ironCondorSavior: IIronCondorSaviorService;
+    readonly tradeLog: ITradeLogService;
 }

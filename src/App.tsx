@@ -5,6 +5,7 @@ import Menu from './components/Menu';
 import Page from './pages/Page';
 import { DashboardPage } from './pages/DashboardPage';
 import { IronCondorSaviorPage } from './pages/IronCondorSaviorPage';
+import { KanbanPage } from './pages/KanbanPage';
 
 /* Core CSS required for Ionic components to work properly */
 import '@ionic/react/css/core.css';
@@ -59,6 +60,9 @@ const App: React.FC = () => {
             </Route>
             <Route path="/iron-condor-savior" exact={true}>
               <IronCondorSaviorPage />
+            </Route>
+            <Route path="/kanban" exact={true}>
+              <KanbanPage />
             </Route>
           </IonRouterOutlet>
 

@@ -6,5 +6,7 @@ export enum RawLocalStorageKeys {
     currentStrategyTab = "currentStrategyTab",
     strategyFilters = "strategyFilters",
     recentTickers = "recentTickers",
+    tradeLog = "tradeLog",
+    discordWebhookUrl = "discordWebhookUrl",
 }
 

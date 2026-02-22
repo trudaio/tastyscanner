@@ -14,6 +14,21 @@ export interface IOptionsStrategyViewModel {
     readonly theta: number;
     readonly legs: IOptionsStrategyLegViewModel[];
     readonly positionConflict: IPositionConflict | null;
+    /** Max profit per contract (credit × 100) */
+    readonly maxProfit: number;
+    /** Max loss per contract ((wingsWidth - credit) × 100) */
+    readonly maxLoss: number;
+    /**
+     * Expected Value per contract.
+     * EV = (POP/100 × maxProfit) - ((1 - POP/100) × maxLoss)
+     * Positive EV = trade has statistical edge.
+     */
+    readonly expectedValue: number;
+    /**
+     * Alpha = EV / maxLoss × 100 (EV as % of max risk).
+     * Measures return per unit of risk. Higher is better.
+     */
+    readonly alpha: number;
     sendOrder(options: IOptionsStrategySendOrderParams): Promise<void>;
 }
 

@@ -1,4 +1,4 @@
-import {ByEarningsDate, ISettingsService, IStrategyFiltersViewModel} from "./settings.service.interface";
+import {ByEarningsDate, IcType, ISettingsService, IStrategyFiltersViewModel} from "./settings.service.interface";
 import {makeObservable, observable, runInAction} from "mobx";
 import {ServiceBase} from "../service-base";
 import {IServiceFactory} from "../service-factory.interface";
@@ -22,7 +22,11 @@ export class StrategyFiltersModel implements IStrategyFiltersViewModel {
             | '_maxDaysToExpiration'
             | '_maxBidAskSpread'
             | '_wings'
-            | '_byEarningsDate'>(this, {
+            | '_byEarningsDate'
+            | '_minPop'
+            | '_minExpectedValue'
+            | '_minAlpha'
+            | '_icType'>(this, {
             _minDelta: observable.ref,
             _maxDelta: observable.ref,
             _maxRiskRewardRatio: observable.ref,
@@ -31,6 +35,10 @@ export class StrategyFiltersModel implements IStrategyFiltersViewModel {
             _maxBidAskSpread: observable.ref,
             _wings: observable.ref,
             _byEarningsDate: observable.ref,
+            _minPop: observable.ref,
+            _minExpectedValue: observable.ref,
+            _minAlpha: observable.ref,
+            _icType: observable.ref,
             lastUpdate: observable.ref
         })
     }
@@ -43,6 +51,10 @@ export class StrategyFiltersModel implements IStrategyFiltersViewModel {
     _wings: number[] = [5, 10];
     _maxBidAskSpread: number = 5;
     _byEarningsDate: ByEarningsDate = "all";
+    _minPop: number = 0;
+    _minExpectedValue: number = 0;
+    _minAlpha: number = 0;
+    _icType: IcType = "symmetric";
     lastUpdate: number = Date.now()
 
 
@@ -112,6 +124,34 @@ export class StrategyFiltersModel implements IStrategyFiltersViewModel {
 
     set byEarningsDate(value: ByEarningsDate) {
         this._setProperty("_byEarningsDate", value);
+    }
+
+    get minPop(): number {
+        return this._minPop;
+    }
+    set minPop(value: number) {
+        this._setProperty("_minPop", value);
+    }
+
+    get minExpectedValue(): number {
+        return this._minExpectedValue;
+    }
+    set minExpectedValue(value: number) {
+        this._setProperty("_minExpectedValue", value);
+    }
+
+    get minAlpha(): number {
+        return this._minAlpha;
+    }
+    set minAlpha(value: number) {
+        this._setProperty("_minAlpha", value);
+    }
+
+    get icType(): IcType {
+        return this._icType;
+    }
+    set icType(value: IcType) {
+        this._setProperty("_icType", value);
     }
 
     private _storedData: any = {};

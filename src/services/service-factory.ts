@@ -24,6 +24,8 @@ import {ITradingDashboardService} from "./trading-dashboard/trading-dashboard.in
 import {TradingDashboardService} from "./trading-dashboard/trading-dashboard.service";
 import {IIronCondorSaviorService} from "./iron-condor-savior/iron-condor-savior.interface";
 import {IronCondorSaviorService} from "./iron-condor-savior/iron-condor-savior.service";
+import {ITradeLogService} from "./trade-log/trade-log.interface";
+import {TradeLogService} from "./trade-log/trade-log.service";
 
 export class ServiceFactory implements IServiceFactory {
 
@@ -90,6 +92,11 @@ export class ServiceFactory implements IServiceFactory {
     private _ironCondorSavior: Lazy<IIronCondorSaviorService> = new Lazy<IIronCondorSaviorService>(() => new IronCondorSaviorService(this));
     get ironCondorSavior(): IIronCondorSaviorService {
         return this._ironCondorSavior.value;
+    }
+
+    private _tradeLog: Lazy<ITradeLogService> = new Lazy<ITradeLogService>(() => new TradeLogService(this));
+    get tradeLog(): ITradeLogService {
+        return this._tradeLog.value;
     }
 
 }

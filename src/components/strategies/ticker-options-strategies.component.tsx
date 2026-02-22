@@ -185,6 +185,7 @@ export const TickerOptionsStrategiesComponent: React.FC = observer(() => {
 
             {currentStrategy && <SendOrderDialogComponent isOpen={Boolean(currentStrategy)}
                                                           strategy={currentStrategy}
+                                                          symbol={ticker.symbol}
                                                           onDitDismiss={() => setCurrentStrategy(null)}/>}
         </IonTabs>
 

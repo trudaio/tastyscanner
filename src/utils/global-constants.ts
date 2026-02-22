@@ -1,0 +1,1 @@
+export const DELTA_SYMBOL = '\u0394';

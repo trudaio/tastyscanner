@@ -1,0 +1,570 @@
+{
+    "eventType": "Greeks",
+    "eventSymbol": ".NVDA260220P175",
+    "eventTime": 0,
+    "eventFlags": 0,
+    "index": 7589374410897752000,
+    "time": 1767038929020,
+    "sequence": 0,
+    "price": 5.09999856508286,
+    "volatility": 0.371598220468295,
+    "delta": -0.285255390796904,
+    "gamma": 0.01277131008357899,
+    "theta": -0.0851003181438622,
+    "rho": -0.0852298183463918,
+    "vega": 0.243076326940856
+}
+
+{
+    "eventType": "Quote",
+    "eventSymbol": ".GOOGL270115C285",
+    "eventTime": 0,
+    "sequence": 0,
+    "timeNanoPart": 0,
+    "bidTime": 0,
+    "bidExchangeCode": "A",
+    "bidPrice": 65.6,
+    "bidSize": 30,
+    "askTime": 0,
+    "askExchangeCode": "A",
+    "askPrice": 65.9,
+    "askSize": 30
+}
+
+{
+    "eventType": "Trade",
+    "eventSymbol": ".NVDA270115C200",
+    "eventTime": 0,
+    "time": 1767039464209,
+    "timeNanoPart": 0,
+    "sequence": 316,
+    "exchangeCode": "D",
+    "price": 32.7,
+    "change": -1.8,
+    "size": 1,
+    "dayId": 20451,
+    "dayVolume": 798,
+    "dayTurnover": 25975.77,
+    "tickDirection": "ZERO_UP",
+    "extendedTradingHours": false
+}
+
+{
+    "expiration-type": "Weekly",
+    "expiration-date": "2026-01-02",
+    "days-to-expiration": 4,
+    "settlement-type": "PM",
+    "strikes": [
+        {
+            "strike-price": "50.0",
+            "call": "NVDA  260102C00050000",
+            "call-streamer-symbol": ".NVDA260102C50",
+            "put": "NVDA  260102P00050000",
+            "put-streamer-symbol": ".NVDA260102P50"
+        },
+        {
+            "strike-price": "55.0",
+            "call": "NVDA  260102C00055000",
+            "call-streamer-symbol": ".NVDA260102C55",
+            "put": "NVDA  260102P00055000",
+            "put-streamer-symbol": ".NVDA260102P55"
+        },
+        {
+            "strike-price": "60.0",
+            "call": "NVDA  260102C00060000",
+            "call-streamer-symbol": ".NVDA260102C60",
+            "put": "NVDA  260102P00060000",
+            "put-streamer-symbol": ".NVDA260102P60"
+        },
+        {
+            "strike-price": "65.0",
+            "call": "NVDA  260102C00065000",
+            "call-streamer-symbol": ".NVDA260102C65",
+            "put": "NVDA  260102P00065000",
+            "put-streamer-symbol": ".NVDA260102P65"
+        },
+        {
+            "strike-price": "70.0",
+            "call": "NVDA  260102C00070000",
+            "call-streamer-symbol": ".NVDA260102C70",
+            "put": "NVDA  260102P00070000",
+            "put-streamer-symbol": ".NVDA260102P70"
+        },
+        {
+            "strike-price": "75.0",
+            "call": "NVDA  260102C00075000",
+            "call-streamer-symbol": ".NVDA260102C75",
+            "put": "NVDA  260102P00075000",
+            "put-streamer-symbol": ".NVDA260102P75"
+        },
+        {
+            "strike-price": "80.0",
+            "call": "NVDA  260102C00080000",
+            "call-streamer-symbol": ".NVDA260102C80",
+            "put": "NVDA  260102P00080000",
+            "put-streamer-symbol": ".NVDA260102P80"
+        },
+        {
+            "strike-price": "85.0",
+            "call": "NVDA  260102C00085000",
+            "call-streamer-symbol": ".NVDA260102C85",
+            "put": "NVDA  260102P00085000",
+            "put-streamer-symbol": ".NVDA260102P85"
+        },
+        {
+            "strike-price": "90.0",
+            "call": "NVDA  260102C00090000",
+            "call-streamer-symbol": ".NVDA260102C90",
+            "put": "NVDA  260102P00090000",
+            "put-streamer-symbol": ".NVDA260102P90"
+        },
+        {
+            "strike-price": "95.0",
+            "call": "NVDA  260102C00095000",
+            "call-streamer-symbol": ".NVDA260102C95",
+            "put": "NVDA  260102P00095000",
+            "put-streamer-symbol": ".NVDA260102P95"
+        },
+        {
+            "strike-price": "100.0",
+            "call": "NVDA  260102C00100000",
+            "call-streamer-symbol": ".NVDA260102C100",
+            "put": "NVDA  260102P00100000",
+            "put-streamer-symbol": ".NVDA260102P100"
+        },
+        {
+            "strike-price": "105.0",
+            "call": "NVDA  260102C00105000",
+            "call-streamer-symbol": ".NVDA260102C105",
+            "put": "NVDA  260102P00105000",
+            "put-streamer-symbol": ".NVDA260102P105"
+        },
+        {
+            "strike-price": "110.0",
+            "call": "NVDA  260102C00110000",
+            "call-streamer-symbol": ".NVDA260102C110",
+            "put": "NVDA  260102P00110000",
+            "put-streamer-symbol": ".NVDA260102P110"
+        },
+        {
+            "strike-price": "115.0",
+            "call": "NVDA  260102C00115000",
+            "call-streamer-symbol": ".NVDA260102C115",
+            "put": "NVDA  260102P00115000",
+            "put-streamer-symbol": ".NVDA260102P115"
+        },
+        {
+            "strike-price": "120.0",
+            "call": "NVDA  260102C00120000",
+            "call-streamer-symbol": ".NVDA260102C120",
+            "put": "NVDA  260102P00120000",
+            "put-streamer-symbol": ".NVDA260102P120"
+        },
+        {
+            "strike-price": "125.0",
+            "call": "NVDA  260102C00125000",
+            "call-streamer-symbol": ".NVDA260102C125",
+            "put": "NVDA  260102P00125000",
+            "put-streamer-symbol": ".NVDA260102P125"
+        },
+        {
+            "strike-price": "130.0",
+            "call": "NVDA  260102C00130000",
+            "call-streamer-symbol": ".NVDA260102C130",
+            "put": "NVDA  260102P00130000",
+            "put-streamer-symbol": ".NVDA260102P130"
+        },
+        {
+            "strike-price": "135.0",
+            "call": "NVDA  260102C00135000",
+            "call-streamer-symbol": ".NVDA260102C135",
+            "put": "NVDA  260102P00135000",
+            "put-streamer-symbol": ".NVDA260102P135"
+        },
+        {
+            "strike-price": "140.0",
+            "call": "NVDA  260102C00140000",
+            "call-streamer-symbol": ".NVDA260102C140",
+            "put": "NVDA  260102P00140000",
+            "put-streamer-symbol": ".NVDA260102P140"
+        },
+        {
+            "strike-price": "145.0",
+            "call": "NVDA  260102C00145000",
+            "call-streamer-symbol": ".NVDA260102C145",
+            "put": "NVDA  260102P00145000",
+            "put-streamer-symbol": ".NVDA260102P145"
+        },
+        {
+            "strike-price": "150.0",
+            "call": "NVDA  260102C00150000",
+            "call-streamer-symbol": ".NVDA260102C150",
+            "put": "NVDA  260102P00150000",
+            "put-streamer-symbol": ".NVDA260102P150"
+        },
+        {
+            "strike-price": "152.5",
+            "call": "NVDA  260102C00152500",
+            "call-streamer-symbol": ".NVDA260102C152.5",
+            "put": "NVDA  260102P00152500",
+            "put-streamer-symbol": ".NVDA260102P152.5"
+        },
+        {
+            "strike-price": "155.0",
+            "call": "NVDA  260102C00155000",
+            "call-streamer-symbol": ".NVDA260102C155",
+            "put": "NVDA  260102P00155000",
+            "put-streamer-symbol": ".NVDA260102P155"
+        },
+        {
+            "strike-price": "157.5",
+            "call": "NVDA  260102C00157500",
+            "call-streamer-symbol": ".NVDA260102C157.5",
+            "put": "NVDA  260102P00157500",
+            "put-streamer-symbol": ".NVDA260102P157.5"
+        },
+        {
+            "strike-price": "160.0",
+            "call": "NVDA  260102C00160000",
+            "call-streamer-symbol": ".NVDA260102C160",
+            "put": "NVDA  260102P00160000",
+            "put-streamer-symbol": ".NVDA260102P160"
+        },
+        {
+            "strike-price": "162.5",
+            "call": "NVDA  260102C00162500",
+            "call-streamer-symbol": ".NVDA260102C162.5",
+            "put": "NVDA  260102P00162500",
+            "put-streamer-symbol": ".NVDA260102P162.5"
+        },
+        {
+            "strike-price": "165.0",
+            "call": "NVDA  260102C00165000",
+            "call-streamer-symbol": ".NVDA260102C165",
+            "put": "NVDA  260102P00165000",
+            "put-streamer-symbol": ".NVDA260102P165"
+        },
+        {
+            "strike-price": "167.5",
+            "call": "NVDA  260102C00167500",
+            "call-streamer-symbol": ".NVDA260102C167.5",
+            "put": "NVDA  260102P00167500",
+            "put-streamer-symbol": ".NVDA260102P167.5"
+        },
+        {
+            "strike-price": "170.0",
+            "call": "NVDA  260102C00170000",
+            "call-streamer-symbol": ".NVDA260102C170",
+            "put": "NVDA  260102P00170000",
+            "put-streamer-symbol": ".NVDA260102P170"
+        },
+        {
+            "strike-price": "172.5",
+            "call": "NVDA  260102C00172500",
+            "call-streamer-symbol": ".NVDA260102C172.5",
+            "put": "NVDA  260102P00172500",
+            "put-streamer-symbol": ".NVDA260102P172.5"
+        },
+        {
+            "strike-price": "175.0",
+            "call": "NVDA  260102C00175000",
+            "call-streamer-symbol": ".NVDA260102C175",
+            "put": "NVDA  260102P00175000",
+            "put-streamer-symbol": ".NVDA260102P175"
+        },
+        {
+            "strike-price": "177.5",
+            "call": "NVDA  260102C00177500",
+            "call-streamer-symbol": ".NVDA260102C177.5",
+            "put": "NVDA  260102P00177500",
+            "put-streamer-symbol": ".NVDA260102P177.5"
+        },
+        {
+            "strike-price": "180.0",
+            "call": "NVDA  260102C00180000",
+            "call-streamer-symbol": ".NVDA260102C180",
+            "put": "NVDA  260102P00180000",
+            "put-streamer-symbol": ".NVDA260102P180"
+        },
+        {
+            "strike-price": "182.5",
+            "call": "NVDA  260102C00182500",
+            "call-streamer-symbol": ".NVDA260102C182.5",
+            "put": "NVDA  260102P00182500",
+            "put-streamer-symbol": ".NVDA260102P182.5"
+        },
+        {
+            "strike-price": "185.0",
+            "call": "NVDA  260102C00185000",
+            "call-streamer-symbol": ".NVDA260102C185",
+            "put": "NVDA  260102P00185000",
+            "put-streamer-symbol": ".NVDA260102P185"
+        },
+        {
+            "strike-price": "187.5",
+            "call": "NVDA  260102C00187500",
+            "call-streamer-symbol": ".NVDA260102C187.5",
+            "put": "NVDA  260102P00187500",
+            "put-streamer-symbol": ".NVDA260102P187.5"
+        },
+        {
+            "strike-price": "190.0",
+            "call": "NVDA  260102C00190000",
+            "call-streamer-symbol": ".NVDA260102C190",
+            "put": "NVDA  260102P00190000",
+            "put-streamer-symbol": ".NVDA260102P190"
+        },
+        {
+            "strike-price": "192.5",
+            "call": "NVDA  260102C00192500",
+            "call-streamer-symbol": ".NVDA260102C192.5",
+            "put": "NVDA  260102P00192500",
+            "put-streamer-symbol": ".NVDA260102P192.5"
+        },
+        {
+            "strike-price": "195.0",
+            "call": "NVDA  260102C00195000",
+            "call-streamer-symbol": ".NVDA260102C195",
+            "put": "NVDA  260102P00195000",
+            "put-streamer-symbol": ".NVDA260102P195"
+        },
+        {
+            "strike-price": "197.5",
+            "call": "NVDA  260102C00197500",
+            "call-streamer-symbol": ".NVDA260102C197.5",
+            "put": "NVDA  260102P00197500",
+            "put-streamer-symbol": ".NVDA260102P197.5"
+        },
+        {
+            "strike-price": "200.0",
+            "call": "NVDA  260102C00200000",
+            "call-streamer-symbol": ".NVDA260102C200",
+            "put": "NVDA  260102P00200000",
+            "put-streamer-symbol": ".NVDA260102P200"
+        },
+        {
+            "strike-price": "202.5",
+            "call": "NVDA  260102C00202500",
+            "call-streamer-symbol": ".NVDA260102C202.5",
+            "put": "NVDA  260102P00202500",
+            "put-streamer-symbol": ".NVDA260102P202.5"
+        },
+        {
+            "strike-price": "205.0",
+            "call": "NVDA  260102C00205000",
+            "call-streamer-symbol": ".NVDA260102C205",
+            "put": "NVDA  260102P00205000",
+            "put-streamer-symbol": ".NVDA260102P205"
+        },
+        {
+            "strike-price": "207.5",
+            "call": "NVDA  260102C00207500",
+            "call-streamer-symbol": ".NVDA260102C207.5",
+            "put": "NVDA  260102P00207500",
+            "put-streamer-symbol": ".NVDA260102P207.5"
+        },
+        {
+            "strike-price": "210.0",
+            "call": "NVDA  260102C00210000",
+            "call-streamer-symbol": ".NVDA260102C210",
+            "put": "NVDA  260102P00210000",
+            "put-streamer-symbol": ".NVDA260102P210"
+        },
+        {
+            "strike-price": "212.5",
+            "call": "NVDA  260102C00212500",
+            "call-streamer-symbol": ".NVDA260102C212.5",
+            "put": "NVDA  260102P00212500",
+            "put-streamer-symbol": ".NVDA260102P212.5"
+        },
+        {
+            "strike-price": "215.0",
+            "call": "NVDA  260102C00215000",
+            "call-streamer-symbol": ".NVDA260102C215",
+            "put": "NVDA  260102P00215000",
+            "put-streamer-symbol": ".NVDA260102P215"
+        },
+        {
+            "strike-price": "220.0",
+            "call": "NVDA  260102C00220000",
+            "call-streamer-symbol": ".NVDA260102C220",
+            "put": "NVDA  260102P00220000",
+            "put-streamer-symbol": ".NVDA260102P220"
+        },
+        {
+            "strike-price": "225.0",
+            "call": "NVDA  260102C00225000",
+            "call-streamer-symbol": ".NVDA260102C225",
+            "put": "NVDA  260102P00225000",
+            "put-streamer-symbol": ".NVDA260102P225"
+        },
+        {
+            "strike-price": "230.0",
+            "call": "NVDA  260102C00230000",
+            "call-streamer-symbol": ".NVDA260102C230",
+            "put": "NVDA  260102P00230000",
+            "put-streamer-symbol": ".NVDA260102P230"
+        },
+        {
+            "strike-price": "235.0",
+            "call": "NVDA  260102C00235000",
+            "call-streamer-symbol": ".NVDA260102C235",
+            "put": "NVDA  260102P00235000",
+            "put-streamer-symbol": ".NVDA260102P235"
+        },
+        {
+            "strike-price": "240.0",
+            "call": "NVDA  260102C00240000",
+            "call-streamer-symbol": ".NVDA260102C240",
+            "put": "NVDA  260102P00240000",
+            "put-streamer-symbol": ".NVDA260102P240"
+        },
+        {
+            "strike-price": "245.0",
+            "call": "NVDA  260102C00245000",
+            "call-streamer-symbol": ".NVDA260102C245",
+            "put": "NVDA  260102P00245000",
+            "put-streamer-symbol": ".NVDA260102P245"
+        },
+        {
+            "strike-price": "250.0",
+            "call": "NVDA  260102C00250000",
+            "call-streamer-symbol": ".NVDA260102C250",
+            "put": "NVDA  260102P00250000",
+            "put-streamer-symbol": ".NVDA260102P250"
+        },
+        {
+            "strike-price": "255.0",
+            "call": "NVDA  260102C00255000",
+            "call-streamer-symbol": ".NVDA260102C255",
+            "put": "NVDA  260102P00255000",
+            "put-streamer-symbol": ".NVDA260102P255"
+        },
+        {
+            "strike-price": "260.0",
+            "call": "NVDA  260102C00260000",
+            "call-streamer-symbol": ".NVDA260102C260",
+            "put": "NVDA  260102P00260000",
+            "put-streamer-symbol": ".NVDA260102P260"
+        },
+        {
+            "strike-price": "265.0",
+            "call": "NVDA  260102C00265000",
+            "call-streamer-symbol": ".NVDA260102C265",
+            "put": "NVDA  260102P00265000",
+            "put-streamer-symbol": ".NVDA260102P265"
+        },
+        {
+            "strike-price": "270.0",
+            "call": "NVDA  260102C00270000",
+            "call-streamer-symbol": ".NVDA260102C270",
+            "put": "NVDA  260102P00270000",
+            "put-streamer-symbol": ".NVDA260102P270"
+        },
+        {
+            "strike-price": "275.0",
+            "call": "NVDA  260102C00275000",
+            "call-streamer-symbol": ".NVDA260102C275",
+            "put": "NVDA  260102P00275000",
+            "put-streamer-symbol": ".NVDA260102P275"
+        },
+        {
+            "strike-price": "280.0",
+            "call": "NVDA  260102C00280000",
+            "call-streamer-symbol": ".NVDA260102C280",
+            "put": "NVDA  260102P00280000",
+            "put-streamer-symbol": ".NVDA260102P280"
+        },
+        {
+            "strike-price": "285.0",
+            "call": "NVDA  260102C00285000",
+            "call-streamer-symbol": ".NVDA260102C285",
+            "put": "NVDA  260102P00285000",
+            "put-streamer-symbol": ".NVDA260102P285"
+        },
+        {
+            "strike-price": "290.0",
+            "call": "NVDA  260102C00290000",
+            "call-streamer-symbol": ".NVDA260102C290",
+            "put": "NVDA  260102P00290000",
+            "put-streamer-symbol": ".NVDA260102P290"
+        },
+        {
+            "strike-price": "295.0",
+            "call": "NVDA  260102C00295000",
+            "call-streamer-symbol": ".NVDA260102C295",
+            "put": "NVDA  260102P00295000",
+            "put-streamer-symbol": ".NVDA260102P295"
+        },
+        {
+            "strike-price": "300.0",
+            "call": "NVDA  260102C00300000",
+            "call-streamer-symbol": ".NVDA260102C300",
+            "put": "NVDA  260102P00300000",
+            "put-streamer-symbol": ".NVDA260102P300"
+        },
+        {
+            "strike-price": "305.0",
+            "call": "NVDA  260102C00305000",
+            "call-streamer-symbol": ".NVDA260102C305",
+            "put": "NVDA  260102P00305000",
+            "put-streamer-symbol": ".NVDA260102P305"
+        },
+        {
+            "strike-price": "310.0",
+            "call": "NVDA  260102C00310000",
+            "call-streamer-symbol": ".NVDA260102C310",
+            "put": "NVDA  260102P00310000",
+            "put-streamer-symbol": ".NVDA260102P310"
+        },
+        {
+            "strike-price": "320.0",
+            "call": "NVDA  260102C00320000",
+            "call-streamer-symbol": ".NVDA260102C320",
+            "put": "NVDA  260102P00320000",
+            "put-streamer-symbol": ".NVDA260102P320"
+        },
+        {
+            "strike-price": "330.0",
+            "call": "NVDA  260102C00330000",
+            "call-streamer-symbol": ".NVDA260102C330",
+            "put": "NVDA  260102P00330000",
+            "put-streamer-symbol": ".NVDA260102P330"
+        },
+        {
+            "strike-price": "340.0",
+            "call": "NVDA  260102C00340000",
+            "call-streamer-symbol": ".NVDA260102C340",
+            "put": "NVDA  260102P00340000",
+            "put-streamer-symbol": ".NVDA260102P340"
+        },
+        {
+            "strike-price": "350.0",
+            "call": "NVDA  260102C00350000",
+            "call-streamer-symbol": ".NVDA260102C350",
+            "put": "NVDA  260102P00350000",
+            "put-streamer-symbol": ".NVDA260102P350"
+        },
+        {
+            "strike-price": "360.0",
+            "call": "NVDA  260102C00360000",
+            "call-streamer-symbol": ".NVDA260102C360",
+            "put": "NVDA  260102P00360000",
+            "put-streamer-symbol": ".NVDA260102P360"
+        },
+        {
+            "strike-price": "370.0",
+            "call": "NVDA  260102C00370000",
+            "call-streamer-symbol": ".NVDA260102C370",
+            "put": "NVDA  260102P00370000",
+            "put-streamer-symbol": ".NVDA260102P370"
+        },
+        {
+            "strike-price": "380.0",
+            "call": "NVDA  260102C00380000",
+            "call-streamer-symbol": ".NVDA260102C380",
+            "put": "NVDA  260102P00380000",
+            "put-streamer-symbol": ".NVDA260102P380"
+        }
+    ]
+}

@@ -13,7 +13,7 @@ import {
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type KanbanStatus = 'todo' | 'in-progress' | 'review' | 'done';
+export type KanbanStatus = 'backlog' | 'todo' | 'in-progress' | 'review' | 'done' | 'approved';
 export type KanbanPriority = 'high' | 'medium' | 'low';
 
 export interface KanbanCard {
@@ -31,6 +31,33 @@ export interface KanbanCard {
 const STORAGE_KEY = 'tasty-kanban-board';
 
 const DEFAULT_CARDS: KanbanCard[] = [
+    {
+        id: 'f-ibkr',
+        feature: 0,
+        title: 'Backlog — IBKR integration spike',
+        description: 'Research Interactive Brokers API (order workflow, auth, positions) to replace TastyTrade. Document connection flow + data mapping before implementation.',
+        status: 'backlog',
+        priority: 'high',
+        tags: ['research', 'api', 'ibkr'],
+    },
+    {
+        id: 'f-dcf',
+        feature: 0,
+        title: 'Backlog — DCF calculator',
+        description: 'Discounted Cash Flow module: inputs for revenue/FCF growth, discount rate, terminal value. Provide template + technical spec once docs arrive.',
+        status: 'backlog',
+        priority: 'medium',
+        tags: ['fundamentals', 'valuation', 'research'],
+    },
+    {
+        id: 'f-auth-self-serve',
+        feature: 0,
+        title: 'Backlog — Public app onboarding (self-serve auth)',
+        description: 'Expose public signup flow: user can enter client_id/client_secret, set password, email for recovery. Include secure storage + forgot-password flow.',
+        status: 'backlog',
+        priority: 'high',
+        tags: ['auth', 'public-app', 'onboarding'],
+    },
     {
         id: 'f2',
         feature: 2,
@@ -84,6 +111,15 @@ const DEFAULT_CARDS: KanbanCard[] = [
         status: 'todo',
         priority: 'medium',
         tags: ['page', 'UI'],
+    },
+    {
+        id: 'f-ui-fix-desktop',
+        feature: 0,
+        title: 'UI polish — cards layout (desktop)',
+        description: 'Fix Iron Condor cards overlapping on desktop: consistent widths, spacing, warnings, table alignment. Urgent for release.',
+        status: 'todo',
+        priority: 'high',
+        tags: ['UI', 'desktop', 'urgent'],
     },
     {
         id: 'f1',
@@ -189,14 +225,11 @@ const kanbanStore = new KanbanStore();
 
 const BoardBox = styled.div`
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 16px;
     padding: 16px;
     min-height: 100%;
 
-    @media (max-width: 900px) {
-        grid-template-columns: repeat(2, 1fr);
-    }
     @media (max-width: 560px) {
         grid-template-columns: 1fr;
     }
@@ -278,17 +311,21 @@ const FeatureBadge = styled(IonBadge)`
 // ─── Column config ────────────────────────────────────────────────────────────
 
 const COLUMNS: { status: KanbanStatus; label: string; color: string; icon: string }[] = [
-    { status: 'todo', label: 'To Do', color: '#607d8b', icon: timeOutline },
+    { status: 'backlog', label: 'Backlog', color: '#607d8b', icon: timeOutline },
+    { status: 'todo', label: 'To Do', color: '#546e7a', icon: timeOutline },
     { status: 'in-progress', label: 'In Progress', color: '#ff9800', icon: constructOutline },
     { status: 'review', label: 'Review', color: '#9c27b0', icon: eyeOutline },
     { status: 'done', label: 'Done ✅', color: '#4caf50', icon: checkmarkCircleOutline },
+    { status: 'approved', label: 'Testat de Cătălin', color: '#00bfa5', icon: checkmarkCircleOutline },
 ];
 
 const STATUS_LABELS: Record<KanbanStatus, string> = {
+    'backlog': 'Backlog',
     'todo': 'To Do',
     'in-progress': 'In Progress',
     'review': 'Review',
     'done': 'Done',
+    'approved': 'Testat de Cătălin'
 };
 
 // ─── Components ───────────────────────────────────────────────────────────────

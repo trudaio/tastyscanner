@@ -1,3 +1,6 @@
+import { makeObservable, observable, action, runInAction } from 'mobx';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../firebase';
 import { ITickersService } from "./tickers/tickers.service.interface";
 import {IServiceFactory} from "./service-factory.interface";
 import {Lazy} from "../utils/lazy";
@@ -26,12 +29,55 @@ import {IIronCondorSaviorService} from "./iron-condor-savior/iron-condor-savior.
 import {IronCondorSaviorService} from "./iron-condor-savior/iron-condor-savior.service";
 import {ITradeLogService} from "./trade-log/trade-log.interface";
 import {TradeLogService} from "./trade-log/trade-log.service";
+import type { ICredentialsService } from './credentials/credentials.service.interface';
+import { CredentialsService } from './credentials/credentials.service';
 
 export class ServiceFactory implements IServiceFactory {
 
-    constructor() {
+    isInitialized = false;
 
+    private _clientSecret = '';
+    private _refreshToken = '';
+
+    constructor() {
+        makeObservable(this, {
+            isInitialized: observable,
+            initialize: action,
+        });
+
+        // Auto-initialize when Firebase auth confirms user
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                this.credentials.loadCredentials()
+                    .then((creds) => {
+                        if (creds) {
+                            this.initialize(creds.clientSecret, creds.refreshToken);
+                        }
+                    })
+                    .catch((err: unknown) => {
+                        console.error('Failed to load credentials:', err);
+                    });
+            } else {
+                runInAction(() => {
+                    this.isInitialized = false;
+                });
+            }
+        });
+    }
+
+    initialize(clientSecret: string, refreshToken: string): void {
+        this._clientSecret = clientSecret;
+        this._refreshToken = refreshToken;
+        this._marketDataProvider = new Lazy<IMarketDataProviderService>(
+            () => new MarketDataProviderService(this._clientSecret, this._refreshToken)
+        );
+        this.isInitialized = true;
         this._brokerAccount.forceInit();
+    }
+
+    private _credentials: Lazy<ICredentialsService> = new Lazy<ICredentialsService>(() => new CredentialsService());
+    get credentials(): ICredentialsService {
+        return this._credentials.value;
     }
 
     private _tickers: Lazy<ITickersService> = new Lazy<ITickersService>(() => new TickersService(this));
@@ -44,7 +90,9 @@ export class ServiceFactory implements IServiceFactory {
         return this._settings.value;
     }
 
-    private _marketDataProvider: Lazy<IMarketDataProviderService> = new Lazy<IMarketDataProviderService>(() => new MarketDataProviderService());
+    private _marketDataProvider: Lazy<IMarketDataProviderService> = new Lazy<IMarketDataProviderService>(
+        () => new MarketDataProviderService(this._clientSecret, this._refreshToken)
+    );
     get marketDataProvider(): IMarketDataProviderService {
         return this._marketDataProvider.value;
     }

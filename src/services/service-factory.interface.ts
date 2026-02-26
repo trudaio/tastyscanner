@@ -11,6 +11,7 @@ import {IWatchlistDataService} from "./watchlist-data/watchlist-data.service.int
 import {ITradingDashboardService} from "./trading-dashboard/trading-dashboard.interface";
 import {IIronCondorSaviorService} from "./iron-condor-savior/iron-condor-savior.interface";
 import {ITradeLogService} from "./trade-log/trade-log.interface";
+import type { ICredentialsService } from './credentials/credentials.service.interface';
 
 export interface IServiceFactory {
     readonly tickers: ITickersService;
@@ -26,4 +27,7 @@ export interface IServiceFactory {
     readonly tradingDashboard: ITradingDashboardService;
     readonly ironCondorSavior: IIronCondorSaviorService;
     readonly tradeLog: ITradeLogService;
+    readonly credentials: ICredentialsService;
+    readonly isInitialized: boolean;
+    initialize(clientSecret: string, refreshToken: string): void;
 }

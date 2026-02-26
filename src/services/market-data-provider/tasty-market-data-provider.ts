@@ -22,11 +22,11 @@ import {Check} from "../../utils/type-checking";
 
 
 export class TastyMarketDataProvider implements IMarketDataProviderService {
-    constructor() {
+    constructor(clientSecret: string, refreshToken: string) {
         this._tastyClient = new TastyTradeClient({
             ...TastyTradeClient.ProdConfig,
-            clientSecret: import.meta.env.VITE_CLIENT_SECRET,
-            refreshToken: import.meta.env.VITE_REFRESH_TOKEN,
+            clientSecret,
+            refreshToken,
             oauthScopes: ['read', 'trade']
         });
         this._tastyClient.quoteStreamer.addEventListener(this._streamEventHandler);

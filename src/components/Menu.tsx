@@ -21,7 +21,7 @@ import {WatchListsComponent} from "./watch-lists.component";
 import {TickerMenuItemComponent} from "./ticker-menu-item.component";
 import {BrokerAccountsComponent} from "./broker-accounts.component";
 import {AccountInfoComponent} from "./account-info.component";
-import {filterOutline, gridOutline, shieldOutline, statsChartOutline} from "ionicons/icons";
+import {filterOutline, gridOutline, openOutline, personCircleOutline, shieldOutline} from "ionicons/icons";
 import {useHistory} from "react-router-dom";
 
 const MenuHeaderContentBox = styled.div`
@@ -141,9 +141,14 @@ const Menu: React.FC = observer(() => {
           <IonLabel>🛟 IC Savior</IonLabel>
         </IonItem>
 
-        <IonItem button routerLink="/kanban" routerDirection="forward" lines="none">
-          <IonIcon slot="start" icon={statsChartOutline} />
-          <IonLabel>🗂 Dev Board</IonLabel>
+        <IonItem button href={import.meta.env.VITE_TASKYMASTER_URL ?? 'http://localhost:5174'} target="_blank" rel="noopener noreferrer" lines="none">
+          <IonIcon slot="start" icon={openOutline} />
+          <IonLabel>🗂 Dev Board ↗</IonLabel>
+        </IonItem>
+
+        <IonItem button routerLink="/account" routerDirection="forward" lines="none">
+          <IonIcon slot="start" icon={personCircleOutline} />
+          <IonLabel>My Account</IonLabel>
         </IonItem>
 
         <WatchListsLabelBox>

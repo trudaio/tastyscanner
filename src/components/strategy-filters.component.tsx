@@ -293,10 +293,10 @@ export const StrategyFiltersComponent: React.FC = observer(() => {
                     Symmetric — equal wings
                 </IonRadio>
                 <IonRadio value={"bullish"} labelPlacement="end">
-                    Bullish — wider put wing
+                    Bullish — put Δ &gt; call Δ (net ≥ +5)
                 </IonRadio>
                 <IonRadio value={"bearish"} labelPlacement="end">
-                    Bearish — wider call wing
+                    Bearish — call Δ &gt; put Δ (net ≤ −5)
                 </IonRadio>
             </ByEarningDateRadioGroupBox>
 

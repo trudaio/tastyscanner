@@ -5,7 +5,7 @@ import Menu from './components/Menu';
 import Page from './pages/Page';
 import { DashboardPage } from './pages/DashboardPage';
 import { IronCondorSaviorPage } from './pages/IronCondorSaviorPage';
-import { KanbanPage } from './pages/KanbanPage';
+import { AccountPage } from './pages/AccountPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { OnboardingPage } from './pages/OnboardingPage';
@@ -95,8 +95,8 @@ const App: React.FC = () => {
                                 <Route path="/iron-condor-savior" exact={true}>
                                     <IronCondorSaviorPage />
                                 </Route>
-                                <Route path="/kanban" exact={true}>
-                                    <KanbanPage />
+                                <Route path="/account" exact={true}>
+                                    <AccountPage />
                                 </Route>
                             </IonRouterOutlet>
                         </SplitPaneBox>

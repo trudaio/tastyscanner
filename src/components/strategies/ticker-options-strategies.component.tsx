@@ -156,7 +156,7 @@ export const TickerOptionsStrategiesComponent: React.FC = observer(() => {
             <IonTab tab={CONDORS_TAB}>
                 <IonPage id={CONDORS_TAB}>
                     <TabHeaderComponent title={"Iron Condors"}/>
-                    <IonContent>
+                    <IonContent style={{ '--padding-bottom': '160px' } as React.CSSProperties}>
                         <IronCondorsComponent ticker={ticker} onTrade={onTrade} />
                     </IonContent>
                 </IonPage>
@@ -166,7 +166,7 @@ export const TickerOptionsStrategiesComponent: React.FC = observer(() => {
             <IonTab tab={PUT_CREDIT_SPREAD_TAB}>
                 <IonPage id={PUT_CREDIT_SPREAD_TAB}>
                     <TabHeaderComponent title={"PUT Credit Spreads"}/>
-                    <IonContent>
+                    <IonContent style={{ '--padding-bottom': '160px' } as React.CSSProperties}>
                         <PutCreditSpreadsComponent ticker={ticker} onTrade={onTrade}/>
                     </IonContent>
                 </IonPage>
@@ -176,7 +176,7 @@ export const TickerOptionsStrategiesComponent: React.FC = observer(() => {
             <IonTab tab={CALL_CREDIT_SPREAD_TAB}>
                 <IonPage id={CALL_CREDIT_SPREAD_TAB}>
                     <TabHeaderComponent title={"CALL Credit Spreads"}/>
-                    <IonContent>
+                    <IonContent style={{ '--padding-bottom': '160px' } as React.CSSProperties}>
                         <CallCreditSpreadsComponent ticker={ticker} onTrade={onTrade}/>
                     </IonContent>
                 </IonPage>

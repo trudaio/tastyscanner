@@ -7,7 +7,6 @@ import {
     IonCardTitle,
     IonCardContent,
     IonItem,
-    IonLabel,
     IonInput,
     IonButton,
     IonText,
@@ -26,7 +25,7 @@ const CenteredContainer = styled.div`
 `;
 
 const StyledCard = styled(IonCard)`
-    max-width: 400px;
+    max-width: 440px;
     width: 100%;
 `;
 
@@ -62,10 +61,7 @@ export const RegisterPage: React.FC = () => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${idToken}`,
                 },
-                body: JSON.stringify({
-                    clientSecret,
-                    refreshToken,
-                }),
+                body: JSON.stringify({ clientSecret, refreshToken }),
             });
 
             if (!response.ok) {
@@ -92,57 +88,73 @@ export const RegisterPage: React.FC = () => {
                         </IonCardHeader>
                         <IonCardContent>
                             <form onSubmit={handleSubmit}>
+
                                 <IonItem>
-                                    <IonLabel slot="label">Email</IonLabel>
                                     <IonInput
+                                        label="Email"
+                                        labelPlacement="stacked"
                                         type="email"
+                                        placeholder="your@email.com"
                                         value={email}
                                         onIonInput={e => setEmail(e.detail.value ?? '')}
                                         required
                                     />
                                 </IonItem>
+
                                 <IonItem>
-                                    <IonLabel slot="label">Password</IonLabel>
                                     <IonInput
+                                        label="Password"
+                                        labelPlacement="stacked"
                                         type="password"
+                                        placeholder="Min. 6 characters"
                                         value={password}
                                         onIonInput={e => setPassword(e.detail.value ?? '')}
                                         required
                                     />
                                 </IonItem>
+
                                 <IonItem>
-                                    <IonLabel slot="label">Confirm Password</IonLabel>
                                     <IonInput
+                                        label="Confirm Password"
+                                        labelPlacement="stacked"
                                         type="password"
+                                        placeholder="Repeat password"
                                         value={confirmPassword}
                                         onIonInput={e => setConfirmPassword(e.detail.value ?? '')}
                                         required
                                     />
                                 </IonItem>
+
                                 <IonItem>
-                                    <IonLabel slot="label">TastyTrade Client Secret</IonLabel>
                                     <IonInput
+                                        label="TastyTrade Client Secret"
+                                        labelPlacement="stacked"
                                         type="password"
+                                        placeholder="Paste your client_secret here"
                                         value={clientSecret}
                                         onIonInput={e => setClientSecret(e.detail.value ?? '')}
                                         required
                                     />
                                     <IonNote slot="helper">
-                                        Found in TastyTrade API settings under API tokens
+                                        TastyTrade → Settings → API Tokens → Client Secret
                                     </IonNote>
                                 </IonItem>
+
                                 <IonItem>
-                                    <IonLabel slot="label">TastyTrade Refresh Token</IonLabel>
                                     <IonInput
+                                        label="TastyTrade Refresh Token"
+                                        labelPlacement="stacked"
                                         type="password"
+                                        placeholder="Paste your refresh_token here"
                                         value={refreshToken}
                                         onIonInput={e => setRefreshToken(e.detail.value ?? '')}
                                         required
                                     />
                                     <IonNote slot="helper">
-                                        Found in TastyTrade API settings — generate a remember token to get a refresh token
+                                        TastyTrade → Settings → API Tokens → Remember Token (refresh token)
                                     </IonNote>
                                 </IonItem>
+
                                 <IonButton
                                     expand="block"
                                     type="submit"
@@ -151,11 +163,13 @@ export const RegisterPage: React.FC = () => {
                                 >
                                     {loading ? 'Creating account...' : 'Register'}
                                 </IonButton>
+
                                 {error && (
                                     <IonText color="danger">
                                         <p>{error}</p>
                                     </IonText>
                                 )}
+
                                 <IonButton fill="clear" expand="block" routerLink="/login">
                                     Already have an account? Login
                                 </IonButton>

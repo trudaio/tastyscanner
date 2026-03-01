@@ -4,9 +4,12 @@
     "build": "tsc",
     "serve": "npm run build && firebase emulators:start --only functions",
     "deploy": "firebase deploy --only functions",
-    "logs": "firebase functions:log"
+    "logs": "firebase functions:log",
+    "create-superadmin": "node scripts/create-superadmin.js"
   },
-  "engines": { "node": "20" },
+  "engines": {
+    "node": "20"
+  },
   "main": "lib/index.js",
   "dependencies": {
     "cors": "^2.8.5",
@@ -18,7 +21,7 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/node": "^20.0.0",
-    "typescript": "^5.9.0"
+    "typescript": "^5.9.3"
   },
   "private": true
 }

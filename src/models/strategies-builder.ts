@@ -79,26 +79,41 @@ export class StrategiesBuilder {
         const filters = this.services.settings.strategyFilters;
         const icType = filters.icType;
 
-        const maxIndex = Math.min(putsDeltas.length, callsDeltas.length) - 1;
+        // Build (shortPutDelta, shortCallDelta) pairs according to IC type bias:
+        //   symmetric → matched indices (same delta both sides, delta-neutral)
+        //   bullish   → all combos where shortPutDelta − shortCallDelta ≥ 5 (net positive delta ≥ +5)
+        //   bearish   → all combos where shortCallDelta − shortPutDelta ≥ 5 (net negative delta ≤ −5)
+        const deltaPairs: Array<[number, number]> = [];
+        if (icType === 'symmetric') {
+            const maxIndex = Math.min(putsDeltas.length, callsDeltas.length) - 1;
+            for (let i = 0; i <= maxIndex; i++) {
+                deltaPairs.push([putsDeltas[i], callsDeltas[i]]);
+            }
+        } else {
+            for (const pd of putsDeltas) {
+                for (const cd of callsDeltas) {
+                    if (icType === 'bullish' && pd - cd >= 5) deltaPairs.push([pd, cd]);
+                    if (icType === 'bearish' && cd - pd >= 5) deltaPairs.push([pd, cd]);
+                }
+            }
+        }
 
-        for(let i = 0; i <= maxIndex; i++) {
-            const stoPuts = puts[putsDeltas[i].toString()];
-            const stoCalls = calls[callsDeltas[i].toString()];
-            for(const stoPut of stoPuts) {
-                for(const stoCall of stoCalls) {
-                    for(const baseWing of this.wings) {
+        for (const [putDelta, callDelta] of deltaPairs) {
+            const stoPuts = puts[putDelta.toString()];
+            const stoCalls = calls[callDelta.toString()];
+            if (!stoPuts || !stoCalls) continue;
+
+            for (const stoPut of stoPuts) {
+                for (const stoCall of stoCalls) {
+                    for (const baseWing of this.wings) {
                         const { putWing, callWing } = this._getAsymmetricWings(baseWing, icType);
 
                         const btoPut = this.expiration.getStrikeByPrice(stoPut.strike.strikePrice - putWing)?.put;
-                        if(!btoPut) {
-                            continue;
-                        }
+                        if (!btoPut) continue;
                         const btoCall = this.expiration.getStrikeByPrice(stoCall.strike.strikePrice + callWing)?.call;
-                        if(!btoCall) {
-                            continue;
-                        }
-                        if(this._hasGoodBidAskSpread([btoPut, stoPut, stoCall, btoCall])) {
-                            // Use the max wing width as the wingsWidth (for BPE/risk display)
+                        if (!btoCall) continue;
+
+                        if (this._hasGoodBidAskSpread([btoPut, stoPut, stoCall, btoCall])) {
                             const maxWing = Math.max(putWing, callWing);
                             condors.push(new IronCondorModel(maxWing, btoPut, stoPut, stoCall, btoCall, this.services));
                         }

@@ -52,10 +52,20 @@ export class ServiceFactory implements IServiceFactory {
                     .then((creds) => {
                         if (creds) {
                             this.initialize(creds.clientSecret, creds.refreshToken);
+                        } else {
+                            // No credentials saved on server — try env var fallback
+                            const cs = import.meta.env.VITE_CLIENT_SECRET;
+                            const rt = import.meta.env.VITE_REFRESH_TOKEN;
+                            if (cs && rt) this.initialize(cs, rt);
                         }
                     })
                     .catch((err: unknown) => {
-                        console.error('Failed to load credentials:', err);
+                        console.warn('Failed to load credentials from server (CORS/network), falling back to env vars:', err);
+                        const cs = import.meta.env.VITE_CLIENT_SECRET;
+                        const rt = import.meta.env.VITE_REFRESH_TOKEN;
+                        if (cs && rt) {
+                            this.initialize(cs, rt);
+                        }
                     });
             } else {
                 runInAction(() => {
@@ -72,7 +82,17 @@ export class ServiceFactory implements IServiceFactory {
             () => new MarketDataProviderService(this._clientSecret, this._refreshToken)
         );
         this.isInitialized = true;
-        this._brokerAccount.forceInit();
+        // Reload accounts using the new credentials (handles race condition where
+        // BrokerAccountService was created before credentials were available)
+        void this._brokerAccount.value.reload();
+        // Start WebSocket on the new provider; once connected re-subscribe the
+        // current ticker so quotes/greeks stream immediately
+        void this.marketDataProvider.start().then(() => {
+            const symbol = this.tickers.currentTicker?.symbol;
+            if (symbol) {
+                void this.tickers.setCurrentTicker(symbol);
+            }
+        });
     }
 
     private _credentials: Lazy<ICredentialsService> = new Lazy<ICredentialsService>(() => new CredentialsService());

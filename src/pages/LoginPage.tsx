@@ -7,7 +7,6 @@ import {
     IonCardTitle,
     IonCardContent,
     IonItem,
-    IonLabel,
     IonInput,
     IonButton,
     IonText,
@@ -63,18 +62,22 @@ export const LoginPage: React.FC = () => {
                         <IonCardContent>
                             <form onSubmit={handleSubmit}>
                                 <IonItem>
-                                    <IonLabel slot="label">Email</IonLabel>
                                     <IonInput
+                                        label="Email"
+                                        labelPlacement="stacked"
                                         type="email"
+                                        placeholder="your@email.com"
                                         value={email}
                                         onIonInput={e => setEmail(e.detail.value ?? '')}
                                         required
                                     />
                                 </IonItem>
                                 <IonItem>
-                                    <IonLabel slot="label">Password</IonLabel>
                                     <IonInput
+                                        label="Password"
+                                        labelPlacement="stacked"
                                         type="password"
+                                        placeholder="Your password"
                                         value={password}
                                         onIonInput={e => setPassword(e.detail.value ?? '')}
                                         required

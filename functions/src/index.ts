@@ -30,6 +30,11 @@ interface IValidateResponse {
   message: string;
 }
 
+interface IAuthContext {
+  uid: string;
+  isSuperadmin: boolean;
+}
+
 function getEncryptionKey(): string {
   const key = process.env.ENCRYPTION_KEY;
   if (!key || key.length !== 64) {
@@ -62,23 +67,27 @@ function decrypt(encryptedWithTag: string, ivHex: string, key: string): string {
   return decrypted;
 }
 
-async function getAuthenticatedUid(req: express.Request): Promise<string> {
+async function getAuthContext(req: express.Request): Promise<IAuthContext> {
   const authHeader = req.headers['authorization'];
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     throw new Error('UNAUTHENTICATED');
   }
   const idToken = authHeader.substring(7);
   const decoded = await admin.auth().verifyIdToken(idToken);
-  return decoded.uid;
+  return {
+    uid: decoded.uid,
+    isSuperadmin: decoded['role'] === 'superadmin',
+  };
 }
 
 const app = express();
 app.use(cors({ origin: true }));
 app.use(express.json());
 
+// POST /api/credentials — save (or update) TastyTrade credentials for the caller
 app.post('/api/credentials', async (req: express.Request, res: express.Response) => {
   try {
-    const uid = await getAuthenticatedUid(req);
+    const { uid } = await getAuthContext(req);
     const body = req.body as ICredentialsRequest;
     if (!body.clientSecret || !body.refreshToken) {
       res.status(400).json({ error: 'clientSecret and refreshToken are required' });
@@ -109,10 +118,16 @@ app.post('/api/credentials', async (req: express.Request, res: express.Response)
   }
 });
 
+// GET /api/credentials — retrieve decrypted credentials
+// Superadmin can request any user's credentials via ?uid=<targetUid>
 app.get('/api/credentials', async (req: express.Request, res: express.Response) => {
   try {
-    const uid = await getAuthenticatedUid(req);
-    const doc = await db.collection('credentials').doc(uid).get();
+    const { uid, isSuperadmin } = await getAuthContext(req);
+    const targetUid =
+      isSuperadmin && typeof req.query['uid'] === 'string'
+        ? req.query['uid']
+        : uid;
+    const doc = await db.collection('credentials').doc(targetUid).get();
     if (!doc.exists) {
       res.status(404).json({ error: 'No credentials found' });
       return;
@@ -134,9 +149,10 @@ app.get('/api/credentials', async (req: express.Request, res: express.Response) 
   }
 });
 
+// POST /api/validate-credentials — check credentials format
 app.post('/api/validate-credentials', async (req: express.Request, res: express.Response) => {
   try {
-    await getAuthenticatedUid(req);
+    await getAuthContext(req);
     const body = req.body as ICredentialsRequest;
     const valid = typeof body.clientSecret === 'string' && body.clientSecret.length >= 10
       && typeof body.refreshToken === 'string' && body.refreshToken.length >= 50;

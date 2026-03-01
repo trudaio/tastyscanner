@@ -49,4 +49,5 @@ export interface IBrokerAccountService {
     readonly accounts: IBrokerAccountViewModel[];
     readonly currentAccount: IBrokerAccountViewModel | null;
     setCurrentAccount(accountNumber: string): void;
+    reload(): Promise<void>;
 }

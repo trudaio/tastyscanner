@@ -34,6 +34,24 @@ export class BrokerAccountService extends ServiceBase implements IBrokerAccountS
     accounts: BrokerAccountModel[] = [];
 
     currentAccount: IBrokerAccountViewModel | null = null;
+
+    async reload(): Promise<void> {
+        const accounts = await this.services.marketDataProvider.getAccounts();
+        runInAction(() => {
+            this.accounts = accounts.map(acc => new BrokerAccountModel(acc.accountNumber, this.services));
+            const lastUsedAccount = this.services.rawLocalStorage.getItem(RawLocalStorageKeys.currentBrokerAccount);
+            if (lastUsedAccount) {
+                this.setCurrentAccount(lastUsedAccount);
+            }
+            if (!this.currentAccount) {
+                this.currentAccount = this.accounts[0] ?? null;
+            }
+            if (this.currentAccount) {
+                this.currentAccount.loadBalances();
+            }
+        });
+    }
+
     setCurrentAccount(accountNumber: string): void {
         runInAction(() => {
             this.currentAccount = this.accounts.find(acc => acc.accountNumber === accountNumber) ?? null;

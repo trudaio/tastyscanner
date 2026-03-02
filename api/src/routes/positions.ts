@@ -48,53 +48,24 @@ positionsRouter.get('/', (_req: Request, res: Response): void => {
 
 /**
  * GET /api/positions/greeks
- * Returns portfolio-level Greeks (delta, theta, gamma, vega) aggregated across all open positions.
- * Requires DxLink WebSocket data — waits up to 6s for initial stream.
+ * Returns portfolio-level Greeks (delta, theta, gamma, vega).
+ * NOTE: DxLink WebSocket streaming is not available in REST-only mode (Node.js 22 compatible).
+ * All greek values are 0. A streaming upgrade path can be added later via a separate process.
  */
 positionsRouter.get('/greeks', (_req: Request, res: Response): void => {
     void (async () => {
         try {
             const positions = await tastyClient.getPositions();
 
-            if (positions.length === 0) {
-                res.json({
-                    account_number: tastyClient.accountNumber,
-                    delta: 0, theta: 0, gamma: 0, vega: 0,
-                    positions_with_greeks: 0,
-                    total_positions: 0,
-                });
-                return;
-            }
-
-            // CRITICAL: Use streamer-symbol (dxFeed format) for WebSocket subscriptions
-            const symbols = positions.map(p => p.streamerSymbol);
-            await tastyClient.subscribeAndWaitForGreeks(symbols, 6000);
-
-            let totalDelta = 0, totalTheta = 0, totalGamma = 0, totalVega = 0;
-            let positionsWithGreeks = 0;
-
-            for (const pos of positions) {
-                const g = tastyClient.greeks[pos.streamerSymbol];
-                if (!g) continue;
-
-                // quantityDirection is "Long" | "Short" string — NEVER parseFloat()
-                const dir = pos.quantityDirection === 'Short' ? -1 : 1;
-                const multiplier = pos.quantity * dir * 100; // options contract multiplier
-
-                totalDelta += (g.delta ?? 0) * multiplier;
-                totalTheta += (g.theta ?? 0) * multiplier;
-                totalGamma += (g.gamma ?? 0) * multiplier;
-                totalVega += (g.vega ?? 0) * multiplier;
-                positionsWithGreeks++;
-            }
-
             res.json({
                 account_number: tastyClient.accountNumber,
-                delta: parseFloat(totalDelta.toFixed(2)),
-                theta: parseFloat(totalTheta.toFixed(2)),
-                gamma: parseFloat(totalGamma.toFixed(4)),
-                vega: parseFloat(totalVega.toFixed(2)),
-                positions_with_greeks: positionsWithGreeks,
+                streaming_available: false,
+                note: 'DxLink WebSocket streaming disabled — REST-only mode for Node.js 22 compatibility. Greeks are all 0.',
+                delta: 0,
+                theta: 0,
+                gamma: 0,
+                vega: 0,
+                positions_with_greeks: 0,
                 total_positions: positions.length,
             });
         } catch (err) {

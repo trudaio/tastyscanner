@@ -1,41 +1,21 @@
 /**
- * TastyApiClient — Backend singleton wrapping @tastytrade/api
+ * TastyRestClient — Direct REST API client for TastyTrade
  *
- * Differs from the frontend TastyMarketDataProvider:
- * - No MobX (plain JS objects for streamer data)
- * - No Firebase auth
- * - Uses process.env instead of import.meta.env
- * - Persists DxLink WebSocket for the server lifetime
+ * Uses native Node.js fetch (v18+) instead of @tastytrade/api.
+ * Reason: @tastytrade/api imports @dxfeed/dxlink-api which has a named-export
+ * incompatibility with Node.js 22 strict ESM (DXLinkFeed not found error).
+ *
+ * This client implements:
+ *   - OAuth 2.0 refresh_token grant → Bearer access token (auto-refreshed)
+ *   - All REST endpoints needed by the API routes
+ *
+ * Streaming (DxLink WebSocket / greeks) is NOT implemented here.
+ * The /positions/greeks endpoint returns zeroes until a streaming solution is added.
  */
 
-import { WebSocket as WS } from 'ws';
-import TastyTradeClient, { MarketDataSubscriptionType } from '@tastytrade/api';
-
-// Polyfill WebSocket for Node.js environments that don't have it globally
-if (!globalThis.WebSocket) {
-    // @ts-expect-error — WS type differs slightly from browser WebSocket
-    globalThis.WebSocket = WS;
-}
+const BASE_URL = 'https://api.tastyworks.com';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-export interface GreeksData {
-    delta: number;
-    theta: number;
-    gamma: number;
-    vega: number;
-    volatility: number;
-    rho: number;
-}
-
-export interface QuoteData {
-    bidPrice: number;
-    askPrice: number;
-}
-
-export interface TradeData {
-    price: number;
-}
 
 export interface AccountBalances {
     netLiquidity: number;
@@ -94,128 +74,133 @@ export interface OrderData {
     legs: OrderLegData[];
 }
 
-// ─── Client Class ─────────────────────────────────────────────────────────────
+// Streamer data — stays empty in REST-only mode
+export interface GreeksData {
+    delta: number; theta: number; gamma: number; vega: number; volatility: number; rho: number;
+}
+export interface QuoteData { bidPrice: number; askPrice: number; }
+export interface TradeData { price: number; }
 
-class TastyApiClient {
-    private _client: TastyTradeClient | null = null;
-    private _connectionPromise: Promise<void> | null = null;
+// ─── TastyRest Client ─────────────────────────────────────────────────────────
+
+class TastyRestClient {
+    private _accessToken = '';
+    private _tokenExpiry = 0;
     private _initialized = false;
 
-    // Streamer data caches — updated directly by WebSocket events (no MobX needed)
-    public quotes: Record<string, QuoteData> = {};
-    public trades: Record<string, TradeData> = {};
-    public greeks: Record<string, GreeksData> = {};
+    /** Streamer caches — always empty in REST-only mode */
+    public readonly quotes: Record<string, QuoteData> = {};
+    public readonly trades: Record<string, TradeData> = {};
+    public readonly greeks: Record<string, GreeksData> = {};
 
     public accountNumber = '';
+    public readonly streamingAvailable = false;
+
+    // ─── Auth ────────────────────────────────────────────────────────────────
+
+    private async refreshAccessToken(): Promise<void> {
+        const clientSecret = process.env['TASTY_CLIENT_SECRET'];
+        const refreshToken = process.env['TASTY_REFRESH_TOKEN'];
+
+        if (!clientSecret || !refreshToken) {
+            throw new Error(
+                'Missing TASTY_CLIENT_SECRET or TASTY_REFRESH_TOKEN. ' +
+                'Copy api/.env.example to api/.env and fill in your TastyTrade credentials.'
+            );
+        }
+
+        const res = await fetch(`${BASE_URL}/oauth/token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                refresh_token: refreshToken,
+                client_secret: clientSecret,
+                scope: 'read trade',
+                grant_type: 'refresh_token',
+            }),
+        });
+
+        if (!res.ok) {
+            const body = await res.text();
+            throw new Error(`TastyTrade OAuth token refresh failed [${res.status}]: ${body}`);
+        }
+
+        const data = await res.json() as { access_token: string; expires_in: number };
+        this._accessToken = data.access_token;
+        // Expire 60s early to avoid edge-case expiry mid-request
+        this._tokenExpiry = Date.now() + (data.expires_in - 60) * 1000;
+        console.log(`[TastyRest] Access token refreshed, expires in ${data.expires_in}s`);
+    }
+
+    private async getToken(): Promise<string> {
+        if (!this._accessToken || Date.now() >= this._tokenExpiry) {
+            await this.refreshAccessToken();
+        }
+        return this._accessToken;
+    }
+
+    // ─── HTTP Helpers ─────────────────────────────────────────────────────────
+
+    private async get<T>(path: string, queryParams?: Record<string, string | number>): Promise<T> {
+        const token = await this.getToken();
+        let url = `${BASE_URL}${path}`;
+        if (queryParams && Object.keys(queryParams).length > 0) {
+            const qs = new URLSearchParams(
+                Object.entries(queryParams).map(([k, v]) => [k, String(v)] as [string, string])
+            );
+            url += `?${qs.toString()}`;
+        }
+
+        const res = await fetch(url, {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            },
+        });
+
+        if (!res.ok) {
+            const body = await res.text();
+            throw new Error(`TastyTrade API [${res.status}] ${path}: ${body}`);
+        }
+
+        const json = await res.json() as Record<string, unknown>;
+        return this.extractData(json) as T;
+    }
+
+    /**
+     * Mirror the extractResponseData logic from @tastytrade/api:
+     * - json.data.items → return items array
+     * - json.data       → return data object
+     * - else            → return json as-is
+     */
+    private extractData(json: Record<string, unknown>): unknown {
+        const dataField = json['data'] as Record<string, unknown> | undefined;
+        if (dataField && Array.isArray(dataField['items'])) return dataField['items'];
+        if (dataField !== undefined) return dataField;
+        return json;
+    }
+
+    // ─── Public API ────────────────────────────────────────────────────────────
 
     async initialize(): Promise<void> {
         if (this._initialized) return;
 
-        const clientSecret = process.env.TASTY_CLIENT_SECRET;
-        const refreshToken = process.env.TASTY_REFRESH_TOKEN;
+        await this.refreshAccessToken();
+        console.log('[TastyRest] OAuth token acquired');
 
-        if (!clientSecret || !refreshToken) {
-            throw new Error(
-                'Missing TASTY_CLIENT_SECRET or TASTY_REFRESH_TOKEN env vars. ' +
-                'Copy api/.env.example to api/.env and fill in your credentials.'
-            );
-        }
-
-        this._client = new TastyTradeClient({
-            ...TastyTradeClient.ProdConfig,
-            clientSecret,
-            refreshToken,
-            oauthScopes: ['read', 'trade'],
-        });
-
-        // Streamer event handler — plain object mutation, no MobX
-        this._client.quoteStreamer.addEventListener((records: unknown[]) => {
-            for (const rec of records) {
-                const r = rec as Record<string, unknown>;
-                const sym = r['eventSymbol'] as string;
-                if (!sym) continue;
-
-                if (r['eventType'] === 'Quote') {
-                    this.quotes[sym] = {
-                        bidPrice: (r['bidPrice'] as number) ?? 0,
-                        askPrice: (r['askPrice'] as number) ?? 0,
-                    };
-                } else if (r['eventType'] === 'Trade') {
-                    this.trades[sym] = { price: (r['price'] as number) ?? 0 };
-                } else if (r['eventType'] === 'Greeks') {
-                    this.greeks[sym] = {
-                        delta: (r['delta'] as number) ?? 0,
-                        theta: (r['theta'] as number) ?? 0,
-                        gamma: (r['gamma'] as number) ?? 0,
-                        vega: (r['vega'] as number) ?? 0,
-                        volatility: (r['volatility'] as number) ?? 0,
-                        rho: (r['rho'] as number) ?? 0,
-                    };
-                }
-            }
-        });
-
-        // Connect DxLink WebSocket — persistent for server lifetime
-        console.log('[TastyAPI] Connecting DxLink WebSocket...');
-        this._connectionPromise = this._client.quoteStreamer.connect();
-        await this._connectionPromise;
-        console.log('[TastyAPI] DxLink WebSocket connected');
-
-        // Discover account number
-        const accs = await this._client.accountsAndCustomersService.getCustomerAccounts() as unknown[];
-        if (accs.length > 0) {
-            const acc = accs[0] as { account: { 'account-number': string } };
-            this.accountNumber = acc.account['account-number'];
-            console.log(`[TastyAPI] Account: ${this.accountNumber}`);
-        } else {
+        const accounts = await this.get<Array<{ account: { 'account-number': string } }>>('/customers/me/accounts');
+        if (!accounts || accounts.length === 0) {
             throw new Error('No TastyTrade accounts found for these credentials');
         }
+        this.accountNumber = accounts[0].account['account-number'];
+        console.log(`[TastyRest] Account: ${this.accountNumber}`);
 
         this._initialized = true;
     }
 
-    get raw(): TastyTradeClient {
-        if (!this._client) throw new Error('TastyApiClient not initialized. Call initialize() first.');
-        return this._client;
-    }
-
-    async waitForConnection(): Promise<void> {
-        if (this._connectionPromise) await this._connectionPromise;
-    }
-
-    subscribe(symbols: string[]): void {
-        if (symbols.length === 0) return;
-        this._client?.quoteStreamer.subscribe(symbols, [
-            MarketDataSubscriptionType.Quote,
-            MarketDataSubscriptionType.Trade,
-            MarketDataSubscriptionType.Greeks,
-        ]);
-    }
-
-    unsubscribe(symbols: string[]): void {
-        if (symbols.length > 0) this._client?.quoteStreamer.unsubscribe(symbols);
-    }
-
-    /**
-     * Subscribe to symbols and wait until we receive greeks for at least one of them,
-     * or until timeoutMs elapses. Useful for on-demand greeks in route handlers.
-     */
-    async subscribeAndWaitForGreeks(symbols: string[], timeoutMs = 6000): Promise<void> {
-        if (symbols.length === 0) return;
-        this.subscribe(symbols);
-        const deadline = Date.now() + timeoutMs;
-        while (Date.now() < deadline) {
-            if (symbols.some(s => this.greeks[s] !== undefined)) return;
-            await new Promise(r => setTimeout(r, 200));
-        }
-    }
-
-    // ─── REST API Wrappers ─────────────────────────────────────────────────────
-
     async getAccountBalances(): Promise<AccountBalances> {
-        const b = await this.raw.balancesAndPositionsService.getAccountBalanceValues(
-            this.accountNumber
-        ) as Record<string, string>;
+        const b = await this.get<Record<string, string>>(`/accounts/${this.accountNumber}/balances`);
         return {
             netLiquidity: parseFloat(b['net-liquidating-value'] ?? '0'),
             optionBuyingPower: parseFloat(b['derivative-buying-power'] ?? '0'),
@@ -228,14 +213,12 @@ class TastyApiClient {
     }
 
     async getPositions(): Promise<PositionData[]> {
-        const raw = await this.raw.balancesAndPositionsService.getPositionsList(
-            this.accountNumber, {}
-        ) as unknown[];
+        const raw = await this.get<Array<Record<string, string>>>(`/accounts/${this.accountNumber}/positions`);
 
-        return (raw as Array<Record<string, string>>)
+        return (raw ?? [])
             .filter(p => p['instrument-type'] === 'Equity Option')
             .map(p => {
-                const symbol = p['symbol'];
+                const symbol = p['symbol'] ?? '';
                 const streamerSymbol = p['streamer-symbol'] ?? symbol;
                 const quantity = Math.abs(parseFloat(p['quantity'] ?? '0'));
                 const quantityDirection: 'Long' | 'Short' =
@@ -245,7 +228,6 @@ class TastyApiClient {
                 let optionType: 'C' | 'P' = 'C';
                 let expirationDate = '';
 
-                // Parse TastyTrade option symbol format: ROOT  YYMMDDCP00STRIKE
                 const m = symbol.match(/(\w+)\s*(\d{6})([CP])(\d+)/);
                 if (m) {
                     const [, , dateStr, type, strikeStr] = m;
@@ -257,7 +239,7 @@ class TastyApiClient {
                 return {
                     symbol,
                     streamerSymbol,
-                    underlyingSymbol: p['underlying-symbol'],
+                    underlyingSymbol: p['underlying-symbol'] ?? '',
                     quantity,
                     quantityDirection,
                     strikePrice,
@@ -268,49 +250,26 @@ class TastyApiClient {
     }
 
     async getTransactions(queryParams: Record<string, string | number> = {}): Promise<TransactionData[]> {
-        const raw = await this.raw.transactionsService.getAccountTransactions(
-            this.accountNumber, queryParams
-        ) as unknown[];
-        return (raw as Array<Record<string, unknown>>).map(tx => ({
-            id: tx['id'] as number | string,
-            'transaction-type': (tx['transaction-type'] as string) ?? '',
-            'transaction-sub-type': (tx['transaction-sub-type'] as string) ?? '',
-            'executed-at': (tx['executed-at'] as string) ?? '',
-            action: (tx['action'] as string) ?? '',
-            symbol: (tx['symbol'] as string) ?? '',
-            'underlying-symbol': (tx['underlying-symbol'] as string) ?? '',
-            quantity: (tx['quantity'] as string) ?? '0',
-            price: (tx['price'] as string) ?? '0',
-            value: (tx['value'] as string) ?? '0',
-            'net-value': (tx['net-value'] as string) ?? (tx['value'] as string) ?? '0',
-            'value-effect': (tx['value-effect'] as string) ?? '',
-            'order-id': tx['order-id'] as number | undefined,
-            'clearing-fees': (tx['clearing-fees'] as string) ?? '0',
-            'regulatory-fees': (tx['regulatory-fees'] as string) ?? '0',
-            'proprietary-index-option-fees': (tx['proprietary-index-option-fees'] as string) ?? '0',
-            commission: (tx['commission'] as string) ?? '0',
-        }));
-    }
+        const raw = await this.get<Array<Record<string, unknown>>>(`/accounts/${this.accountNumber}/transactions`, queryParams);
 
-    async getOrders(queryParams: Record<string, string | number> = {}): Promise<OrderData[]> {
-        const raw = await this.raw.orderService.getOrders(
-            this.accountNumber, queryParams
-        ) as unknown[];
-        return (raw as Array<Record<string, unknown>>).map(o => ({
-            id: o['id'] as number | string,
-            'received-at': o['received-at'] as string | undefined,
-            'created-at': o['created-at'] as string | undefined,
-            status: (o['status'] as string) ?? '',
-            'underlying-symbol': o['underlying-symbol'] as string | undefined,
-            legs: ((o['legs'] as unknown[]) ?? []).map(l => {
-                const leg = l as Record<string, unknown>;
-                return {
-                    symbol: (leg['symbol'] as string) ?? '',
-                    action: (leg['action'] as string) ?? '',
-                    quantity: (leg['quantity'] as number) ?? 0,
-                    fills: leg['fills'] as OrderLegData['fills'],
-                };
-            }),
+        return (raw ?? []).map(tx => ({
+            id: tx['id'] as number | string,
+            'transaction-type': String(tx['transaction-type'] ?? ''),
+            'transaction-sub-type': String(tx['transaction-sub-type'] ?? ''),
+            'executed-at': String(tx['executed-at'] ?? ''),
+            action: String(tx['action'] ?? ''),
+            symbol: String(tx['symbol'] ?? ''),
+            'underlying-symbol': String(tx['underlying-symbol'] ?? ''),
+            quantity: String(tx['quantity'] ?? '0'),
+            price: String(tx['price'] ?? '0'),
+            value: String(tx['value'] ?? '0'),
+            'net-value': String(tx['net-value'] ?? tx['value'] ?? '0'),
+            'value-effect': String(tx['value-effect'] ?? ''),
+            'order-id': tx['order-id'] as number | undefined,
+            'clearing-fees': String(tx['clearing-fees'] ?? '0'),
+            'regulatory-fees': String(tx['regulatory-fees'] ?? '0'),
+            'proprietary-index-option-fees': String(tx['proprietary-index-option-fees'] ?? '0'),
+            commission: String(tx['commission'] ?? '0'),
         }));
     }
 
@@ -344,7 +303,37 @@ class TastyApiClient {
         }
         return all;
     }
+
+    async getOrders(queryParams: Record<string, string | number> = {}): Promise<OrderData[]> {
+        const raw = await this.get<Array<Record<string, unknown>>>(`/accounts/${this.accountNumber}/orders`, queryParams);
+
+        return (raw ?? []).map(o => ({
+            id: o['id'] as number | string,
+            'received-at': o['received-at'] as string | undefined,
+            'created-at': o['created-at'] as string | undefined,
+            status: String(o['status'] ?? ''),
+            'underlying-symbol': o['underlying-symbol'] as string | undefined,
+            legs: ((o['legs'] as unknown[]) ?? []).map(l => {
+                const leg = l as Record<string, unknown>;
+                return {
+                    symbol: String(leg['symbol'] ?? ''),
+                    action: String(leg['action'] ?? ''),
+                    quantity: Number(leg['quantity'] ?? 0),
+                    fills: leg['fills'] as OrderLegData['fills'],
+                };
+            }),
+        }));
+    }
+
+    /**
+     * No-op in REST-only mode — streaming not available.
+     * Resolves immediately; greeks map stays empty.
+     */
+    async subscribeAndWaitForGreeks(_symbols: string[], _timeoutMs?: number): Promise<void> {
+        // DxLink streaming is disabled in REST-only mode.
+        // /positions/greeks will return zeroes.
+    }
 }
 
-// Module-level singleton — created once when the server starts
-export const tastyClient = new TastyApiClient();
+// Module-level singleton
+export const tastyClient = new TastyRestClient();

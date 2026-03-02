@@ -9,7 +9,10 @@
     "preview": "vite preview",
     "test.e2e": "cypress run",
     "test.unit": "vitest",
-    "lint": "eslint"
+    "lint": "eslint",
+    "api:dev": "cd api && npm run dev",
+    "api:build": "cd api && npm run build",
+    "api:install": "cd api && npm install"
   },
   "dependencies": {
     "@capacitor/app": "8.0.0",

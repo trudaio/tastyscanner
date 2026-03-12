@@ -63,6 +63,7 @@ export const AllExpirationsStrategiesComponent: React.FC<AllExpirationsStrategie
                 expiration={expiration}
                 strategies={expiration.key === expandedExpirationKey ? expandedExpirationStrategies : getExpirationStrategies(expiration)}
                 onTrade={props.onTrade}
+                positionCount={services.positions.getPositionsForExpiration(expiration.expirationDate).length}
                 earningsDatePosition={getEarningsDateRenderPosition(props.ticker, expirations, index)}/>)}
         </IonAccordionGroup>
     )

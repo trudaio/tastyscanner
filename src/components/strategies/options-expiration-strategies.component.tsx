@@ -55,7 +55,16 @@ const StrategiesCountBox = styled(IonChip)`
     min-width: 50px;
     text-align: center;
     justify-content: center;
-    
+
+`
+
+const PositionsCountBox = styled(IonChip)`
+    --background: var(--ion-color-warning);
+    --color: var(--ion-color-warning-contrast);
+    min-width: 36px;
+    text-align: center;
+    justify-content: center;
+    font-size: 0.85em;
 `
 
 const StrategiesBox = styled.div`
@@ -77,6 +86,7 @@ interface OptionsExpirationStrategiesComponentProps {
     strategies: IOptionsStrategyViewModel[];
     earningsDatePosition: EarningsDatePositionEnum;
     onTrade: (strategy: IOptionsStrategyViewModel) => void;
+    positionCount: number;
 }
 export const OptionsExpirationStrategiesComponent: React.FC<OptionsExpirationStrategiesComponentProps> = observer((props) => {
 
@@ -102,6 +112,11 @@ export const OptionsExpirationStrategiesComponent: React.FC<OptionsExpirationStr
                         <StrategiesCountBox>
                             {strategies.length}
                         </StrategiesCountBox>
+                        {props.positionCount > 0 && (
+                            <PositionsCountBox>
+                                {props.positionCount}
+                            </PositionsCountBox>
+                        )}
                         <IonLabel>
                             {label}
                         </IonLabel>

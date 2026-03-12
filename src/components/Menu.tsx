@@ -21,7 +21,7 @@ import {WatchListsComponent} from "./watch-lists.component";
 import {TickerMenuItemComponent} from "./ticker-menu-item.component";
 import {BrokerAccountsComponent} from "./broker-accounts.component";
 import {AccountInfoComponent} from "./account-info.component";
-import {filterOutline, gridOutline, personCircleOutline, shieldOutline} from "ionicons/icons";
+import {bookOutline, filterOutline, gridOutline, personCircleOutline, shieldOutline} from "ionicons/icons";
 import {useHistory} from "react-router-dom";
 
 const MenuHeaderContentBox = styled.div`
@@ -152,7 +152,12 @@ const Menu: React.FC = observer(() => {
         </IonItem>
 
 
-<IonItem button routerLink="/account" routerDirection="forward" lines="none">
+<IonItem button routerLink="/guide" routerDirection="forward" lines="none">
+          <IonIcon slot="start" icon={bookOutline} />
+          <IonLabel>Greeks Guide</IonLabel>
+        </IonItem>
+
+        <IonItem button routerLink="/account" routerDirection="forward" lines="none">
           <IonIcon slot="start" icon={personCircleOutline} />
           <IonLabel>My Account</IonLabel>
         </IonItem>

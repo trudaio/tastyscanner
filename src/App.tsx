@@ -6,6 +6,7 @@ import Page from './pages/Page';
 import { DashboardPage } from './pages/DashboardPage';
 import { IronCondorSaviorPage } from './pages/IronCondorSaviorPage';
 import { AccountPage } from './pages/AccountPage';
+import { GreeksGuidePage } from './pages/GreeksGuidePage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { OnboardingPage } from './pages/OnboardingPage';
@@ -106,6 +107,9 @@ const App: React.FC = () => {
                                 </Route>
                                 <Route path="/account" exact={true}>
                                     <AccountPage />
+                                </Route>
+                                <Route path="/guide" exact={true}>
+                                    <GreeksGuidePage />
                                 </Route>
                             </IonRouterOutlet>
                         </SplitPaneBox>

@@ -14,6 +14,7 @@ import {
 import {OptionsStrategyComponent} from "./options-strategy.component";
 import {IonAccordion, IonChip, IonItem, IonLabel} from "@ionic/react";
 import styled, {css} from "styled-components";
+import {useServices} from "../../hooks/use-services.hook";
 
 function computeHeaderColor(expirationType: OptionExpirationTypeEnum) {
     switch (expirationType) {
@@ -86,14 +87,14 @@ interface OptionsExpirationStrategiesComponentProps {
     strategies: IOptionsStrategyViewModel[];
     earningsDatePosition: EarningsDatePositionEnum;
     onTrade: (strategy: IOptionsStrategyViewModel) => void;
-    positionCount: number;
 }
 export const OptionsExpirationStrategiesComponent: React.FC<OptionsExpirationStrategiesComponentProps> = observer((props) => {
-
+    const services = useServices();
 
     const strategies = props.strategies;
     const bestPop = Math.max(...strategies.map(strategy => strategy.pop));
     const bestRiskReward = Math.min(...strategies.map(strategy => strategy.riskRewardRatio));
+    const positionCount = services.positions.getPositionsForExpiration(props.expiration.expirationDate).length;
 
 
     let label = `${props.expiration.expirationDate} (${props.expiration.daysToExpiration} days) - ${props.expiration.expirationType}`;
@@ -112,9 +113,9 @@ export const OptionsExpirationStrategiesComponent: React.FC<OptionsExpirationStr
                         <StrategiesCountBox>
                             {strategies.length}
                         </StrategiesCountBox>
-                        {props.positionCount > 0 && (
+                        {positionCount > 0 && (
                             <PositionsCountBox>
-                                {props.positionCount}
+                                {positionCount}
                             </PositionsCountBox>
                         )}
                         <IonLabel>

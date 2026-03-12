@@ -109,7 +109,7 @@ export class TradeLogService extends ServiceBase implements ITradeLogService {
                 { name: '🏗 IC Type', value: entry.icType, inline: true },
                 { name: '📋 Legs', value: legsText, inline: false },
             ],
-            footer: { text: `TastyScanner • ${date} ET` },
+            footer: { text: `Operatiunea Guvidul • ${date} ET` },
             timestamp: new Date(entry.timestamp).toISOString(),
         };
 

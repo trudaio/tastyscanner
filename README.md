@@ -1,4 +1,4 @@
-# TastyScanner — Iron Condor Builder
+# Operatiunea Guvidul — Iron Condor Builder
 
 A systematic options premium-selling tool built for TastyTrade, focused on Iron Condor strategies with real-time Greeks streaming, EV/Alpha filtering, and trade logging.
 

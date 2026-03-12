@@ -57,7 +57,7 @@ export const LoginPage: React.FC = () => {
                 <CenteredContainer>
                     <StyledCard>
                         <IonCardHeader>
-                            <IonCardTitle className="ion-text-center">TastyScanner</IonCardTitle>
+                            <IonCardTitle className="ion-text-center">Operatiunea Guvidul</IonCardTitle>
                         </IonCardHeader>
                         <IonCardContent>
                             <form onSubmit={handleSubmit}>

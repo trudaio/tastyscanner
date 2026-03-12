@@ -34,13 +34,13 @@ export const OnboardingPage: React.FC = () => {
                 <CenteredContainer>
                     <StyledCard>
                         <IonCardHeader>
-                            <IonCardTitle className="ion-text-center">Welcome to TastyScanner</IonCardTitle>
+                            <IonCardTitle className="ion-text-center">Bine ai venit la Operatiunea Guvidul</IonCardTitle>
                         </IonCardHeader>
                         <IonCardContent>
                             <IonText>
                                 <p className="ion-text-center">
                                     To get started, you'll need to connect your TastyTrade account.
-                                    This allows TastyScanner to stream live market data and manage
+                                    This allows Operatiunea Guvidul to stream live market data and manage
                                     your iron condor positions.
                                 </p>
                                 <p className="ion-text-center">

@@ -1,4 +1,4 @@
-# TastyScanner Task Tracker
+# Operatiunea Guvidul Task Tracker
 
 _Source of truth: `KanbanBoardComponent` default cards (mirrors soon-to-be standalone Kanban app)._ 
 

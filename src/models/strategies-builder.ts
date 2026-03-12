@@ -122,11 +122,12 @@ export class StrategiesBuilder {
             }
         }
 
-        // Apply EV / Alpha / POP filters
+        // Apply EV / Alpha / POP / Credit filters
         const filtered = condors.filter(c => {
             if (filters.minPop > 0 && c.pop < filters.minPop) return false;
             if (filters.minExpectedValue !== 0 && c.expectedValue < filters.minExpectedValue) return false;
             if (filters.minAlpha !== 0 && c.alpha < filters.minAlpha) return false;
+            if (filters.minCredit > 0 && c.credit < filters.minCredit) return false;
             return true;
         });
 

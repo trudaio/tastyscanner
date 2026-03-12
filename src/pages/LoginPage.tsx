@@ -43,7 +43,7 @@ export const LoginPage: React.FC = () => {
         setLoading(true);
         try {
             await authService.login(email, password);
-            history.push('/');
+            history.push('/app');
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Login failed');
         } finally {

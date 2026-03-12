@@ -60,17 +60,13 @@ const StrategiesCountBox = styled(IonChip)`
 
 const StrategiesBox = styled.div`
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 12px;
     padding: 12px;
 
-    @media (max-width: 900px) {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
-    @media (max-width: 600px) {
+    @media (max-width: 400px) {
         grid-template-columns: 1fr;
-        gap: 10px;
+        gap: 8px;
         padding: 8px;
     }
 `

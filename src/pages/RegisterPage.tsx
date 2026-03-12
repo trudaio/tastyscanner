@@ -10,7 +10,6 @@ import {
     IonInput,
     IonButton,
     IonText,
-    IonNote,
 } from '@ionic/react';
 import { useHistory } from 'react-router-dom';
 import { FirebaseAuthService } from '../services/auth/firebase-auth.service';
@@ -35,8 +34,6 @@ export const RegisterPage: React.FC = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
-    const [clientSecret, setClientSecret] = useState('');
-    const [refreshToken, setRefreshToken] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const history = useHistory();
@@ -46,33 +43,16 @@ export const RegisterPage: React.FC = () => {
         setError('');
 
         if (password !== confirmPassword) {
-            setError('Passwords do not match.');
+            setError('Parolele nu se potrivesc.');
             return;
         }
 
         setLoading(true);
         try {
-            const user = await authService.register(email, password);
-            const idToken = await user.getIdToken();
-
-            const response = await fetch(`${import.meta.env.VITE_FUNCTIONS_BASE_URL}/api/credentials`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${idToken}`,
-                },
-                body: JSON.stringify({ clientSecret, refreshToken }),
-            });
-
-            if (!response.ok) {
-                const data: unknown = await response.json().catch(() => ({}));
-                const message = (data as { message?: string }).message ?? 'Failed to save credentials';
-                throw new Error(message);
-            }
-
-            history.push('/');
+            await authService.register(email, password);
+            history.push('/account');
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Registration failed');
+            setError(err instanceof Error ? err.message : 'Inregistrarea a esuat');
         } finally {
             setLoading(false);
         }
@@ -84,7 +64,7 @@ export const RegisterPage: React.FC = () => {
                 <CenteredContainer>
                     <StyledCard>
                         <IonCardHeader>
-                            <IonCardTitle className="ion-text-center">Create Account</IonCardTitle>
+                            <IonCardTitle className="ion-text-center">Creeaza cont</IonCardTitle>
                         </IonCardHeader>
                         <IonCardContent>
                             <form onSubmit={handleSubmit}>
@@ -94,7 +74,7 @@ export const RegisterPage: React.FC = () => {
                                         label="Email"
                                         labelPlacement="stacked"
                                         type="email"
-                                        placeholder="your@email.com"
+                                        placeholder="email@exemplu.com"
                                         value={email}
                                         onIonInput={e => setEmail(e.detail.value ?? '')}
                                         required
@@ -103,10 +83,10 @@ export const RegisterPage: React.FC = () => {
 
                                 <IonItem>
                                     <IonInput
-                                        label="Password"
+                                        label="Parola"
                                         labelPlacement="stacked"
                                         type="password"
-                                        placeholder="Min. 6 characters"
+                                        placeholder="Minim 6 caractere"
                                         value={password}
                                         onIonInput={e => setPassword(e.detail.value ?? '')}
                                         required
@@ -115,44 +95,14 @@ export const RegisterPage: React.FC = () => {
 
                                 <IonItem>
                                     <IonInput
-                                        label="Confirm Password"
+                                        label="Confirma parola"
                                         labelPlacement="stacked"
                                         type="password"
-                                        placeholder="Repeat password"
+                                        placeholder="Repeta parola"
                                         value={confirmPassword}
                                         onIonInput={e => setConfirmPassword(e.detail.value ?? '')}
                                         required
                                     />
-                                </IonItem>
-
-                                <IonItem>
-                                    <IonInput
-                                        label="TastyTrade Client Secret"
-                                        labelPlacement="stacked"
-                                        type="password"
-                                        placeholder="Paste your client_secret here"
-                                        value={clientSecret}
-                                        onIonInput={e => setClientSecret(e.detail.value ?? '')}
-                                        required
-                                    />
-                                    <IonNote slot="helper">
-                                        TastyTrade → Settings → API Tokens → Client Secret
-                                    </IonNote>
-                                </IonItem>
-
-                                <IonItem>
-                                    <IonInput
-                                        label="TastyTrade Refresh Token"
-                                        labelPlacement="stacked"
-                                        type="password"
-                                        placeholder="Paste your refresh_token here"
-                                        value={refreshToken}
-                                        onIonInput={e => setRefreshToken(e.detail.value ?? '')}
-                                        required
-                                    />
-                                    <IonNote slot="helper">
-                                        TastyTrade → Settings → API Tokens → Remember Token (refresh token)
-                                    </IonNote>
                                 </IonItem>
 
                                 <IonButton
@@ -161,7 +111,7 @@ export const RegisterPage: React.FC = () => {
                                     disabled={loading}
                                     className="ion-margin-top"
                                 >
-                                    {loading ? 'Creating account...' : 'Register'}
+                                    {loading ? 'Se creeaza contul...' : 'Inregistreaza-te'}
                                 </IonButton>
 
                                 {error && (
@@ -171,7 +121,7 @@ export const RegisterPage: React.FC = () => {
                                 )}
 
                                 <IonButton fill="clear" expand="block" routerLink="/login">
-                                    Already have an account? Login
+                                    Ai deja cont? Autentifica-te
                                 </IonButton>
                             </form>
                         </IonCardContent>

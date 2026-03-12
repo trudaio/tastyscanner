@@ -51,7 +51,7 @@ export const OnboardingPage: React.FC = () => {
                             <IonButton
                                 expand="block"
                                 className="ion-margin-top"
-                                onClick={() => history.push('/')}
+                                onClick={() => history.push('/app')}
                             >
                                 Get Started
                             </IonButton>

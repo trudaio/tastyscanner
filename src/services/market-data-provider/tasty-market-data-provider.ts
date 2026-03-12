@@ -258,11 +258,15 @@ export class TastyMarketDataProvider implements IMarketDataProviderService {
     async getSymbolMetrics(symbol: string): Promise<ISymbolMetricsRawData | null> {
         const result = await this._tastyClient.marketMetricsService.getMarketMetrics({symbols: symbol});
 
+        console.log(`[MarketMetrics] ${symbol} raw result type=${typeof result}, isArray=${Array.isArray(result)}, value=`, result);
+
         if(!Check.isArray(result) || result.length === 0) {
+            console.warn(`[MarketMetrics] ${symbol} returned empty/non-array:`, result);
             return null;
         }
 
         const data = result[0] as any;
+        console.log(`[MarketMetrics] ${symbol} IVR=${data["implied-volatility-index-rank"]}, beta=${data["beta"]}`);
 
         const earningsRawData = data["earnings"];
 

@@ -7,15 +7,16 @@ import {IonButton} from "@ionic/react";
 
 const StrategyFooterBox = styled.div`
     display: grid;
-    grid-template-columns: 1fr 0.5fr 1fr 1fr;
-    row-gap: 8px;
-    column-gap: 16px;
+    grid-template-columns: auto 1fr auto 1fr;
+    row-gap: 6px;
+    column-gap: 8px;
     font-weight: bold;
+    font-size: 13px;
 
     @media (max-width: 480px) {
-        grid-template-columns: 1fr 0.5fr;
-        column-gap: 8px;
-        font-size: 13px;
+        grid-template-columns: auto 1fr;
+        column-gap: 6px;
+        font-size: 12px;
     }
 `
 

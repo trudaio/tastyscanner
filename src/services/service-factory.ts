@@ -53,19 +53,11 @@ export class ServiceFactory implements IServiceFactory {
                         if (creds) {
                             this.initialize(creds.clientSecret, creds.refreshToken);
                         } else {
-                            // No credentials saved on server — try env var fallback
-                            const cs = import.meta.env.VITE_CLIENT_SECRET;
-                            const rt = import.meta.env.VITE_REFRESH_TOKEN;
-                            if (cs && rt) this.initialize(cs, rt);
+                            console.warn('No credentials found on server. Please add your TastyTrade API keys in My Account.');
                         }
                     })
                     .catch((err: unknown) => {
-                        console.warn('Failed to load credentials from server (CORS/network), falling back to env vars:', err);
-                        const cs = import.meta.env.VITE_CLIENT_SECRET;
-                        const rt = import.meta.env.VITE_REFRESH_TOKEN;
-                        if (cs && rt) {
-                            this.initialize(cs, rt);
-                        }
+                        console.warn('Failed to load credentials from server:', err);
                     });
             } else {
                 runInAction(() => {

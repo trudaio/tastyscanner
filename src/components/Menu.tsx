@@ -21,7 +21,7 @@ import {WatchListsComponent} from "./watch-lists.component";
 import {TickerMenuItemComponent} from "./ticker-menu-item.component";
 import {BrokerAccountsComponent} from "./broker-accounts.component";
 import {AccountInfoComponent} from "./account-info.component";
-import {filterOutline, gridOutline, openOutline, personCircleOutline, shieldOutline} from "ionicons/icons";
+import {filterOutline, gridOutline, personCircleOutline, shieldOutline} from "ionicons/icons";
 import {useHistory} from "react-router-dom";
 
 const MenuHeaderContentBox = styled.div`
@@ -47,14 +47,23 @@ const MenuTitleBox = styled.a`
   border-bottom: 1px solid var(--ion-color-light-shade);
   text-decoration: none;
   color: inherit;
-  font-size: 1.2rem;
+  font-size: 1.05rem;
   font-weight: 700;
   cursor: pointer;
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 
   &:hover {
     color: var(--ion-color-primary);
   }
+`
+
+const MenuLogo = styled.img`
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  object-fit: contain;
 `
 
 
@@ -93,8 +102,9 @@ const Menu: React.FC = observer(() => {
         <IonListBox id="inbox-list">
           <IonListHeader>
             <MenuHeaderContentBox>
-              <MenuTitleBox href="/">
-                🦅 IRONCONDOR Builder
+              <MenuTitleBox href="/app">
+                <MenuLogo src="/logo-guvidul.svg" alt="Guvidul" />
+                Operatiunea Guvidul
               </MenuTitleBox>
               <BrokerAccountsComponent/>
             </MenuHeaderContentBox>
@@ -133,20 +143,16 @@ const Menu: React.FC = observer(() => {
 
         <IonItem button routerLink="/dashboard" routerDirection="forward" lines="none" style={{ marginTop: '16px' }}>
           <IonIcon slot="start" icon={gridOutline} />
-          <IonLabel>Dashboard</IonLabel>
+          <IonLabel>Dashboard <span style={{ fontSize: '0.7rem', color: 'var(--ion-color-warning)', fontWeight: 600 }}>(working)</span></IonLabel>
         </IonItem>
 
         <IonItem button routerLink="/iron-condor-savior" routerDirection="forward" lines="none">
           <IonIcon slot="start" icon={shieldOutline} />
-          <IonLabel>🛟 IC Savior</IonLabel>
+          <IonLabel>🛟 IC Savior <span style={{ fontSize: '0.7rem', color: 'var(--ion-color-warning)', fontWeight: 600 }}>(working)</span></IonLabel>
         </IonItem>
 
-        <IonItem button href={import.meta.env.VITE_TASKYMASTER_URL ?? 'http://localhost:5174'} target="_blank" rel="noopener noreferrer" lines="none">
-          <IonIcon slot="start" icon={openOutline} />
-          <IonLabel>🗂 Dev Board ↗</IonLabel>
-        </IonItem>
 
-        <IonItem button routerLink="/account" routerDirection="forward" lines="none">
+<IonItem button routerLink="/account" routerDirection="forward" lines="none">
           <IonIcon slot="start" icon={personCircleOutline} />
           <IonLabel>My Account</IonLabel>
         </IonItem>

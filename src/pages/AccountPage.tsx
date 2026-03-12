@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
     IonPage, IonContent, IonCard, IonCardHeader, IonCardTitle,
     IonCardContent, IonItem, IonInput, IonButton, IonText,
-    IonBadge, IonNote, IonSpinner, IonIcon,
+    IonBadge, IonSpinner, IonIcon,
 } from '@ionic/react';
 import {
     updatePassword,
@@ -41,13 +41,59 @@ const StatusRow = styled.div`
     padding: 10px 0;
 `;
 
+const ApiInstructionsBox = styled.div`
+    background: #ffffff;
+    color: #1a1a2e;
+    border-radius: 10px;
+    padding: 20px;
+    margin: 12px 0 16px;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    border: 1px solid #e0e0e0;
+
+    h3 {
+        margin: 0 0 12px 0;
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #1a73e8;
+    }
+
+    ol {
+        margin: 0;
+        padding-left: 22px;
+    }
+
+    li {
+        margin-bottom: 8px;
+        color: #333;
+    }
+
+    a {
+        color: #1a73e8;
+        text-decoration: none;
+        font-weight: 600;
+        &:hover {
+            text-decoration: underline;
+        }
+    }
+
+    code {
+        background: #f0f0f0;
+        color: #d63384;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.85em;
+        font-weight: 600;
+    }
+`;
+
 type CredentialStatus = 'loading' | 'set' | 'missing' | 'error';
 
 export const AccountPage: React.FC = observer(() => {
     const services = useServices();
     const user = auth.currentUser;
 
-    // ── Password reset (email) ─────────────────────────────────────────────
+    // ── Resetare parola (email) ─────────────────────────────────────────────
     const [resetSent, setResetSent] = useState(false);
     const [resetError, setResetError] = useState('');
 
@@ -58,11 +104,11 @@ export const AccountPage: React.FC = observer(() => {
             await sendPasswordResetEmail(auth, user.email);
             setResetSent(true);
         } catch (e) {
-            setResetError(e instanceof Error ? e.message : 'Failed to send reset email');
+            setResetError(e instanceof Error ? e.message : 'Eroare la trimiterea email-ului');
         }
     };
 
-    // ── Change password ────────────────────────────────────────────────────
+    // ── Schimbare parola ────────────────────────────────────────────────────
     const [currentPwd, setCurrentPwd] = useState('');
     const [newPwd, setNewPwd] = useState('');
     const [pwdMsg, setPwdMsg] = useState('');
@@ -72,7 +118,7 @@ export const AccountPage: React.FC = observer(() => {
     const handleChangePassword = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!user || !user.email) return;
-        if (newPwd.length < 6) { setPwdError('Minimum 6 characters.'); return; }
+        if (newPwd.length < 6) { setPwdError('Minim 6 caractere.'); return; }
         setPwdLoading(true);
         setPwdError('');
         setPwdMsg('');
@@ -80,13 +126,13 @@ export const AccountPage: React.FC = observer(() => {
             const cred = EmailAuthProvider.credential(user.email, currentPwd);
             await reauthenticateWithCredential(user, cred);
             await updatePassword(user, newPwd);
-            setPwdMsg('Password updated successfully.');
+            setPwdMsg('Parola a fost actualizata cu succes.');
             setCurrentPwd('');
             setNewPwd('');
         } catch (e) {
-            const msg = e instanceof Error ? e.message : 'Failed';
+            const msg = e instanceof Error ? e.message : 'Eroare';
             if (msg.includes('wrong-password') || msg.includes('invalid-credential')) {
-                setPwdError('Current password is incorrect.');
+                setPwdError('Parola curenta este incorecta.');
             } else {
                 setPwdError(msg);
             }
@@ -95,7 +141,7 @@ export const AccountPage: React.FC = observer(() => {
         }
     };
 
-    // ── TastyTrade Credentials ─────────────────────────────────────────────
+    // ── Credentiale TastyTrade ─────────────────────────────────────────────
     const [credStatus, setCredStatus] = useState<CredentialStatus>('loading');
     const [clientSecret, setClientSecret] = useState('');
     const [refreshToken, setRefreshToken] = useState('');
@@ -120,28 +166,21 @@ export const AccountPage: React.FC = observer(() => {
     const handleSaveCredentials = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!clientSecret.trim() || !refreshToken.trim()) {
-            setCredError('Both fields are required.');
+            setCredError('Ambele campuri sunt obligatorii.');
             return;
         }
         setCredLoading(true);
         setCredError('');
         setCredMsg('');
         try {
-            let savedToServer = false;
-            try {
-                await services.credentials.saveCredentials(clientSecret.trim(), refreshToken.trim());
-                savedToServer = true;
-            } catch {
-                // Functions unreachable (CORS/not deployed) — still initialize locally
-            }
-            // Always reconnect with the entered credentials
+            await services.credentials.saveCredentials(clientSecret.trim(), refreshToken.trim());
             services.initialize(clientSecret.trim(), refreshToken.trim());
             setCredStatus('set');
-            setCredMsg(savedToServer ? 'Credentials saved. App reconnected.' : 'App reconnected locally (server unreachable).');
+            setCredMsg('Credentialele au fost salvate. Aplicatia s-a reconectat.');
             setClientSecret('');
             setRefreshToken('');
         } catch (e) {
-            setCredError(e instanceof Error ? e.message : 'Failed to save credentials');
+            setCredError(e instanceof Error ? e.message : 'Eroare la salvarea credentialelor');
         } finally {
             setCredLoading(false);
         }
@@ -149,7 +188,7 @@ export const AccountPage: React.FC = observer(() => {
 
     const handleTestCredentials = async () => {
         if (!clientSecret.trim() || !refreshToken.trim()) {
-            setCredError('Enter credentials first to test them.');
+            setCredError('Introdu credentialele mai intai pentru a le testa.');
             return;
         }
         setCredLoading(true);
@@ -157,9 +196,9 @@ export const AccountPage: React.FC = observer(() => {
         setCredMsg('');
         try {
             const valid = await services.credentials.validateCredentials(clientSecret.trim(), refreshToken.trim());
-            setCredMsg(valid ? '✅ Credentials format is valid.' : '❌ Credentials format invalid — check the values.');
+            setCredMsg(valid ? '✅ Formatul credentialelor este valid.' : '❌ Format invalid — verifica valorile.');
         } catch {
-            setCredError('Could not reach the server. Make sure Functions are deployed.');
+            setCredError('Nu s-au putut valida credentialele.');
         } finally {
             setCredLoading(false);
         }
@@ -170,12 +209,12 @@ export const AccountPage: React.FC = observer(() => {
             <IonContent>
                 <PageBox>
 
-                    {/* ── Account Info ────────────────────────────────── */}
+                    {/* ── Informatii cont ────────────────────────────────── */}
                     <IonCard>
                         <IonCardHeader>
-                            <SectionTitle>Account</SectionTitle>
+                            <SectionTitle>Contul meu</SectionTitle>
                             <IonCardTitle style={{ fontSize: '1.1rem' }}>
-                                {user?.email ?? 'Unknown'}
+                                {user?.email ?? 'Necunoscut'}
                             </IonCardTitle>
                         </IonCardHeader>
                         <IonCardContent>
@@ -184,27 +223,27 @@ export const AccountPage: React.FC = observer(() => {
                             </p>
                             {resetSent ? (
                                 <IonText color="success">
-                                    <p>Password reset email sent to {user?.email}</p>
+                                    <p>Email de resetare trimis la {user?.email}</p>
                                 </IonText>
                             ) : (
                                 <IonButton fill="outline" size="small" onClick={() => void handleSendReset()}>
-                                    Send password reset email
+                                    Trimite email de resetare parola
                                 </IonButton>
                             )}
                             {resetError && <IonText color="danger"><p>{resetError}</p></IonText>}
                         </IonCardContent>
                     </IonCard>
 
-                    {/* ── Change Password ──────────────────────────────── */}
+                    {/* ── Schimbare parola ──────────────────────────────── */}
                     <IonCard>
                         <IonCardHeader>
-                            <SectionTitle>Change Password</SectionTitle>
+                            <SectionTitle>Schimba parola</SectionTitle>
                         </IonCardHeader>
                         <IonCardContent>
                             <form onSubmit={handleChangePassword}>
                                 <IonItem>
                                     <IonInput
-                                        label="Current password"
+                                        label="Parola curenta"
                                         labelPlacement="stacked"
                                         type="password"
                                         placeholder="••••••••"
@@ -215,10 +254,10 @@ export const AccountPage: React.FC = observer(() => {
                                 </IonItem>
                                 <IonItem>
                                     <IonInput
-                                        label="New password"
+                                        label="Parola noua"
                                         labelPlacement="stacked"
                                         type="password"
-                                        placeholder="Min. 6 characters"
+                                        placeholder="Minim 6 caractere"
                                         value={newPwd}
                                         onIonInput={e => setNewPwd(e.detail.value ?? '')}
                                         required
@@ -233,45 +272,57 @@ export const AccountPage: React.FC = observer(() => {
                                     className="ion-margin-top"
                                     fill="outline"
                                 >
-                                    {pwdLoading ? <IonSpinner name="crescent" /> : 'Update Password'}
+                                    {pwdLoading ? <IonSpinner name="crescent" /> : 'Actualizeaza parola'}
                                 </IonButton>
                             </form>
                         </IonCardContent>
                     </IonCard>
 
-                    {/* ── TastyTrade Credentials ───────────────────────── */}
+                    {/* ── Credentiale TastyTrade ───────────────────────── */}
                     <IonCard>
                         <IonCardHeader>
-                            <SectionTitle>TastyTrade Credentials</SectionTitle>
+                            <SectionTitle>Credentiale TastyTrade</SectionTitle>
                         </IonCardHeader>
                         <IonCardContent>
                             {/* Status indicator */}
                             <StatusRow>
                                 {credStatus === 'loading' && (
-                                    <><IonSpinner name="dots" /><span style={{ fontSize: '0.85rem', color: 'var(--ion-color-medium)' }}>Checking credentials…</span></>
+                                    <><IonSpinner name="dots" /><span style={{ fontSize: '0.85rem', color: 'var(--ion-color-medium)' }}>Se verifica credentialele…</span></>
                                 )}
                                 {credStatus === 'set' && (
                                     <>
                                         <IonIcon icon={checkmarkCircleOutline} color="success" style={{ fontSize: '1.3rem' }} />
-                                        <IonBadge color="success">Connected</IonBadge>
-                                        <span style={{ fontSize: '0.8rem', color: 'var(--ion-color-medium)' }}>Credentials saved. Use the form below to update them.</span>
+                                        <IonBadge color="success">Conectat</IonBadge>
+                                        <span style={{ fontSize: '0.8rem', color: 'var(--ion-color-medium)' }}>Credentialele sunt salvate. Foloseste formularul de mai jos pentru a le actualiza.</span>
                                     </>
                                 )}
                                 {credStatus === 'missing' && (
                                     <>
                                         <IonIcon icon={closeCircleOutline} color="warning" style={{ fontSize: '1.3rem' }} />
-                                        <IonBadge color="warning">Not configured</IonBadge>
-                                        <span style={{ fontSize: '0.8rem', color: 'var(--ion-color-medium)' }}>Enter your TastyTrade credentials below.</span>
+                                        <IonBadge color="warning">Neconfigurat</IonBadge>
+                                        <span style={{ fontSize: '0.8rem', color: 'var(--ion-color-medium)' }}>Introdu credentialele TastyTrade mai jos.</span>
                                     </>
                                 )}
                                 {credStatus === 'error' && (
                                     <>
                                         <IonIcon icon={closeCircleOutline} color="danger" style={{ fontSize: '1.3rem' }} />
-                                        <IonBadge color="danger">Cannot reach server</IonBadge>
-                                        <span style={{ fontSize: '0.8rem', color: 'var(--ion-color-medium)' }}>Functions not deployed yet. Enter credentials to save locally.</span>
+                                        <IonBadge color="danger">Eroare</IonBadge>
+                                        <span style={{ fontSize: '0.8rem', color: 'var(--ion-color-medium)' }}>Nu s-au putut incarca credentialele. Introdu-le mai jos.</span>
                                     </>
                                 )}
                             </StatusRow>
+
+                            <ApiInstructionsBox>
+                                <h3>Cum obtii cheile API de la TastyTrade</h3>
+                                <ol>
+                                    <li>Autentifica-te pe <a href="https://developer.tastytrade.com" target="_blank" rel="noopener noreferrer">developer.tastytrade.com</a></li>
+                                    <li>Mergi la <strong>My Apps & Keys</strong></li>
+                                    <li>Apasa <strong>Add Application</strong> si da-i orice nume</li>
+                                    <li>Copiaza <code>Client Secret</code> si lipeste-l mai jos</li>
+                                    <li>La sectiunea <strong>OAuth</strong>, genereaza un <strong>Refresh Token</strong> cu scope-ul <code>read trade</code></li>
+                                    <li>Copiaza <code>Refresh Token</code> si lipeste-l mai jos</li>
+                                </ol>
+                            </ApiInstructionsBox>
 
                             <form onSubmit={handleSaveCredentials}>
                                 <IonItem>
@@ -279,7 +330,7 @@ export const AccountPage: React.FC = observer(() => {
                                         label="Client Secret"
                                         labelPlacement="stacked"
                                         type={showSecret ? 'text' : 'password'}
-                                        placeholder="Your TastyTrade client_secret"
+                                        placeholder="Lipeste client_secret aici"
                                         value={clientSecret}
                                         onIonInput={e => setClientSecret(e.detail.value ?? '')}
                                     />
@@ -292,9 +343,6 @@ export const AccountPage: React.FC = observer(() => {
                                     >
                                         <IonIcon icon={showSecret ? eyeOffOutline : eyeOutline} />
                                     </IonButton>
-                                    <IonNote slot="helper">
-                                        TastyTrade → Settings → API Tokens → Client Secret (40 hex chars)
-                                    </IonNote>
                                 </IonItem>
 
                                 <IonItem>
@@ -302,7 +350,7 @@ export const AccountPage: React.FC = observer(() => {
                                         label="Refresh Token"
                                         labelPlacement="stacked"
                                         type={showToken ? 'text' : 'password'}
-                                        placeholder="Your TastyTrade refresh_token (JWT)"
+                                        placeholder="Lipeste refresh_token aici"
                                         value={refreshToken}
                                         onIonInput={e => setRefreshToken(e.detail.value ?? '')}
                                     />
@@ -315,9 +363,6 @@ export const AccountPage: React.FC = observer(() => {
                                     >
                                         <IonIcon icon={showToken ? eyeOffOutline : eyeOutline} />
                                     </IonButton>
-                                    <IonNote slot="helper">
-                                        TastyTrade → Settings → API Tokens → Remember Token (long JWT string)
-                                    </IonNote>
                                 </IonItem>
 
                                 {credError && <IonText color="danger"><p style={{ padding: '8px 0' }}>{credError}</p></IonText>}
@@ -329,14 +374,14 @@ export const AccountPage: React.FC = observer(() => {
                                         disabled={credLoading}
                                         style={{ flex: 1 }}
                                     >
-                                        {credLoading ? <IonSpinner name="crescent" /> : 'Save & Reconnect'}
+                                        {credLoading ? <IonSpinner name="crescent" /> : 'Salveaza & Reconecteaza'}
                                     </IonButton>
                                     <IonButton
                                         fill="outline"
                                         disabled={credLoading}
                                         onClick={() => void handleTestCredentials()}
                                     >
-                                        Test
+                                        Testeaza
                                     </IonButton>
                                 </div>
                             </form>

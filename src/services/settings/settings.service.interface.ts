@@ -33,5 +33,7 @@ export interface IStrategyFiltersViewModel {
     minAlpha: number;
     /** IC type bias — controls wing asymmetry suggestion */
     icType: IcType;
+    /** Minimum credit received ($). Condors below this are hidden. */
+    minCredit: number;
 }
 

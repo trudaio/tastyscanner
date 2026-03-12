@@ -9,6 +9,7 @@ import { AccountPage } from './pages/AccountPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { OnboardingPage } from './pages/OnboardingPage';
+import { LandingPage } from './pages/LandingPage';
 
 /* Core CSS required for Ionic components to work properly */
 import '@ionic/react/css/core.css';
@@ -68,25 +69,33 @@ const App: React.FC = () => {
         <IonApp>
             <IonReactRouter>
                 {/* Public routes — no sidebar */}
+                <Route path="/welcome" exact>
+                    {user ? <Redirect to="/app" /> : <LandingPage />}
+                </Route>
                 <Route path="/login" exact>
-                    {user ? <Redirect to="/" /> : <LoginPage />}
+                    {user ? <Redirect to="/app" /> : <LoginPage />}
                 </Route>
                 <Route path="/register" exact>
-                    {user ? <Redirect to="/" /> : <RegisterPage />}
+                    {user ? <Redirect to="/app" /> : <RegisterPage />}
                 </Route>
                 <Route path="/onboarding" exact>
                     {!user ? <Redirect to="/login" /> : <OnboardingPage />}
                 </Route>
 
+                {/* Root redirect */}
+                <Route path="/" exact>
+                    {user ? <Redirect to="/app" /> : <Redirect to="/welcome" />}
+                </Route>
+
                 {/* Protected routes — with sidebar */}
                 <Route>
                     {!user ? (
-                        <Redirect to="/login" />
+                        <Redirect to="/welcome" />
                     ) : (
                         <SplitPaneBox contentId="main">
                             <Menu />
                             <IonRouterOutlet id="main">
-                                <Route path="/" exact={true}>
+                                <Route path="/app" exact={true}>
                                     <Page />
                                 </Route>
                                 <Route path="/dashboard" exact={true}>

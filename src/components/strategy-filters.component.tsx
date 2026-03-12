@@ -107,6 +107,7 @@ interface SingleValueEditorComponentProps {
     value: number;
     onValueChanged: (value: number) => void;
     formatValue?: (value: number) => string;
+    step?: number;
 }
 const SingleValueEditorComponent: React.FC<SingleValueEditorComponentProps> = observer((props) => {
     return (
@@ -115,7 +116,7 @@ const SingleValueEditorComponent: React.FC<SingleValueEditorComponentProps> = ob
                 {props.label}
             </FilterLabelBox>
             <RangeBox>
-                <IonRange pin={true} min={props.min} max={props.max} value={props.value} onIonChange={e => {
+                <IonRange pin={true} min={props.min} max={props.max} step={props.step} value={props.value} onIonChange={e => {
                     props.onValueChanged(e.detail.value as number)
                 }}/>
                 <FilterValueBox>
@@ -224,6 +225,16 @@ export const StrategyFiltersComponent: React.FC = observer(() => {
             <WingsEditorBox>
                 {filters.availableWings.map(w => <WingValueComponent key={w} value={w}/>)}
             </WingsEditorBox>
+
+            <SeparatorBox/>
+
+            <SingleValueEditorComponent label="Min credit"
+                                        min={1}
+                                        max={10}
+                                        step={0.5}
+                                        value={filters.minCredit}
+                                        formatValue={value => `${value.toFixed(2)}$`}
+                                        onValueChanged={value => filters.minCredit = value}/>
 
             <SeparatorBox/>
 

@@ -26,7 +26,8 @@ export class StrategyFiltersModel implements IStrategyFiltersViewModel {
             | '_minPop'
             | '_minExpectedValue'
             | '_minAlpha'
-            | '_icType'>(this, {
+            | '_icType'
+            | '_minCredit'>(this, {
             _minDelta: observable.ref,
             _maxDelta: observable.ref,
             _maxRiskRewardRatio: observable.ref,
@@ -39,6 +40,7 @@ export class StrategyFiltersModel implements IStrategyFiltersViewModel {
             _minExpectedValue: observable.ref,
             _minAlpha: observable.ref,
             _icType: observable.ref,
+            _minCredit: observable.ref,
             lastUpdate: observable.ref
         })
     }
@@ -55,6 +57,7 @@ export class StrategyFiltersModel implements IStrategyFiltersViewModel {
     _minExpectedValue: number = 0;
     _minAlpha: number = 0;
     _icType: IcType = "symmetric";
+    _minCredit: number = 1;
     lastUpdate: number = Date.now()
 
 
@@ -152,6 +155,13 @@ export class StrategyFiltersModel implements IStrategyFiltersViewModel {
     }
     set icType(value: IcType) {
         this._setProperty("_icType", value);
+    }
+
+    get minCredit(): number {
+        return this._minCredit;
+    }
+    set minCredit(value: number) {
+        this._setProperty("_minCredit", value);
     }
 
     private _storedData: any = {};

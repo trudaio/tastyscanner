@@ -359,8 +359,8 @@ export const GreeksGuidePage: React.FC = () => {
                         </IonCardContent>
                     </GuideCard>
 
-                    {/* ============ QUICK REFERENCE ============ */}
-                    <SectionTitle>Quick Reference: Ideal Iron Condor</SectionTitle>
+                    {/* ============ STRATEGIA GUVIDUL ============ */}
+                    <SectionTitle>Strategia Guvidul</SectionTitle>
 
                     <GuideCard>
                         <IonCardContent>
@@ -368,22 +368,22 @@ export const GreeksGuidePage: React.FC = () => {
                                 <thead>
                                     <tr style={{ borderBottom: '2px solid var(--ion-color-tertiary)' }}>
                                         <th style={{ textAlign: 'left', padding: '8px' }}>Metric</th>
-                                        <th style={{ textAlign: 'left', padding: '8px' }}>Ideal Range</th>
+                                        <th style={{ textAlign: 'left', padding: '8px' }}>Rule</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {[
-                                        ['DTE at Entry', '30-45 days'],
-                                        ['Short Strike Delta', '16-24'],
-                                        ['POP', '75-85%'],
+                                        ['DTE at Entry', '5-45 days, enter at 10:00 AM NY time'],
+                                        ['Short Strike Delta', '16-22'],
+                                        ['POP', '> 75%'],
                                         ['EV', '> $0 (positive)'],
                                         ['Alpha', '> 30%'],
                                         ['Risk/Reward', '< 2.5'],
-                                        ['IV Rank', '> 30 (ideal > 50)'],
-                                        ['Net Delta', 'Near 0 (neutral)'],
+                                        ['IV Rank', '> 17 minimum'],
+                                        ['Net Delta', 'Your choice (symmetric, bullish, or bearish)'],
                                         ['Theta', 'Positive (higher = better)'],
-                                        ['Profit Target', 'Close at 75% of max profit'],
-                                        ['Management', 'Close or roll at 21 DTE'],
+                                        ['Profit Target', 'Close at minimum 75% of max profit'],
+                                        ['Management', 'Last day only, 1 hour before market close (3:00 PM ET)'],
                                         ['Position Size', 'Max 5% of net liquidity'],
                                     ].map(([metric, range]) => (
                                         <tr key={metric} style={{ borderBottom: '1px solid var(--ion-color-light-shade)' }}>

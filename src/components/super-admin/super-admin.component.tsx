@@ -27,20 +27,22 @@ interface IUserAccountData {
 /* ─── Styled Components ──────────────────────────────────── */
 
 const Container = styled.div`
-    padding: 20px;
-    background: #0d0d1a;
+    width: min(100%, 1120px);
+    margin: 0 auto;
+    padding: clamp(18px, 3vw, 28px);
+    background: transparent;
     min-height: 100%;
     @media (max-width: 480px) { padding: 12px; }
 `;
 
 const Title = styled.h1`
-    color: #fff;
+    color: var(--app-text);
     font-size: 22px;
     margin: 0 0 6px 0;
 `;
 
 const Subtitle = styled.p`
-    color: #8888aa;
+    color: var(--app-text-muted);
     font-size: 13px;
     margin: 0 0 24px 0;
 `;
@@ -54,33 +56,36 @@ const TopBar = styled.div`
 `;
 
 const RefreshBtn = styled.button`
-    padding: 7px 20px;
-    background: #4a9eff;
-    border: none;
-    border-radius: 6px;
-    color: #fff;
+    min-height: 42px;
+    padding: 8px 18px;
+    background: linear-gradient(135deg, #67a8ff, #7de2d1);
+    border: 1px solid rgba(103, 168, 255, 0.2);
+    border-radius: 14px;
+    color: #08111f;
     font-size: 13px;
-    font-weight: 600;
+    font-weight: 800;
     cursor: pointer;
     white-space: nowrap;
-    &:hover { background: #3a8eef; }
-    &:disabled { background: #333; cursor: not-allowed; }
+    &:hover { filter: brightness(0.99); transform: translateY(-1px); }
+    &:disabled { background: var(--app-subtle-surface-2); color: var(--app-text-muted); border-color: var(--app-border); cursor: not-allowed; }
 `;
 
 const Table = styled.table`
     width: 100%;
     border-collapse: collapse;
     font-size: 13px;
-    background: #1a1a2e;
-    border-radius: 8px;
+    background: var(--app-panel-surface);
+    border-radius: 18px;
     overflow: hidden;
+    border: 1px solid var(--app-border);
+    box-shadow: var(--app-shadow);
 `;
 
 const Th = styled.th`
     text-align: left;
     padding: 12px 14px;
-    background: #2a2a3e;
-    color: #8888aa;
+    background: var(--app-table-head-surface);
+    color: var(--app-text-muted);
     font-weight: 600;
     font-size: 11px;
     text-transform: uppercase;
@@ -90,35 +95,40 @@ const Th = styled.th`
 
 const Td = styled.td<{ $color?: string }>`
     padding: 10px 14px;
-    color: ${p => p.$color || '#e0e0e0'};
-    border-bottom: 1px solid #2a2a3e;
+    color: ${p => p.$color || 'var(--app-text)'};
+    border-bottom: 1px solid var(--app-border);
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
 `;
 
 const StatusBadge = styled.span<{ $type: 'loading' | 'loaded' | 'error' | 'loading-greeks' }>`
-    padding: 2px 8px;
-    border-radius: 4px;
+    padding: 4px 10px;
+    border-radius: 999px;
     font-size: 11px;
-    font-weight: 600;
+    font-weight: 700;
     background: ${p =>
-        p.$type === 'loaded' ? '#1a3a2a' :
-        p.$type === 'loading' ? '#2a2a1a' :
-        p.$type === 'loading-greeks' ? '#1a2a3a' :
-        '#3a1a1a'};
+        p.$type === 'loaded' ? 'rgba(84, 214, 148, 0.14)' :
+        p.$type === 'loading' ? 'rgba(246, 200, 95, 0.14)' :
+        p.$type === 'loading-greeks' ? 'rgba(103, 168, 255, 0.14)' :
+        'rgba(255, 107, 126, 0.14)'};
     color: ${p =>
         p.$type === 'loaded' ? '#4dff91' :
-        p.$type === 'loading' ? '#ffd700' :
-        p.$type === 'loading-greeks' ? '#4a9eff' :
-        '#ff4d6d'};
+        p.$type === 'loading' ? '#f6c85f' :
+        p.$type === 'loading-greeks' ? '#67a8ff' :
+        '#ff6b7e'};
+    border: 1px solid ${p =>
+        p.$type === 'loaded' ? 'rgba(84, 214, 148, 0.22)' :
+        p.$type === 'loading' ? 'rgba(246, 200, 95, 0.22)' :
+        p.$type === 'loading-greeks' ? 'rgba(103, 168, 255, 0.22)' :
+        'rgba(255, 107, 126, 0.22)'};
 `;
 
 const ErrorBox = styled.div`
-    background: #3a1a1a;
-    border: 1px solid #ff4d6d;
-    border-radius: 8px;
+    background: rgba(255, 107, 126, 0.12);
+    border: 1px solid rgba(255, 107, 126, 0.22);
+    border-radius: 16px;
     padding: 16px;
-    color: #ff4d6d;
+    color: #ff6b7e;
     margin-bottom: 20px;
 `;
 
@@ -130,16 +140,27 @@ const SummaryRow = styled.div`
 `;
 
 const SummaryCard = styled.div<{ $color?: string }>`
-    background: #1a1a2e;
-    border-radius: 8px;
+    position: relative;
+    background: var(--app-panel-surface);
+    border-radius: 18px;
     padding: 14px 18px;
     min-width: 140px;
     flex: 1;
-    border-left: 4px solid ${p => p.$color || '#4a9eff'};
+    border: 1px solid var(--app-border);
+    box-shadow: var(--app-shadow);
+    overflow: hidden;
+
+    &::before {
+        content: '';
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 4px;
+        background: ${p => p.$color || '#4a9eff'};
+    }
 `;
 
 const SummaryLabel = styled.div`
-    color: #8888aa;
+    color: var(--app-text-muted);
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -147,7 +168,7 @@ const SummaryLabel = styled.div`
 `;
 
 const SummaryValue = styled.div<{ $color?: string }>`
-    color: ${p => p.$color || '#fff'};
+    color: ${p => p.$color || 'var(--app-text)'};
     font-size: 20px;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
@@ -160,7 +181,7 @@ const LoadingContainer = styled.div`
     justify-content: center;
     gap: 12px;
     padding: 60px 20px;
-    color: #8888aa;
+    color: var(--app-text-muted);
 `;
 
 /* ─── Helpers ────────────────────────────────────────────── */
@@ -176,7 +197,7 @@ function formatGreek(n: number | undefined, decimals = 2): string {
 }
 
 function plColor(n: number | undefined): string {
-    if (n === undefined || n === null) return '#8888aa';
+    if (n === undefined || n === null) return 'var(--app-text-muted)';
     return n > 0 ? '#4dff91' : n < 0 ? '#ff4d6d' : '#e0e0e0';
 }
 
@@ -514,7 +535,7 @@ export const SuperAdminComponent: React.FC = () => {
                             ))}
                             {users.length === 0 && !isLoading && (
                                 <tr>
-                                    <Td colSpan={7} style={{ textAlign: 'center', color: '#8888aa', padding: '40px' }}>
+                                    <Td colSpan={7} style={{ textAlign: 'center', color: 'var(--app-text-muted)', padding: '40px' }}>
                                         No accounts found
                                     </Td>
                                 </tr>

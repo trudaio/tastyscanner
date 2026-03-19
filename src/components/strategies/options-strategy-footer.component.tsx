@@ -8,10 +8,10 @@ import {IonButton} from "@ionic/react";
 const StrategyFooterBox = styled.div`
     display: grid;
     grid-template-columns: auto 1fr auto 1fr;
-    row-gap: 6px;
-    column-gap: 8px;
-    font-weight: bold;
+    row-gap: 8px;
+    column-gap: 10px;
     font-size: 13px;
+    color: var(--app-text);
 
     @media (max-width: 480px) {
         grid-template-columns: auto 1fr;
@@ -27,6 +27,16 @@ const ButtonBox = styled.div`
     justify-content: flex-end;
     width: 100%;
     grid-column: 1 / -1;
+`
+
+const MetricLabel = styled.span`
+    color: var(--app-text-muted);
+    font-weight: 700;
+`
+
+const MetricValue = styled.span`
+    color: var(--app-text);
+    font-weight: 800;
 `
 
 const EvValueBox = styled.span<{ $positive: boolean }>`
@@ -50,26 +60,26 @@ export const OptionsStrategyFooterComponent: React.FC<{strategy: IOptionsStrateg
 
     return (
         <StrategyFooterBox>
-            <span>Risk/Reward:</span>
-            <span>{strategy.riskRewardRatio}</span>
-            <span>POP:</span>
-            <span>{`${strategy.pop}%`}</span>
-            <span>BPE:</span>
-            <span>{`$${strategy.maxLoss.toFixed(0)}`}</span>
-            <span>Credit:</span>
-            <span>{`${strategy.credit.toFixed(2)}$`}</span>
-            <span>EV:</span>
+            <MetricLabel>Risk/Reward</MetricLabel>
+            <MetricValue>{strategy.riskRewardRatio}</MetricValue>
+            <MetricLabel>POP</MetricLabel>
+            <MetricValue>{`${strategy.pop}%`}</MetricValue>
+            <MetricLabel>BPE</MetricLabel>
+            <MetricValue>{`$${strategy.maxLoss.toFixed(0)}`}</MetricValue>
+            <MetricLabel>Credit</MetricLabel>
+            <MetricValue>{`${strategy.credit.toFixed(2)}$`}</MetricValue>
+            <MetricLabel>EV</MetricLabel>
             <EvValueBox $positive={evPositive}>
                 {`${evPositive ? '+' : ''}${strategy.expectedValue.toFixed(2)}$`}
             </EvValueBox>
-            <span>Alpha:</span>
+            <MetricLabel>Alpha</MetricLabel>
             <AlphaValueBox $positive={alphaPositive}>
                 {`${alphaPositive ? '+' : ''}${strategy.alpha.toFixed(2)}%`}
             </AlphaValueBox>
-            <span>Delta:</span>
-            <span>{strategy.delta}</span>
-            <span>Theta:</span>
-            <span>{strategy.theta}</span>
+            <MetricLabel>Delta</MetricLabel>
+            <MetricValue>{strategy.delta}</MetricValue>
+            <MetricLabel>Theta</MetricLabel>
+            <MetricValue>{strategy.theta}</MetricValue>
             <ButtonBox>
                 <IonButton color={"success"} onClick={() => props.onOpenTradeDialog()}>
                     Trade

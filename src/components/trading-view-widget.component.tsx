@@ -1,6 +1,7 @@
 // TradingViewWidget.jsx
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {observer} from "mobx-react";
+import { AppTheme, getStoredTheme } from '../theme/theme-preference';
 
 function getMarketCode(listedMarket: string) {
     switch (listedMarket) {
@@ -19,6 +20,7 @@ function getMarketCode(listedMarket: string) {
 
 export const  TradingViewWidgetComponent: React.FC<{symbol: string; listedMarket: string}> = observer((props) => {
     const container = useRef<HTMLDivElement | null>(null);
+    const [theme, setTheme] = useState<AppTheme>(getStoredTheme());
 
     const market = getMarketCode(props.listedMarket);
 
@@ -27,6 +29,16 @@ export const  TradingViewWidgetComponent: React.FC<{symbol: string; listedMarket
     if(market && symbol) {
        symbol = `${market}:${symbol}`;
     }
+
+    useEffect(() => {
+        const onThemeChange = (event: Event) => {
+            const customEvent = event as CustomEvent<AppTheme>;
+            setTheme(customEvent.detail ?? getStoredTheme());
+        };
+
+        window.addEventListener('app-theme-change', onThemeChange as EventListener);
+        return () => window.removeEventListener('app-theme-change', onThemeChange as EventListener);
+    }, []);
 
     useEffect(
         () => {
@@ -59,10 +71,10 @@ export const  TradingViewWidgetComponent: React.FC<{symbol: string; listedMarket
           "save_image": true,
           "style": "1",
           "symbol": "${symbol}",
-          "theme": "light",
+          "theme": "${theme === 'light' ? 'light' : 'dark'}",
           "timezone": "Etc/UTC",
-          "backgroundColor": "#ffffff",
-          "gridColor": "rgba(46, 46, 46, 0.06)",
+          "backgroundColor": "${theme === 'light' ? '#ffffff' : '#0d1728'}",
+          "gridColor": "${theme === 'light' ? 'rgba(46, 46, 46, 0.06)' : 'rgba(211, 225, 248, 0.08)'}",
           "watchlist": [],
           "withdateranges": true,
           "compareSymbols": [],
@@ -74,7 +86,7 @@ export const  TradingViewWidgetComponent: React.FC<{symbol: string; listedMarket
         }`;
             container.current?.appendChild(script);
         },
-        [symbol, market]
+        [symbol, market, theme]
     );
 
     return (

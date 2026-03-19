@@ -10,48 +10,88 @@ import {warningOutline} from "ionicons/icons";
 
 type DeltaBias = 'bullish' | 'bearish' | 'neutral';
 
-export const StrategyBox = styled.div<{$isBestPop: boolean; $isBestRiskReward: boolean; $hasConflict: boolean; $deltaBias: DeltaBias}>`
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 12px;
+const StrategyCard = styled(IonCard)<{$isBestPop: boolean; $isBestRiskReward: boolean; $hasConflict: boolean; $deltaBias: DeltaBias}>`
+    margin: 0;
+    border-radius: 18px;
+    overflow: hidden;
+    border: 1px solid var(--app-border);
+    background: var(--app-surface-1);
+    box-shadow: 0 10px 28px rgba(9, 17, 31, 0.08);
 
-    @media (max-width: 480px) {
-        padding: 8px;
-    }
-
-    /* Delta bias background - applied first as base */
     ${props => props.$deltaBias === 'bullish' && css`
-        background-color: rgba(76, 175, 80, 0.15);
+        border-color: rgba(84, 214, 148, 0.24);
+        background: linear-gradient(180deg, rgba(84, 214, 148, 0.08), var(--app-surface-1));
     `}
     ${props => props.$deltaBias === 'bearish' && css`
-        background-color: rgba(244, 67, 54, 0.15);
+        border-color: rgba(255, 107, 126, 0.24);
+        background: linear-gradient(180deg, rgba(255, 107, 126, 0.08), var(--app-surface-1));
     `}
-    ${props => props.$deltaBias === 'neutral' && css`
-        background-color: transparent;
-    `}
-
-    /* Best POP/Risk-Reward overrides */
     ${props => props.$isBestPop && css`
-        background-color: var(--ion-color-warning-tint);
-        color: var(--ion-color-warning-contrast);
+        box-shadow: 0 0 0 1px rgba(244, 162, 97, 0.25), 0 16px 30px rgba(244, 162, 97, 0.12);
     `}
     ${props => props.$isBestRiskReward && css`
-        background-color: var(--ion-color-primary-tint);
-        color: var(--ion-color-primary-contrast);
+        box-shadow: 0 0 0 1px rgba(103, 168, 255, 0.25), 0 16px 30px rgba(103, 168, 255, 0.12);
     `}
-
     ${props => props.$isBestRiskReward && props.$isBestPop && css`
-        background: linear-gradient(to right, var(--ion-color-primary-tint), var(--ion-color-warning-tint));
-        color: var(--ion-color-primary-contrast);
+        box-shadow:
+            0 0 0 1px rgba(103, 168, 255, 0.22),
+            0 0 0 3px rgba(244, 162, 97, 0.12),
+            0 18px 34px rgba(73, 112, 186, 0.14);
     `}
 
     ${props => props.$hasConflict && css`
-        border: 5px solid var(--ion-color-danger);
-        border-radius: 8px;
-        box-shadow: 0 0 20px 5px rgba(255, 77, 109, 0.6),
-                    0 0 40px 10px rgba(255, 77, 109, 0.3),
-                    inset 0 0 15px rgba(255, 77, 109, 0.1);
+        border-color: rgba(255, 107, 126, 0.55);
+    `}
+`
+
+const StrategyBox = styled.div<{$hasConflict: boolean}>`
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px;
+    color: var(--app-text);
+
+    @media (max-width: 480px) {
+        padding: 12px;
+    }
+
+    ${props => props.$hasConflict && css`
+        box-shadow: inset 0 0 0 1px rgba(255, 107, 126, 0.2);
+    `}
+`
+
+const BadgeRow = styled.div`
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+`
+
+const StrategyBadge = styled.span<{ $tone: 'primary' | 'warning' | 'danger' }>`
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+
+    ${props => props.$tone === 'primary' && css`
+        background: rgba(103, 168, 255, 0.14);
+        color: var(--ion-color-primary);
+        border: 1px solid rgba(103, 168, 255, 0.24);
+    `}
+
+    ${props => props.$tone === 'warning' && css`
+        background: rgba(244, 162, 97, 0.14);
+        color: var(--ion-color-tertiary);
+        border: 1px solid rgba(244, 162, 97, 0.24);
+    `}
+
+    ${props => props.$tone === 'danger' && css`
+        background: rgba(255, 107, 126, 0.14);
+        color: var(--ion-color-danger);
+        border: 1px solid rgba(255, 107, 126, 0.26);
     `}
 `
 
@@ -96,11 +136,18 @@ export const OptionsStrategyComponent: React.FC<OptionsStrategyComponentProps> =
     const deltaBias = getDeltaBias(props.strategy.delta);
 
     return (
-        <IonCard>
-            <StrategyBox $isBestRiskReward={isBestRiskReward}
-                         $isBestPop={isBestPop}
-                         $hasConflict={hasConflict}
-                         $deltaBias={deltaBias}>
+        <StrategyCard $isBestRiskReward={isBestRiskReward}
+                      $isBestPop={isBestPop}
+                      $hasConflict={hasConflict}
+                      $deltaBias={deltaBias}>
+            <StrategyBox $hasConflict={hasConflict}>
+                {(isBestRiskReward || isBestPop || hasConflict) ? (
+                    <BadgeRow>
+                        {isBestRiskReward ? <StrategyBadge $tone="primary">Best risk/reward</StrategyBadge> : null}
+                        {isBestPop ? <StrategyBadge $tone="warning">Best POP</StrategyBadge> : null}
+                        {hasConflict ? <StrategyBadge $tone="danger">Conflict</StrategyBadge> : null}
+                    </BadgeRow>
+                ) : null}
                 {hasConflict && (
                     <ConflictWarningBox>
                         <ConflictIcon icon={warningOutline} />
@@ -111,6 +158,6 @@ export const OptionsStrategyComponent: React.FC<OptionsStrategyComponentProps> =
                 {props.strategy.legs.map(leg => (<OptionsStrategyLegComponent key={leg.key} leg={leg}/>))}
                 <OptionsStrategyFooterComponent strategy={props.strategy} onOpenTradeDialog={() => props.onOpenTradeModal(props.strategy)}/>
             </StrategyBox>
-        </IonCard>
+        </StrategyCard>
     )
 })

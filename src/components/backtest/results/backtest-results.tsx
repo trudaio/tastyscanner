@@ -9,6 +9,7 @@ import React, { useState } from 'react';
 import {
     SectionTitle, CardsGrid, StatCard, StatLabel, StatValue,
     SaveRow, SaveInput, SaveButton, ProgressText,
+    ResultsHeader, ResultsTitle, ResultsCaption, ResultsMetaRow, ResultsMetaChip,
     formatDollar, formatPct, plColor, winRateColor,
 } from '../backtest-styled';
 import type { IBacktestResults } from '../../../services/backtest/backtest-engine.interface';
@@ -35,15 +36,23 @@ export const BacktestResultsComponent: React.FC<Props> = ({ results: r, onSave, 
 
     return (
         <>
-            {/* Summary Header */}
-            <SectionTitle>
-                Summary — {r.totalTrades} trades ({r.params.startDate} → {r.params.endDate})
-            </SectionTitle>
+            <ResultsHeader>
+                <ResultsTitle>Rezumat backtest</ResultsTitle>
+                <ResultsCaption>
+                    Rezultatele de mai jos iti arata repede daca setup-ul merita rafinat sau daca trebuie schimbata structura,
+                    sizing-ul ori regulile de iesire.
+                </ResultsCaption>
+                <ResultsMetaRow>
+                    <ResultsMetaChip>{r.totalTrades} trades</ResultsMetaChip>
+                    <ResultsMetaChip>{r.params.startDate} → {r.params.endDate}</ResultsMetaChip>
+                    <ResultsMetaChip>{r.params.tickers.join(', ')}</ResultsMetaChip>
+                    <ResultsMetaChip>{r.params.batchProfitTargets?.length ? 'Batch mode' : 'Single run'}</ResultsMetaChip>
+                </ResultsMetaRow>
+            </ResultsHeader>
 
-            {/* Save Row */}
             <SaveRow>
                 <SaveInput
-                    placeholder="Name this backtest..."
+                    placeholder="Salveaza acest run cu un nume clar..."
                     value={saveName}
                     onChange={e => setSaveName(e.target.value)}
                 />
@@ -51,11 +60,10 @@ export const BacktestResultsComponent: React.FC<Props> = ({ results: r, onSave, 
                     onClick={handleSave}
                     disabled={isSaving || !saveName.trim()}
                 >
-                    {isSaving ? 'Saving...' : 'Save'}
+                    {isSaving ? 'Se salveaza...' : 'Salveaza'}
                 </SaveButton>
             </SaveRow>
 
-            {/* Stat Cards */}
             <CardsGrid>
                 <StatCard $color="#4a9eff">
                     <StatLabel>Total Trades</StatLabel>
@@ -97,11 +105,9 @@ export const BacktestResultsComponent: React.FC<Props> = ({ results: r, onSave, 
                 </StatCard>
             </CardsGrid>
 
-            {/* Equity Curve */}
             <SectionTitle>Equity Curve</SectionTitle>
             <EquityCurveChartComponent equityCurve={r.equityCurve} />
 
-            {/* Monthly P&L */}
             {r.monthlyBreakdown.length > 0 && (
                 <>
                     <SectionTitle>Monthly P&L</SectionTitle>
@@ -109,7 +115,6 @@ export const BacktestResultsComponent: React.FC<Props> = ({ results: r, onSave, 
                 </>
             )}
 
-            {/* Ticker P&L */}
             {r.tickerBreakdown.length > 0 && (
                 <>
                     <SectionTitle>Ticker P&L</SectionTitle>
@@ -117,13 +122,11 @@ export const BacktestResultsComponent: React.FC<Props> = ({ results: r, onSave, 
                 </>
             )}
 
-            {/* Trade History */}
             <SectionTitle>Trade History ({r.trades.length} trades)</SectionTitle>
             <TradeHistoryTableComponent trades={r.trades} />
 
-            {/* Execution Time */}
             <ProgressText>
-                Backtest completed in {(r.executionTimeMs / 1000).toFixed(1)}s
+                Backtest finalizat in {(r.executionTimeMs / 1000).toFixed(1)}s. Foloseste salvarea doar pentru variantele care chiar merita comparate sau reluate.
             </ProgressText>
         </>
     );

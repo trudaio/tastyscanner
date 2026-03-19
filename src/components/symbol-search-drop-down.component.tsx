@@ -17,26 +17,33 @@ const ComponentContainerBox = styled.div`
     display: flex;
     flex-direction: row;
     align-items: center;
+    min-width: min(320px, 100%);
 `
 
 const SearchIconBox = styled.div`
     position: absolute;
-    right: 8px;
+    right: 14px;
+    display: flex;
+    align-items: center;
+    color: var(--app-text-muted);
 `
 
 
 
 const DropDownContainerBox = styled.div<{$isOpen: boolean}>`
     display: ${props => props.$isOpen ? 'block' : 'none'};
-    min-width: 400px;
-    max-width: 400px;
+    min-width: min(460px, calc(100vw - 32px));
+    max-width: min(460px, calc(100vw - 32px));
     min-height: 150px;
-    max-height: 500px;
+    max-height: min(420px, 60vh);
     z-index: 1000;
-    border: 1px solid var(--ion-color-light-shade);
-    background-color: var(--ion-color-light);
-    border-radius: 8px;
-    padding: 8px;
+    border: 1px solid var(--app-border-strong);
+    background:
+        radial-gradient(circle at top right, rgba(103, 168, 255, 0.12), transparent 32%),
+        var(--app-panel-surface);
+    box-shadow: var(--app-shadow);
+    border-radius: 18px;
+    padding: 10px;
     overflow-y: auto;
 `
 
@@ -49,26 +56,44 @@ const DropDownItemContainerBox = styled.div`
     display: flex;
     flex-direction: column;
     width: 100%;
-    border-bottom: 1px solid var(--ion-color-medium-tint);
-    padding: 8px;
+    border-bottom: 1px solid rgba(162, 184, 219, 0.1);
+    padding: 12px 14px;
     cursor: pointer;
     gap: 4px;
+    color: var(--app-text-soft);
+    border-radius: 12px;
     &:last-of-type {
         border-bottom: none;
     }
     
     &:hover {
-        background-color: var(--ion-color-dark);
-        color: var(--ion-color-dark-contrast);
+        background: var(--app-hover-surface);
+        color: var(--app-text);
         ${SymbolBox} {
-            color: var(--ion-color-dark-contrast);
+            color: var(--ion-color-primary);
         }
         
     }
 `
 
 const DropDownInputBox = styled(InputBaseBox)`
-    max-width: 150px;
+    width: min(320px, calc(100vw - 80px));
+    min-height: 48px;
+    padding: 11px 44px 11px 14px;
+    border-radius: 14px;
+    border: 1px solid var(--app-border);
+    background: var(--app-surface-1);
+    color: var(--app-text);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+
+    &::placeholder {
+        color: var(--app-text-muted);
+    }
+
+    &:focus {
+        border-color: rgba(103, 168, 255, 0.45);
+        box-shadow: 0 0 0 4px rgba(103, 168, 255, 0.12);
+    }
 `
 
 
@@ -175,7 +200,13 @@ export const SymbolSearchDropDownComponent: React.FC = observer(() => {
 
     return (
         <ComponentContainerBox>
-            <DropDownInputBox ref={inputElementRef} value={query} onChange={(e) => onChange(e.target.value ?? "")} onFocus={onFocus}/>
+            <DropDownInputBox
+                ref={inputElementRef}
+                value={query}
+                placeholder="Cauta SPY, QQQ, AAPL..."
+                onChange={(e) => onChange(e.target.value ?? "")}
+                onFocus={onFocus}
+            />
             <SearchIconBox>
                 <IonIcon icon={searchOutline}/>
             </SearchIconBox>
@@ -185,4 +216,3 @@ export const SymbolSearchDropDownComponent: React.FC = observer(() => {
 
 
 })
-

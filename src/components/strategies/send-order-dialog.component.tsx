@@ -25,7 +25,7 @@ const HeaderBox = styled.div`
     justify-content: flex-end;
     width: 100%;
     padding: 16px;
-    border-bottom: 1px solid var(--ion-color-light-shade);
+    border-bottom: 1px solid var(--app-border);
 `
 const TitleBox = styled.div`
     flex-grow: 1;
@@ -63,7 +63,7 @@ const FooterBox = styled.div`
     flex-direction: row;
     justify-content: flex-end;
     width: 100%;
-    background-color: var(--ion-color-light);
+    background-color: var(--app-panel-surface);
     padding: 16px;
     
 `
@@ -86,7 +86,7 @@ const ReadonlyFieldValueBox = styled(FieldLabelBox)`
 const MidPriceValueBox = styled(ReadonlyFieldValueBox)`
     text-align: center;
     padding: 8px;
-    border: 1px solid var(--ion-color-light-shade);
+    border: 1px solid var(--app-border);
     border-radius: 8px;
 `
 
@@ -103,7 +103,7 @@ const BpeInfoBox = styled.div`
 
 const BpeLabel = styled.span`
     font-size: 13px;
-    color: #888;
+    color: var(--app-text-muted);
 `
 
 const BpeValue = styled.span`
@@ -169,7 +169,7 @@ const LockerBox = styled.div`
 `
 
 const LegCellBox = styled.div`
-    border-bottom: 1px solid var(--ion-color-light-shade);
+    border-bottom: 1px solid var(--app-border);
     padding: 4px;
     width: 100%;
     text-align: center;

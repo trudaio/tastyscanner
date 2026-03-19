@@ -1,32 +1,16 @@
 import React, { useState } from 'react';
-import {
-    IonPage,
-    IonContent,
-    IonCard,
-    IonCardHeader,
-    IonCardTitle,
-    IonCardContent,
-    IonItem,
-    IonInput,
-    IonButton,
-    IonText,
-} from '@ionic/react';
+import { IonInput } from '@ionic/react';
 import { useHistory } from 'react-router-dom';
 import { FirebaseAuthService } from '../services/auth/firebase-auth.service';
-import styled from 'styled-components';
-
-const CenteredContainer = styled.div`
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100%;
-    padding: 20px;
-`;
-
-const StyledCard = styled(IonCard)`
-    max-width: 400px;
-    width: 100%;
-`;
+import { AuthLayout } from '../components/ui/auth-layout';
+import {
+    AuthField,
+    AuthForm,
+    AuthHelper,
+    AuthMessage,
+    AuthPrimaryButton,
+    AuthSecondaryButton,
+} from '../components/ui/auth-form';
 
 const authService = new FirebaseAuthService();
 
@@ -45,65 +29,64 @@ export const LoginPage: React.FC = () => {
             await authService.login(email, password);
             history.push('/app');
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Login failed');
+            setError(err instanceof Error ? err.message : 'Autentificarea a esuat');
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <IonPage>
-            <IonContent>
-                <CenteredContainer>
-                    <StyledCard>
-                        <IonCardHeader>
-                            <IonCardTitle className="ion-text-center">Operatiunea Guvidul</IonCardTitle>
-                        </IonCardHeader>
-                        <IonCardContent>
-                            <form onSubmit={handleSubmit}>
-                                <IonItem>
-                                    <IonInput
-                                        label="Email"
-                                        labelPlacement="stacked"
-                                        type="email"
-                                        placeholder="your@email.com"
-                                        value={email}
-                                        onIonInput={e => setEmail(e.detail.value ?? '')}
-                                        required
-                                    />
-                                </IonItem>
-                                <IonItem>
-                                    <IonInput
-                                        label="Password"
-                                        labelPlacement="stacked"
-                                        type="password"
-                                        placeholder="Your password"
-                                        value={password}
-                                        onIonInput={e => setPassword(e.detail.value ?? '')}
-                                        required
-                                    />
-                                </IonItem>
-                                <IonButton
-                                    expand="block"
-                                    type="submit"
-                                    disabled={loading}
-                                    className="ion-margin-top"
-                                >
-                                    {loading ? 'Logging in...' : 'Login'}
-                                </IonButton>
-                                {error && (
-                                    <IonText color="danger">
-                                        <p>{error}</p>
-                                    </IonText>
-                                )}
-                                <IonButton fill="clear" expand="block" routerLink="/register">
-                                    Don't have an account? Register
-                                </IonButton>
-                            </form>
-                        </IonCardContent>
-                    </StyledCard>
-                </CenteredContainer>
-            </IonContent>
-        </IonPage>
+        <AuthLayout
+            badge="Workspace activ"
+            brandTitle="Acces rapid la un workspace disciplinat."
+            brandSubtitle="Operatiunea Guvidul este gandita pentru selectie structurata, control de risc si executie fara frictiune operationala."
+            eyebrow="Autentificare"
+            subtitle="Autentifica-te pentru a reveni in workspace-ul tau, cu watchlist-uri, filtre si date de portofoliu disponibile in acelasi flux."
+            title="Reintra in mediul de lucru"
+        >
+            <AuthForm onSubmit={handleSubmit}>
+                <AuthField>
+                    <IonInput
+                        label="Email"
+                        labelPlacement="stacked"
+                        type="email"
+                        placeholder="email@exemplu.com"
+                        value={email}
+                        onIonInput={e => setEmail(e.detail.value ?? '')}
+                        required
+                    />
+                </AuthField>
+
+                <AuthField>
+                    <IonInput
+                        label="Parola"
+                        labelPlacement="stacked"
+                        type="password"
+                        placeholder="Introdu parola contului"
+                        value={password}
+                        onIonInput={e => setPassword(e.detail.value ?? '')}
+                        required
+                    />
+                </AuthField>
+
+                <AuthHelper>
+                    <span>Ai nevoie doar de email si parola. Credentialele TastyTrade raman separate si se administreaza din contul tau.</span>
+                </AuthHelper>
+
+                {error && (
+                    <AuthMessage color="danger">
+                        <p>{error}</p>
+                    </AuthMessage>
+                )}
+
+                <AuthPrimaryButton expand="block" type="submit" disabled={loading}>
+                    {loading ? 'Se autentifica...' : 'Acceseaza workspace-ul'}
+                </AuthPrimaryButton>
+
+                <AuthSecondaryButton fill="outline" expand="block" routerLink="/register">
+                    Nu ai cont? Creeaza unul
+                </AuthSecondaryButton>
+            </AuthForm>
+        </AuthLayout>
     );
 };

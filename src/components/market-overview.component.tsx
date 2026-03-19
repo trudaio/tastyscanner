@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import styled from 'styled-components';
+import { getStoredTheme } from '../theme/theme-preference';
 
 const INDICES = [
     { symbol: 'AMEX:SPY',   label: 'SPY' },
@@ -45,10 +46,11 @@ const Grid = styled.div`
 `;
 
 const ChartCard = styled.div`
-    border-radius: 10px;
+    border-radius: 16px;
     overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--app-border);
+    background: var(--app-panel-surface);
+    box-shadow: var(--app-shadow);
     height: 200px;
     position: relative;
 
@@ -86,7 +88,7 @@ const MiniChart: React.FC<{ symbol: string; uniqueId: string }> = ({ symbol, uni
             height: '100%',
             locale: 'en',
             dateRange: '3M',
-            colorTheme: 'dark',
+            colorTheme: getStoredTheme() === 'light' ? 'light' : 'dark',
             isTransparent: true,
             autosize: true,
             largeChartUrl: '',

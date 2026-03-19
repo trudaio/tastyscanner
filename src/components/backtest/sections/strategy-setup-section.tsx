@@ -114,7 +114,7 @@ export const StrategySetupSection: React.FC<StrategySetupSectionProps> = ({
                 ))}
             </ChipsRow>
             {ladderingMode === 'fill-all' && (
-                <div style={{ color: '#888', fontSize: 11, marginTop: -6, marginBottom: 12 }}>
+                <div style={{ color: 'var(--app-text-muted)', fontSize: 11, marginTop: -6, marginBottom: 12 }}>
                     Opens IC at every available expiration in DTE range. Day 1 fills all expirations; replaces at furthest DTE when one closes.
                 </div>
             )}

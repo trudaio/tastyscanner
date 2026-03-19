@@ -1,30 +1,15 @@
 import React from 'react';
-import {
-    IonButtons,
-    IonContent,
-    IonHeader,
-    IonMenuButton,
-    IonPage,
-    IonTitle,
-    IonToolbar
-} from '@ionic/react';
 import { IronCondorDashboardComponent } from '../components/iron-condor-dashboard/iron-condor-dashboard.component';
+import { AppPageShell } from '../components/ui/app-page-shell';
 
 export const IronCondorDashboardPage: React.FC = () => {
     return (
-        <IonPage>
-            <IonHeader>
-                <IonToolbar>
-                    <IonButtons slot="start">
-                        <IonMenuButton />
-                    </IonButtons>
-                    <IonTitle>Iron Condor Analytics</IonTitle>
-                </IonToolbar>
-            </IonHeader>
-
-            <IonContent fullscreen>
-                <IronCondorDashboardComponent />
-            </IonContent>
-        </IonPage>
+        <AppPageShell
+            eyebrow="Analytics"
+            title="Iron Condor analytics"
+            subtitle="Citire rapida a structurii, expunerii si performantelor pentru strategiile Iron Condor."
+        >
+            <IronCondorDashboardComponent />
+        </AppPageShell>
     );
 };

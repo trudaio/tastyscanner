@@ -19,6 +19,12 @@
 .env.production.local
 /.nx
 /.nx/cache
+/.brv
+/.gstack
+/.learnings
+firebase-debug.log
+landing-mobile.png
+local-welcome.png
 /.vscode/*
 !/.vscode/extensions.json
 .idea

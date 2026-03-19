@@ -6,13 +6,15 @@ import { IPositionViewModel } from '../../services/positions/positions.service.i
 const VisualizationContainer = styled.div`
     width: 100%;
     padding: 20px;
-    background-color: #1a1a1a;
-    border-radius: 8px;
+    background: var(--app-panel-surface);
+    border: 1px solid var(--app-border);
+    border-radius: 18px;
+    box-shadow: var(--app-shadow);
     overflow-x: auto;
 `;
 
 const Title = styled.h3`
-    color: #fff;
+    color: var(--app-text);
     margin: 0 0 16px 0;
     font-size: 16px;
     font-weight: 500;
@@ -62,16 +64,16 @@ const PositionBox = styled.div<{ $isShort: boolean; $isPut: boolean }>`
     font-size: 11px;
     font-weight: 600;
     border-radius: 3px;
-    border: 2px solid ${props => props.$isShort ? '#ff4d6d' : '#888'};
-    background-color: ${props => props.$isShort ? 'rgba(255, 77, 109, 0.3)' : '#2a2a2a'};
-    color: ${props => props.$isShort ? '#fff' : '#ccc'};
+    border: 2px solid ${props => props.$isShort ? 'var(--ion-color-danger)' : 'var(--app-border-strong)'};
+    background-color: ${props => props.$isShort ? 'rgba(255, 107, 126, 0.18)' : 'var(--app-subtle-surface)'};
+    color: ${props => props.$isShort ? 'var(--app-text)' : 'var(--app-text-soft)'};
     white-space: nowrap;
 `;
 
 const StrikeLine = styled.div<{ $isCurrentPrice?: boolean }>`
     width: 2px;
     height: ${props => props.$isCurrentPrice ? '100%' : '8px'};
-    background-color: ${props => props.$isCurrentPrice ? '#ff6b35' : '#444'};
+    background-color: ${props => props.$isCurrentPrice ? 'var(--ion-color-tertiary)' : 'var(--app-border-strong)'};
     position: absolute;
     bottom: 0;
     left: 50%;
@@ -81,14 +83,14 @@ const StrikeLine = styled.div<{ $isCurrentPrice?: boolean }>`
 const PriceAxis = styled.div`
     display: flex;
     justify-content: center;
-    border-top: 2px solid #444;
+    border-top: 2px solid var(--app-border-strong);
     margin-top: 0;
     position: relative;
 `;
 
 const StrikeLabel = styled.div<{ $isCurrentPrice?: boolean }>`
     font-size: 10px;
-    color: ${props => props.$isCurrentPrice ? '#ff6b35' : '#888'};
+    color: ${props => props.$isCurrentPrice ? 'var(--ion-color-tertiary)' : 'var(--app-text-muted)'};
     font-weight: ${props => props.$isCurrentPrice ? '600' : '400'};
     padding-top: 8px;
     min-width: 36px;
@@ -99,8 +101,8 @@ const CurrentPriceMarker = styled.div`
     position: absolute;
     width: 16px;
     height: 16px;
-    background-color: #ff6b35;
-    border: 2px solid #fff;
+    background-color: var(--ion-color-tertiary);
+    border: 2px solid var(--app-panel-solid);
     border-radius: 50%;
     z-index: 20;
     transform: translateX(-50%);
@@ -115,7 +117,7 @@ const CurrentPriceMarker = styled.div`
         height: 0;
         border-left: 6px solid transparent;
         border-right: 6px solid transparent;
-        border-top: 8px solid #ff6b35;
+        border-top: 8px solid var(--ion-color-tertiary);
     }
 `;
 
@@ -131,7 +133,7 @@ const ProbabilityCurve = styled.svg`
 
 const NoPositionsMessage = styled.div`
     text-align: center;
-    color: #666;
+    color: var(--app-text-muted);
     padding: 40px;
     font-size: 14px;
 `;
@@ -139,13 +141,13 @@ const NoPositionsMessage = styled.div`
 const AlertsContainer = styled.div`
     margin-top: 16px;
     padding: 16px;
-    background: rgba(255, 107, 53, 0.1);
-    border: 1px solid rgba(255, 107, 53, 0.3);
-    border-radius: 8px;
+    background: rgba(244, 162, 97, 0.12);
+    border: 1px solid rgba(244, 162, 97, 0.24);
+    border-radius: 14px;
 `;
 
 const AlertTitle = styled.div`
-    color: #ff6b35;
+    color: var(--ion-color-tertiary);
     font-weight: 600;
     font-size: 14px;
     margin-bottom: 12px;
@@ -159,11 +161,12 @@ const AlertItem = styled.div`
     align-items: center;
     gap: 12px;
     padding: 8px 12px;
-    background: rgba(255, 77, 109, 0.1);
-    border-radius: 4px;
+    background: var(--app-subtle-surface);
+    border-radius: 10px;
+    border: 1px solid var(--app-border);
     margin-bottom: 8px;
     font-size: 13px;
-    color: #fff;
+    color: var(--app-text);
 
     &:last-child {
         margin-bottom: 0;
@@ -177,12 +180,12 @@ const AlertBadge = styled.span<{ $severity: 'high' | 'medium' | 'low' }>`
     font-weight: 600;
     background: ${props => {
         switch (props.$severity) {
-            case 'high': return '#ff4d6d';
-            case 'medium': return '#ff6b35';
-            default: return '#ffd93d';
+            case 'high': return 'var(--ion-color-danger)';
+            case 'medium': return 'var(--ion-color-tertiary)';
+            default: return 'var(--ion-color-warning)';
         }
     }};
-    color: ${props => props.$severity === 'low' ? '#000' : '#fff'};
+    color: ${props => props.$severity === 'low' ? '#1a1405' : 'var(--app-text)'};
 `;
 
 const AlertText = styled.span`
@@ -190,7 +193,7 @@ const AlertText = styled.span`
 `;
 
 const AlertDTE = styled.span`
-    color: #aaa;
+    color: var(--app-text-muted);
     font-size: 12px;
 `;
 

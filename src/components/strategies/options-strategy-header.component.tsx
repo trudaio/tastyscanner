@@ -5,8 +5,12 @@ import {OptionsStrategyLegBaseBox} from "./boxes/options-strategy-leg-base.box";
 import {DELTA_SYMBOL} from "../../utils/global-constants";
 
 const HeaderBox = styled(OptionsStrategyLegBaseBox)`
-    background-color: var(--ion-color-medium);
-    color: var(--ion-color-medium-contrast);
+    background: var(--app-subtle-surface-2);
+    color: var(--app-text-muted);
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
 `
 
 

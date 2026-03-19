@@ -7,7 +7,7 @@
 import React from 'react';
 import styled from 'styled-components';
 import type { IBacktestBatchResults } from '../../../services/backtest/backtest-engine.interface';
-import { formatDollar, formatPct, plColor, SectionTitle } from '../backtest-styled';
+import { PanelHeader, PanelHeaderText, PanelHeaderTitle, ProgressText, formatDollar, formatPct } from '../backtest-styled';
 
 // ─── Styled ─────────────────────────────────────────────────────────────────
 
@@ -15,68 +15,68 @@ const ComparisonContainer = styled.div`
     margin: 24px 0;
 `;
 
+const ComparisonScroller = styled.div`
+    overflow-x: auto;
+    border-radius: 18px;
+    border: 1px solid var(--app-border);
+    background: var(--app-panel-surface);
+    box-shadow: var(--app-shadow);
+`;
+
 const ComparisonTable = styled.table`
     width: 100%;
     border-collapse: collapse;
-    background: #1a1a2e;
-    border-radius: 10px;
-    overflow: hidden;
     font-size: 13px;
+    min-width: 720px;
 `;
 
 const HeaderRow = styled.tr`
-    background: #0d0d1a;
+    background: var(--app-table-head-surface);
 `;
 
 const HeaderCell = styled.th`
     padding: 12px 14px;
-    color: #888;
-    font-weight: 500;
+    color: var(--app-text-muted);
+    font-weight: 800;
     text-transform: uppercase;
     font-size: 11px;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.08em;
     text-align: center;
-    border-bottom: 1px solid #2a2a3e;
+    border-bottom: 1px solid var(--app-border);
 
     &:first-child {
         text-align: left;
-        color: #ccc;
+        color: var(--app-text-soft);
     }
 `;
 
 const MetricRow = styled.tr`
-    border-bottom: 1px solid #1a1a2e;
-    &:hover { background: rgba(74, 158, 255, 0.03); }
+    border-bottom: 1px solid rgba(162, 184, 219, 0.08);
+    &:nth-child(even) { background: var(--app-subtle-surface); }
+    &:hover { background: var(--app-hover-surface); }
 `;
 
 const MetricLabel = styled.td`
-    padding: 10px 14px;
-    color: #aaa;
-    font-weight: 500;
+    padding: 12px 14px;
+    color: var(--app-text-soft);
+    font-weight: 700;
     font-size: 12px;
     white-space: nowrap;
 `;
 
 const MetricCell = styled.td<{ $isBest?: boolean; $isWorst?: boolean }>`
-    padding: 10px 14px;
+    padding: 12px 14px;
     text-align: center;
-    font-weight: 600;
+    font-weight: 700;
     font-size: 14px;
-    color: ${p => p.$isBest ? '#4dff91' : p.$isWorst ? '#ff4d6d' : '#ccc'};
-    background: ${p => p.$isBest ? 'rgba(77, 255, 145, 0.06)' : p.$isWorst ? 'rgba(255, 77, 109, 0.04)' : 'transparent'};
+    color: ${p => p.$isBest ? '#4dff91' : p.$isWorst ? '#ff4d6d' : 'var(--app-text)'};
+    background: ${p => p.$isBest ? 'rgba(77, 255, 145, 0.08)' : p.$isWorst ? 'rgba(255, 77, 109, 0.05)' : 'transparent'};
 `;
 
 const ScenarioLabel = styled.div`
     font-size: 13px;
-    font-weight: 600;
-    color: #4a9eff;
-`;
-
-const ExecutionTime = styled.div`
-    color: #555;
-    font-size: 11px;
-    margin-top: 8px;
-    text-align: right;
+    font-weight: 800;
+    color: var(--ion-color-primary);
 `;
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -199,41 +199,48 @@ export const BatchComparisonComponent: React.FC<BatchComparisonProps> = ({ batch
 
     return (
         <ComparisonContainer>
-            <SectionTitle>Batch Comparison</SectionTitle>
-            <ComparisonTable>
-                <thead>
-                    <HeaderRow>
-                        <HeaderCell>Metric</HeaderCell>
-                        {scenarios.map(s => (
-                            <HeaderCell key={s.label}>
-                                <ScenarioLabel>{s.label}</ScenarioLabel>
-                            </HeaderCell>
-                        ))}
-                    </HeaderRow>
-                </thead>
-                <tbody>
-                    {metrics.map(metric => {
-                        const { bestIdx, worstIdx } = findBestWorst(metric);
-                        return (
-                            <MetricRow key={metric.label}>
-                                <MetricLabel>{metric.label}</MetricLabel>
-                                {scenarios.map((_, i) => (
-                                    <MetricCell
-                                        key={i}
-                                        $isBest={i === bestIdx}
-                                        $isWorst={i === worstIdx}
-                                    >
-                                        {metric.format(metric.getValue(i))}
-                                    </MetricCell>
-                                ))}
-                            </MetricRow>
-                        );
-                    })}
-                </tbody>
-            </ComparisonTable>
-            <ExecutionTime>
-                {scenarios.length} scenarios completed in {(batchResults.executionTimeMs / 1000).toFixed(1)}s
-            </ExecutionTime>
+            <PanelHeader>
+                <PanelHeaderTitle>Batch comparison</PanelHeaderTitle>
+                <PanelHeaderText>
+                    Compara scenariile unul langa altul si vezi imediat unde castigi P&amp;L, unde sacrifici drawdown si unde Sharpe-ul ramane sanatos.
+                </PanelHeaderText>
+            </PanelHeader>
+            <ComparisonScroller>
+                <ComparisonTable>
+                    <thead>
+                        <HeaderRow>
+                            <HeaderCell>Metric</HeaderCell>
+                            {scenarios.map(s => (
+                                <HeaderCell key={s.label}>
+                                    <ScenarioLabel>{s.label}</ScenarioLabel>
+                                </HeaderCell>
+                            ))}
+                        </HeaderRow>
+                    </thead>
+                    <tbody>
+                        {metrics.map(metric => {
+                            const { bestIdx, worstIdx } = findBestWorst(metric);
+                            return (
+                                <MetricRow key={metric.label}>
+                                    <MetricLabel>{metric.label}</MetricLabel>
+                                    {scenarios.map((_, i) => (
+                                        <MetricCell
+                                            key={i}
+                                            $isBest={i === bestIdx}
+                                            $isWorst={i === worstIdx}
+                                        >
+                                            {metric.format(metric.getValue(i))}
+                                        </MetricCell>
+                                    ))}
+                                </MetricRow>
+                            );
+                        })}
+                    </tbody>
+                </ComparisonTable>
+            </ComparisonScroller>
+            <ProgressText>
+                {scenarios.length} scenarii finalizate in {(batchResults.executionTimeMs / 1000).toFixed(1)}s.
+            </ProgressText>
         </ComparisonContainer>
     );
 };

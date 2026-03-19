@@ -21,19 +21,19 @@ const ExitRuleRow = styled.div`
     align-items: center;
     gap: 12px;
     padding: 10px 0;
-    border-bottom: 1px solid #1a1a2e;
+    border-bottom: 1px solid var(--app-border);
     &:last-child { border-bottom: none; }
 `;
 
 const ExitRuleLabel = styled.div`
-    color: #ccc;
+    color: var(--app-text-soft);
     font-size: 13px;
     font-weight: 500;
     min-width: 120px;
 `;
 
 const ExitRuleValue = styled.div`
-    color: #888;
+    color: var(--app-text-muted);
     font-size: 13px;
     flex: 1;
     display: flex;
@@ -42,21 +42,21 @@ const ExitRuleValue = styled.div`
 `;
 
 const DisabledText = styled.span`
-    color: #555;
+    color: var(--app-text-muted);
     font-size: 13px;
     font-style: italic;
 `;
 
 const BatchBox = styled.div`
-    background: rgba(74, 158, 255, 0.06);
-    border: 1px solid rgba(74, 158, 255, 0.2);
-    border-radius: 8px;
+    background: rgba(103, 168, 255, 0.08);
+    border: 1px solid rgba(103, 168, 255, 0.2);
+    border-radius: 14px;
     padding: 12px;
     margin-top: 12px;
 `;
 
 const BatchLabel = styled.div`
-    color: #aaa;
+    color: var(--app-text-muted);
     font-size: 11px;
     margin-bottom: 8px;
 `;

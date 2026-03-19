@@ -69,7 +69,7 @@ export const PositionEntrySection: React.FC<PositionEntrySectionProps> = ({
                 </ParamGroup>
             </ParamsGrid>
 
-            <div style={{ color: '#666', fontSize: 12, marginTop: 4 }}>
+            <div style={{ color: 'var(--app-text-muted)', fontSize: 12, marginTop: 4 }}>
                 Entry: 1 hour after market open (daily data)
             </div>
         </div>

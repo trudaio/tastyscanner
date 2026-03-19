@@ -8,7 +8,16 @@ import React, { useEffect } from 'react';
 import { observer } from 'mobx-react-lite';
 import { IonSpinner } from '@ionic/react';
 import { useServices } from '../../../hooks/use-services.hook';
-import { SectionTitle, SavedTestsGrid } from '../backtest-styled';
+import {
+    PanelEmptyState,
+    PanelEmptyText,
+    PanelEmptyTitle,
+    PanelHint,
+    PanelHintRow,
+    SavedTestsGrid,
+    SectionLead,
+    SectionTitle,
+} from '../backtest-styled';
 import { SavedTestCardComponent } from './saved-test-card';
 import type { IBacktestParams, IBacktestResults } from '../../../services/backtest/backtest-engine.interface';
 
@@ -36,6 +45,7 @@ export const SavedTestsPanelComponent: React.FC<Props> = observer(({ onLoadTest 
     return (
         <>
             <SectionTitle>Saved Tests</SectionTitle>
+            <SectionLead>Salveaza scenariile bune si reincarca rapid un setup complet cu rezultate incluse.</SectionLead>
 
             {bt.isLoadingSavedTests && (
                 <div style={{ textAlign: 'center', padding: '20px' }}>
@@ -44,9 +54,17 @@ export const SavedTestsPanelComponent: React.FC<Props> = observer(({ onLoadTest 
             )}
 
             {!bt.isLoadingSavedTests && bt.savedTests.length === 0 && (
-                <div style={{ color: '#666', fontSize: '13px', padding: '12px 0' }}>
-                    No saved tests yet
-                </div>
+                <PanelEmptyState>
+                    <PanelEmptyTitle>Nu ai teste salvate inca</PanelEmptyTitle>
+                    <PanelEmptyText>
+                        Dupa primul run reusit, poti salva parametrii si rezultatele ca sa compari iteratii diferite fara sa reconstruiesti setup-ul manual.
+                    </PanelEmptyText>
+                    <PanelHintRow>
+                        <PanelHint>Salvezi dupa rulare</PanelHint>
+                        <PanelHint>Reincarci parametrii complet</PanelHint>
+                        <PanelHint>Compara iteratii mai rapid</PanelHint>
+                    </PanelHintRow>
+                </PanelEmptyState>
             )}
 
             {!bt.isLoadingSavedTests && bt.savedTests.length > 0 && (

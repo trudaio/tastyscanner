@@ -16,8 +16,10 @@ import { useServices } from '../../hooks/use-services.hook';
 import { IIronCondorSummary, IIronCondorTrade } from '../../services/iron-condor-analytics/iron-condor-analytics.interface';
 
 const DashboardContainer = styled.div`
-    padding: 20px;
-    background-color: #0d0d1a;
+    width: min(100%, 1120px);
+    margin: 0 auto;
+    padding: clamp(18px, 3vw, 28px);
+    background: transparent;
     min-height: 100%;
 
     @media (max-width: 480px) {
@@ -39,7 +41,7 @@ const Header = styled.div`
 `;
 
 const Title = styled.h1`
-    color: #fff;
+    color: var(--app-text);
     margin: 0;
     font-size: 24px;
 
@@ -69,17 +71,19 @@ const StatCard = styled(IonCard)<{ $variant?: 'success' | 'danger' | 'neutral' }
     margin: 0;
     --background: ${props => {
         switch (props.$variant) {
-            case 'success': return 'linear-gradient(135deg, #1a472a 0%, #2d5a3d 100%)';
-            case 'danger': return 'linear-gradient(135deg, #4a1a1a 0%, #5a2d2d 100%)';
-            default: return 'linear-gradient(135deg, #1a1a2e 0%, #2d2d4a 100%)';
+            case 'success': return 'linear-gradient(135deg, rgba(84, 214, 148, 0.18) 0%, rgba(84, 214, 148, 0.08) 100%)';
+            case 'danger': return 'linear-gradient(135deg, rgba(255, 107, 126, 0.18) 0%, rgba(255, 107, 126, 0.08) 100%)';
+            default: return 'var(--app-panel-surface)';
         }
     }};
+    border: 1px solid var(--app-border);
+    box-shadow: var(--app-shadow);
 `;
 
 const StatValue = styled.div`
     font-size: 32px;
     font-weight: 700;
-    color: #fff;
+    color: var(--app-text);
     margin-bottom: 4px;
 
     @media (max-width: 480px) {
@@ -89,28 +93,30 @@ const StatValue = styled.div`
 
 const StatLabel = styled.div`
     font-size: 14px;
-    color: #aaa;
+    color: var(--app-text-muted);
     text-transform: uppercase;
     letter-spacing: 1px;
 `;
 
 const StatSubtext = styled.div`
     font-size: 12px;
-    color: #888;
+    color: var(--app-text-muted);
     margin-top: 8px;
 `;
 
 const SectionTitle = styled.h2`
-    color: #fff;
+    color: var(--app-text);
     font-size: 18px;
     margin: 24px 0 16px 0;
 `;
 
 const TableContainer = styled.div`
     overflow-x: auto;
-    background: #1a1a2e;
-    border-radius: 8px;
+    background: var(--app-panel-surface);
+    border-radius: 18px;
     margin-bottom: 24px;
+    border: 1px solid var(--app-border);
+    box-shadow: var(--app-shadow);
 `;
 
 const Table = styled.table`
@@ -123,8 +129,8 @@ const Table = styled.table`
 const Th = styled.th<{ $align?: string }>`
     text-align: ${props => props.$align || 'left'};
     padding: 12px 16px;
-    background: #2d2d4a;
-    color: #aaa;
+    background: var(--app-table-head-surface);
+    color: var(--app-text-muted);
     font-weight: 600;
     text-transform: uppercase;
     font-size: 12px;
@@ -133,8 +139,8 @@ const Th = styled.th<{ $align?: string }>`
 
 const Td = styled.td<{ $align?: string }>`
     padding: 12px 16px;
-    border-bottom: 1px solid #2d2d4a;
-    color: #fff;
+    border-bottom: 1px solid var(--app-border);
+    color: var(--app-text);
     text-align: ${props => props.$align || 'left'};
 `;
 
@@ -158,8 +164,9 @@ const DteCell = styled(Td)<{ $dte: number }>`
 
 const CloseBadge = styled.span`
     display: inline-block;
-    background: #ff4d6d;
-    color: #fff;
+    background: rgba(255, 107, 126, 0.16);
+    color: #ff6b7e;
+    border: 1px solid rgba(255, 107, 126, 0.24);
     font-size: 9px;
     font-weight: 700;
     padding: 1px 4px;
@@ -184,14 +191,14 @@ const TargetBadge = styled.span`
 
 const TargetCell = styled(Td)`
     white-space: nowrap;
-    color: #aaa;
+    color: var(--app-text-muted);
     font-size: 12px;
 `;
 
 const WinRateBar = styled.div<{ $rate: number }>`
     width: 100%;
     height: 8px;
-    background: #333;
+    background: var(--app-subtle-surface-3);
     border-radius: 4px;
     overflow: hidden;
     margin-top: 4px;
@@ -212,7 +219,7 @@ const StatusBadge = styled(IonBadge)<{ $status: string }>`
             case 'closed': return '#4dff91';
             case 'expired': return '#ffd93d';
             case 'open': return '#4a9eff';
-            default: return '#888';
+            default: return '#8a96ad';
         }
     }};
     --color: #000;
@@ -224,14 +231,17 @@ const LoadingContainer = styled.div`
     align-items: center;
     justify-content: center;
     padding: 60px;
-    color: #aaa;
+    color: var(--app-text-muted);
     gap: 16px;
 `;
 
 const EmptyState = styled.div`
     text-align: center;
     padding: 60px;
-    color: #666;
+    color: var(--app-text-muted);
+    background: var(--app-subtle-surface);
+    border: 1px dashed var(--app-border);
+    border-radius: 18px;
 `;
 
 export const IronCondorDashboardComponent: React.FC = observer(() => {
@@ -482,7 +492,7 @@ export const IronCondorDashboardComponent: React.FC = observer(() => {
                                     })}
                                 {summary.trades.filter(t => t.status === 'open').length === 0 && (
                                     <tr>
-                                        <Td colSpan={9} $align="center" style={{ color: '#666', padding: '24px' }}>
+                                        <Td colSpan={9} $align="center" style={{ color: 'var(--app-text-muted)', padding: '24px' }}>
                                             No open trades
                                         </Td>
                                     </tr>
@@ -537,7 +547,7 @@ export const IronCondorDashboardComponent: React.FC = observer(() => {
                                     ))}
                                 {summary.trades.filter(t => t.status !== 'open').length === 0 && (
                                     <tr>
-                                        <Td colSpan={9} $align="center" style={{ color: '#666', padding: '24px' }}>
+                                        <Td colSpan={9} $align="center" style={{ color: 'var(--app-text-muted)', padding: '24px' }}>
                                             No closed or expired trades yet
                                         </Td>
                                     </tr>

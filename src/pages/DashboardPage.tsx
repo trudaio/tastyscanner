@@ -1,29 +1,15 @@
 import React from 'react';
-import {
-    IonButtons,
-    IonContent,
-    IonHeader,
-    IonMenuButton,
-    IonPage,
-    IonTitle,
-    IonToolbar
-} from '@ionic/react';
 import { DashboardComponent } from '../components/dashboard/dashboard.component';
+import { AppPageShell } from '../components/ui/app-page-shell';
 
 export const DashboardPage: React.FC = () => {
     return (
-        <IonPage>
-            <IonHeader>
-                <IonToolbar>
-                    <IonButtons slot="start">
-                        <IonMenuButton />
-                    </IonButtons>
-                    <IonTitle>Dashboard</IonTitle>
-                </IonToolbar>
-            </IonHeader>
-            <IonContent fullscreen>
-                <DashboardComponent />
-            </IonContent>
-        </IonPage>
+        <AppPageShell
+            eyebrow="Workspace"
+            title="Management pozitii"
+            subtitle="Monitorizare, context si ajustari pentru expunerea activa din portofoliu."
+        >
+            <DashboardComponent />
+        </AppPageShell>
     );
 };

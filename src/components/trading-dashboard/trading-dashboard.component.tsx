@@ -1,85 +1,127 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { observer } from 'mobx-react-lite';
 import styled from 'styled-components';
+import { useHistory } from 'react-router-dom';
 import { useServices } from '../../hooks/use-services.hook';
 import { ITickerPL, INetLiquidityPoint } from '../../services/trading-dashboard/trading-dashboard.interface';
 
 const DashboardContainer = styled.div`
-    padding: 20px;
-    background-color: #0d0d1a;
+    width: min(100%, 1120px);
+    margin: 0 auto;
+    padding: clamp(18px, 3vw, 28px);
+    background: transparent;
     min-height: 100%;
 
     @media (max-width: 480px) {
-        padding: 12px;
+        padding: 16px;
     }
 `;
 
-const Title = styled.h1`
-    color: #fff;
-    font-size: 24px;
-    margin: 0 0 20px 0;
+const Hero = styled.div`
+    display: grid;
+    gap: 18px;
+    padding: clamp(20px, 3vw, 28px);
+    margin-bottom: 20px;
+    border-radius: 24px;
+    background: var(--app-hero-surface);
+    border: 1px solid var(--app-hero-border);
+    box-shadow: var(--app-shadow);
+`;
+
+const Eyebrow = styled.div`
+    color: var(--ion-color-primary);
+    font-size: 0.76rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+`;
+
+const HeroTitle = styled.h2`
+    margin: 0;
+    color: var(--app-text);
+    font-size: clamp(1.45rem, 2.8vw, 2rem);
+    line-height: 1.06;
+    letter-spacing: -0.03em;
+`;
+
+const HeroText = styled.p`
+    margin: 0;
+    max-width: 72ch;
+    color: var(--app-text-soft);
+    line-height: 1.65;
 `;
 
 const DateRangeContainer = styled.div`
     display: flex;
     gap: 16px;
     align-items: center;
-    margin-bottom: 24px;
     flex-wrap: wrap;
+    padding: 12px;
+    border-radius: 18px;
+    background: var(--app-subtle-surface);
+    border: 1px solid var(--app-border);
 `;
 
 const DateInput = styled.input`
+    min-height: 40px;
     padding: 8px 12px;
-    background: #1a1a2e;
-    border: 1px solid #333;
-    border-radius: 6px;
-    color: #fff;
+    background: var(--app-panel-solid);
+    border: 1px solid var(--app-border);
+    border-radius: 12px;
+    color: var(--app-text);
     font-size: 14px;
 
     &:focus {
         outline: none;
-        border-color: #4a9eff;
+        border-color: var(--app-border-strong);
     }
 `;
 
 const DateLabel = styled.label`
-    color: #aaa;
+    color: var(--app-text-muted);
     font-size: 14px;
 `;
 
 const QuickSelectButton = styled.button<{ $active?: boolean }>`
+    min-height: 38px;
     padding: 8px 16px;
-    background: ${props => props.$active ? '#4a9eff' : '#1a1a2e'};
-    border: 1px solid ${props => props.$active ? '#4a9eff' : '#333'};
-    border-radius: 6px;
-    color: #fff;
+    background: ${props => props.$active ? 'rgba(103, 168, 255, 0.18)' : 'var(--app-subtle-surface)'};
+    border: 1px solid ${props => props.$active ? 'rgba(103, 168, 255, 0.28)' : 'var(--app-border)'};
+    border-radius: 999px;
+    color: ${props => props.$active ? 'var(--app-text)' : 'var(--app-text-soft)'};
     font-size: 13px;
+    font-weight: 700;
     cursor: pointer;
     transition: all 0.2s;
 
     &:hover {
-        background: ${props => props.$active ? '#4a9eff' : '#2a2a3e'};
+        background: ${props => props.$active ? 'rgba(103, 168, 255, 0.22)' : 'var(--app-hover-surface)'};
     }
 `;
 
 const RefreshButton = styled.button`
+    min-height: 40px;
     padding: 8px 20px;
-    background: #4a9eff;
-    border: none;
-    border-radius: 6px;
-    color: #fff;
+    background: linear-gradient(135deg, #67a8ff, #7de2d1);
+    border: 1px solid rgba(103, 168, 255, 0.2);
+    border-radius: 14px;
+    color: #08111f;
     font-size: 14px;
-    font-weight: 500;
+    font-weight: 800;
     cursor: pointer;
     transition: all 0.2s;
 
     &:hover {
-        background: #3a8eef;
+        filter: brightness(0.98);
+        transform: translateY(-1px);
     }
 
     &:disabled {
-        background: #333;
+        background: var(--app-subtle-surface-2);
+        border-color: var(--app-border);
+        color: var(--app-text-muted);
         cursor: not-allowed;
+        transform: none;
     }
 `;
 
@@ -98,10 +140,12 @@ const TotalsRow = styled.div`
     grid-template-columns: 120px repeat(6, 1fr);
     gap: 8px;
     padding: 16px;
-    background: #1a1a2e;
-    border-radius: 8px;
+    background: var(--app-panel-surface);
+    border-radius: 18px;
     font-weight: 600;
     min-width: 680px;
+    border: 1px solid var(--app-border);
+    box-shadow: var(--app-shadow);
 `;
 
 const TotalsHeaderRow = styled.div`
@@ -113,7 +157,7 @@ const TotalsHeaderRow = styled.div`
 `;
 
 const TotalsHeaderLabel = styled.div`
-    color: #666;
+    color: var(--app-text-muted);
     font-size: 11px;
     text-transform: uppercase;
     text-align: right;
@@ -121,7 +165,7 @@ const TotalsHeaderLabel = styled.div`
 `;
 
 const TotalLabel = styled.div`
-    color: #fff;
+    color: var(--app-text);
     font-size: 16px;
 `;
 
@@ -132,17 +176,24 @@ const TotalValue = styled.div<{ $value: number }>`
 `;
 
 const SectionTitle = styled.h2`
-    color: #fff;
-    font-size: 18px;
-    margin: 24px 0 16px 0;
+    color: var(--app-text);
+    font-size: 1.08rem;
+    margin: 28px 0 14px 0;
+    letter-spacing: -0.02em;
 `;
 
 const TableContainer = styled.div`
-    background: #1a1a2e;
-    border-radius: 8px;
+    background: var(--app-panel-surface);
+    border-radius: 18px;
     overflow-x: auto;
     margin-bottom: 24px;
     -webkit-overflow-scrolling: touch;
+    border: 1px solid var(--app-border);
+    box-shadow: var(--app-shadow);
+
+    tbody tr:hover {
+        background: var(--app-hover-surface);
+    }
 `;
 
 const Table = styled.table`
@@ -154,8 +205,8 @@ const Table = styled.table`
 const Th = styled.th<{ $align?: string }>`
     text-align: ${props => props.$align || 'left'};
     padding: 12px 16px;
-    background: #2a2a3e;
-    color: #aaa;
+    background: var(--app-table-head-surface);
+    color: var(--app-text-muted);
     font-size: 12px;
     text-transform: uppercase;
     font-weight: 500;
@@ -163,8 +214,8 @@ const Th = styled.th<{ $align?: string }>`
 
 const Td = styled.td<{ $align?: string }>`
     padding: 12px 16px;
-    border-bottom: 1px solid #2a2a3e;
-    color: #fff;
+    border-bottom: 1px solid var(--app-border);
+    color: var(--app-text);
     font-size: 14px;
     text-align: ${props => props.$align || 'left'};
 `;
@@ -175,10 +226,12 @@ const PLValue = styled.span<{ $value: number }>`
 `;
 
 const ChartContainer = styled.div`
-    background: #1a1a2e;
-    border-radius: 8px;
+    background: var(--app-panel-surface);
+    border-radius: 18px;
     padding: 20px;
     margin-bottom: 24px;
+    border: 1px solid var(--app-border);
+    box-shadow: var(--app-shadow);
 `;
 
 const ChartSVG = styled.svg`
@@ -191,14 +244,67 @@ const LoadingOverlay = styled.div`
     align-items: center;
     justify-content: center;
     padding: 60px;
-    color: #888;
+    color: var(--app-text-muted);
     font-size: 16px;
 `;
 
 const EmptyState = styled.div`
-    text-align: center;
-    padding: 60px 20px;
-    color: #666;
+    display: grid;
+    gap: 14px;
+    justify-items: flex-start;
+    padding: 28px 24px;
+    color: var(--app-text-muted);
+    border: 1px dashed var(--app-border);
+    border-radius: 24px;
+    background: var(--app-subtle-surface);
+`;
+
+const EmptyTitle = styled.div`
+    color: var(--app-text);
+    font-size: 1.08rem;
+    font-weight: 800;
+`;
+
+const EmptyText = styled.div`
+    color: var(--app-text-soft);
+    line-height: 1.6;
+    max-width: 64ch;
+`;
+
+const EmptyHints = styled.div`
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+`;
+
+const EmptyHint = styled.span`
+    display: inline-flex;
+    align-items: center;
+    padding: 7px 11px;
+    border-radius: 999px;
+    background: var(--app-subtle-surface-2);
+    border: 1px solid var(--app-border);
+    color: var(--app-text);
+    font-size: 0.78rem;
+    font-weight: 700;
+`;
+
+const EmptyActions = styled.div`
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+`;
+
+const EmptyAction = styled.button<{ $primary?: boolean }>`
+    min-height: 46px;
+    padding: 0 16px;
+    border-radius: 14px;
+    border: 1px solid ${p => p.$primary ? 'transparent' : 'var(--app-border)'};
+    background: ${p => p.$primary ? 'linear-gradient(135deg, #67a8ff, #7de2d1)' : 'var(--app-subtle-surface)'};
+    color: ${p => p.$primary ? '#08111f' : 'var(--app-text)'};
+    font-size: 0.9rem;
+    font-weight: 800;
+    cursor: pointer;
 `;
 
 const MetricsRow = styled.div`
@@ -209,12 +315,23 @@ const MetricsRow = styled.div`
 `;
 
 const MetricCard = styled.div<{ $color?: string }>`
-    background: #1a1a2e;
-    border-radius: 8px;
+    position: relative;
+    background: var(--app-panel-surface);
+    border-radius: 18px;
     padding: 16px 20px;
     min-width: 130px;
     flex: 1;
-    border-left: 4px solid ${props => props.$color || '#4a9eff'};
+    border: 1px solid var(--app-border);
+    box-shadow: var(--app-shadow);
+    overflow: hidden;
+
+    &::before {
+        content: '';
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 4px;
+        background: ${props => props.$color || '#4a9eff'};
+    }
 
     @media (max-width: 480px) {
         padding: 12px 16px;
@@ -223,24 +340,26 @@ const MetricCard = styled.div<{ $color?: string }>`
 `;
 
 const MetricLabel = styled.div`
-    color: #888;
+    color: var(--app-text-muted);
     font-size: 11px;
     text-transform: uppercase;
     margin-bottom: 4px;
 `;
 
 const MetricValue = styled.div<{ $color?: string }>`
-    color: ${props => props.$color || '#fff'};
+    color: ${props => props.$color || 'var(--app-text)'};
     font-size: 20px;
     font-weight: 600;
 `;
 
 // Calendar Styles
 const CalendarContainer = styled.div`
-    background: #1a1a2e;
-    border-radius: 8px;
+    background: var(--app-panel-surface);
+    border-radius: 18px;
     padding: 20px;
     margin-bottom: 24px;
+    border: 1px solid var(--app-border);
+    box-shadow: var(--app-shadow);
 `;
 
 const CalendarHeader = styled.div`
@@ -252,7 +371,7 @@ const CalendarHeader = styled.div`
 
 const CalendarDayHeader = styled.div`
     text-align: center;
-    color: #888;
+    color: var(--app-text-muted);
     font-size: 12px;
     font-weight: 600;
     padding: 8px 4px;
@@ -275,13 +394,13 @@ const CalendarDay = styled.div<{ $hasData: boolean; $isProfit: boolean; $isEmpty
         padding: 4px;
     }
     background: ${props => {
-        if (props.$isEmpty) return '#0d0d1a';
-        if (!props.$hasData) return '#1f1f35';
+        if (props.$isEmpty) return 'transparent';
+        if (!props.$hasData) return 'var(--app-subtle-surface)';
         return props.$isProfit ? 'rgba(77, 255, 145, 0.2)' : 'rgba(255, 77, 109, 0.2)';
     }};
     border: 1px solid ${props => {
         if (props.$isEmpty) return 'transparent';
-        if (!props.$hasData) return '#2a2a3e';
+        if (!props.$hasData) return 'var(--app-border)';
         return props.$isProfit ? 'rgba(77, 255, 145, 0.3)' : 'rgba(255, 77, 109, 0.3)';
     }};
     display: flex;
@@ -298,7 +417,7 @@ const CalendarDay = styled.div<{ $hasData: boolean; $isProfit: boolean; $isEmpty
 
 const CalendarDayNumber = styled.div<{ $isToday?: boolean }>`
     font-size: 12px;
-    color: ${props => props.$isToday ? '#4a9eff' : '#888'};
+    color: ${props => props.$isToday ? '#4a9eff' : 'var(--app-text-muted)'};
     font-weight: ${props => props.$isToday ? '700' : '400'};
     margin-bottom: 4px;
 `;
@@ -316,13 +435,13 @@ const CalendarDayPL = styled.div<{ $value: number }>`
 
 const CalendarDayTrades = styled.div`
     font-size: 10px;
-    color: #888;
+    color: var(--app-text-muted);
     margin-top: 2px;
 `;
 
 const CalendarMonthTitle = styled.div`
     text-align: center;
-    color: #fff;
+    color: var(--app-text);
     font-size: 16px;
     font-weight: 600;
     margin-bottom: 16px;
@@ -342,6 +461,8 @@ type DateRangePreset = 'ytd' | 'mtd' | '3m' | '6m' | '1y' | 'custom';
 export const TradingDashboardComponent: React.FC = observer(() => {
     const services = useServices();
     const { tradingDashboard } = services;
+    const history = useHistory();
+    const account = services.brokerAccount.currentAccount;
 
     const [dateRange, setDateRange] = useState<DateRangePreset>('ytd');
     const [customStartDate, setCustomStartDate] = useState<string>('');
@@ -380,10 +501,11 @@ export const TradingDashboardComponent: React.FC = observer(() => {
     }, [dateRange, customStartDate, customEndDate]);
 
     useEffect(() => {
+        if (!account) return;
         tradingDashboard.fetchTrades(startDate, endDate).catch(err => {
             console.error('Failed to fetch trades:', err);
         });
-    }, [tradingDashboard, startDate, endDate]);
+    }, [account, tradingDashboard, startDate, endDate]);
 
     const summary = tradingDashboard.summary;
     const isLoading = tradingDashboard.isLoading;
@@ -518,57 +640,64 @@ export const TradingDashboardComponent: React.FC = observer(() => {
     }, [summary]);
 
     const handleRefresh = () => {
+        if (!account) return;
         tradingDashboard.fetchTrades(startDate, endDate);
     };
 
     return (
         <DashboardContainer>
-            <Title>Trading Dashboard</Title>
+            <Hero>
+                <Eyebrow>Trading Overview</Eyebrow>
+                <HeroTitle>Trading Dashboard</HeroTitle>
+                <HeroText>
+                    Aici se aduna rezultatele agregate ale executiilor: P&amp;L, distributie pe simbol, calendar zilnic si curba de evolutie a contului.
+                </HeroText>
 
-            <DateRangeContainer>
-                <QuickSelectButton $active={dateRange === 'ytd'} onClick={() => setDateRange('ytd')}>
-                    YTD
-                </QuickSelectButton>
-                <QuickSelectButton $active={dateRange === 'mtd'} onClick={() => setDateRange('mtd')}>
-                    MTD
-                </QuickSelectButton>
-                <QuickSelectButton $active={dateRange === '3m'} onClick={() => setDateRange('3m')}>
-                    3M
-                </QuickSelectButton>
-                <QuickSelectButton $active={dateRange === '6m'} onClick={() => setDateRange('6m')}>
-                    6M
-                </QuickSelectButton>
-                <QuickSelectButton $active={dateRange === '1y'} onClick={() => setDateRange('1y')}>
-                    1Y
-                </QuickSelectButton>
-                <QuickSelectButton $active={dateRange === 'custom'} onClick={() => setDateRange('custom')}>
-                    Custom
-                </QuickSelectButton>
+                <DateRangeContainer>
+                    <QuickSelectButton $active={dateRange === 'ytd'} onClick={() => setDateRange('ytd')}>
+                        YTD
+                    </QuickSelectButton>
+                    <QuickSelectButton $active={dateRange === 'mtd'} onClick={() => setDateRange('mtd')}>
+                        MTD
+                    </QuickSelectButton>
+                    <QuickSelectButton $active={dateRange === '3m'} onClick={() => setDateRange('3m')}>
+                        3M
+                    </QuickSelectButton>
+                    <QuickSelectButton $active={dateRange === '6m'} onClick={() => setDateRange('6m')}>
+                        6M
+                    </QuickSelectButton>
+                    <QuickSelectButton $active={dateRange === '1y'} onClick={() => setDateRange('1y')}>
+                        1Y
+                    </QuickSelectButton>
+                    <QuickSelectButton $active={dateRange === 'custom'} onClick={() => setDateRange('custom')}>
+                        Custom
+                    </QuickSelectButton>
 
-                {dateRange === 'custom' && (
-                    <>
-                        <DateLabel>From:</DateLabel>
-                        <DateInput
-                            type="date"
-                            value={customStartDate}
-                            onChange={(e) => setCustomStartDate(e.target.value)}
-                        />
-                        <DateLabel>To:</DateLabel>
-                        <DateInput
-                            type="date"
-                            value={customEndDate}
-                            onChange={(e) => setCustomEndDate(e.target.value)}
-                        />
-                    </>
-                )}
+                    {dateRange === 'custom' && (
+                        <>
+                            <DateLabel>From:</DateLabel>
+                            <DateInput
+                                type="date"
+                                value={customStartDate}
+                                onChange={(e) => setCustomStartDate(e.target.value)}
+                            />
+                            <DateLabel>To:</DateLabel>
+                            <DateInput
+                                type="date"
+                                value={customEndDate}
+                                onChange={(e) => setCustomEndDate(e.target.value)}
+                            />
+                        </>
+                    )}
 
-                <RefreshButton onClick={handleRefresh} disabled={isLoading}>
-                    {isLoading ? 'Loading...' : 'Refresh'}
-                </RefreshButton>
-            </DateRangeContainer>
+                    <RefreshButton onClick={handleRefresh} disabled={isLoading || !account}>
+                        {isLoading ? 'Loading...' : 'Refresh'}
+                    </RefreshButton>
+                </DateRangeContainer>
+            </Hero>
 
             {isLoading && !summary && (
-                <LoadingOverlay>Loading trading data...</LoadingOverlay>
+                <LoadingOverlay>Se incarca datele de trading...</LoadingOverlay>
             )}
 
             {summary && (
@@ -628,7 +757,7 @@ export const TradingDashboardComponent: React.FC = observer(() => {
                                     y1={zeroLineY}
                                     x2={chartWidth - chartPadding.right}
                                     y2={zeroLineY}
-                                    stroke="#444"
+                                    stroke="rgba(162, 184, 219, 0.4)"
                                     strokeDasharray="5,5"
                                 />
 
@@ -663,7 +792,7 @@ export const TradingDashboardComponent: React.FC = observer(() => {
                                         key={i}
                                         x={label.x}
                                         y={chartHeight - 10}
-                                        fill="#888"
+                                        fill="var(--app-text-muted)"
                                         fontSize="11"
                                         textAnchor="middle"
                                     >
@@ -675,7 +804,7 @@ export const TradingDashboardComponent: React.FC = observer(() => {
                                 <text
                                     x={chartPadding.left - 10}
                                     y={chartPadding.top + 5}
-                                    fill="#888"
+                                    fill="var(--app-text-muted)"
                                     fontSize="11"
                                     textAnchor="end"
                                 >
@@ -684,7 +813,7 @@ export const TradingDashboardComponent: React.FC = observer(() => {
                                 <text
                                     x={chartPadding.left - 10}
                                     y={zeroLineY + 4}
-                                    fill="#888"
+                                    fill="var(--app-text-muted)"
                                     fontSize="11"
                                     textAnchor="end"
                                 >
@@ -693,7 +822,7 @@ export const TradingDashboardComponent: React.FC = observer(() => {
                                 <text
                                     x={chartPadding.left - 10}
                                     y={chartHeight - chartPadding.bottom}
-                                    fill="#888"
+                                    fill="var(--app-text-muted)"
                                     fontSize="11"
                                     textAnchor="end"
                                 >
@@ -714,7 +843,7 @@ export const TradingDashboardComponent: React.FC = observer(() => {
                                 )}
                             </ChartSVG>
                         ) : (
-                            <EmptyState>Not enough data to display chart</EmptyState>
+                            <EmptyState>Date insuficiente pentru a desena evolutia curbei.</EmptyState>
                         )}
                     </ChartContainer>
 
@@ -808,7 +937,27 @@ export const TradingDashboardComponent: React.FC = observer(() => {
 
             {!isLoading && !summary && (
                 <EmptyState>
-                    <p>No trading data available. Click Refresh to load.</p>
+                    <EmptyTitle>{account ? 'Nu exista date suficiente inca' : 'Conecteaza brokerul pentru date agregate'}</EmptyTitle>
+                    <EmptyText>
+                        {account
+                            ? 'Intervalul selectat nu intoarce rezultate sau nu exista inca enough executions pentru agregare. Schimba perioada ori relanseaza incarcarea dupa ce apar trades noi.'
+                            : 'Trading Dashboard are nevoie de un cont broker conectat ca sa poata calcula P&L agregat, evolutia capitalului si distributia pe simbol.'}
+                    </EmptyText>
+                    <EmptyHints>
+                        <EmptyHint>Calendar zilnic</EmptyHint>
+                        <EmptyHint>Curba equity</EmptyHint>
+                        <EmptyHint>P&amp;L pe ticker</EmptyHint>
+                    </EmptyHints>
+                    <EmptyActions>
+                        {!account && (
+                            <EmptyAction $primary type="button" onClick={() => history.push('/account')}>
+                                Mergi la cont
+                            </EmptyAction>
+                        )}
+                        <EmptyAction type="button" onClick={() => history.push('/app')}>
+                            Deschide scannerul
+                        </EmptyAction>
+                    </EmptyActions>
                 </EmptyState>
             )}
         </DashboardContainer>

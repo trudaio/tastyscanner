@@ -9,6 +9,7 @@ import { AccountPage } from './pages/AccountPage';
 import { GreeksGuidePage } from './pages/GreeksGuidePage';
 import { GuvidHistoryPage } from './pages/GuvidHistoryPage';
 import { SuperAdminPage } from './pages/SuperAdminPage';
+import { TradingDashboardPage } from './pages/TradingDashboardPage';
 import BacktestPage from './pages/BacktestPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
@@ -46,13 +47,16 @@ import '@ionic/react/css/palettes/dark.system.css';
 /* Theme variables */
 import './theme/variables.css';
 import styled from "styled-components";
-import { onAuthStateChanged, type User } from 'firebase/auth';
+import { onAuthStateChanged, signInAnonymously, type User } from 'firebase/auth';
 import { auth } from './firebase';
+import { applyTheme, getStoredTheme } from './theme/theme-preference';
 
 setupIonicReact();
 
+const shouldBypassLogin = import.meta.env.VITE_BYPASS_LOGIN === 'true';
+
 const SplitPaneBox = styled(IonSplitPane)`
-  --side-max-width: 350px;
+  --side-max-width: 392px;
 `
 
 const App: React.FC = () => {
@@ -60,10 +64,22 @@ const App: React.FC = () => {
     const [authLoading, setAuthLoading] = useState(true);
 
     useEffect(() => {
+        applyTheme(getStoredTheme());
+    }, []);
+
+    useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (u) => {
             setUser(u);
             setAuthLoading(false);
         });
+
+        if (shouldBypassLogin && !auth.currentUser) {
+            void signInAnonymously(auth).catch((error: unknown) => {
+                console.error('Anonymous auth bypass failed:', error);
+                setAuthLoading(false);
+            });
+        }
+
         return unsubscribe;
     }, []);
 
@@ -113,6 +129,9 @@ const App: React.FC = () => {
                                 </Route>
                                 <Route path="/guvid-history" exact={true}>
                                     <GuvidHistoryPage />
+                                </Route>
+                                <Route path="/trading-dashboard" exact={true}>
+                                    <TradingDashboardPage />
                                 </Route>
                                 <Route path="/guide" exact={true}>
                                     <GreeksGuidePage />

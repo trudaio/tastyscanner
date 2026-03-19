@@ -24,7 +24,7 @@ const MenuItemContentBox = styled.div`
 
 const PriceBox = styled.span`
   font-size: 12px;
-  color: #aaa;
+  color: var(--app-text-muted);
   min-width: 60px;
   text-align: right;
 `
@@ -36,14 +36,20 @@ const IVRankBox = styled.span<{ $ivRank: number | null }>`
   min-width: 35px;
   text-align: center;
   background: ${props => {
-    if (props.$ivRank === null) return '#333';
-    if (props.$ivRank >= 50) return '#2d5a3d'; // High IV - green (good for selling)
-    if (props.$ivRank >= 25) return '#4a4a1a'; // Medium IV - yellow
-    return '#4a1a1a'; // Low IV - red
+    if (props.$ivRank === null) return 'var(--app-subtle-surface-2)';
+    if (props.$ivRank >= 50) return 'rgba(84, 214, 148, 0.18)';
+    if (props.$ivRank >= 25) return 'rgba(246, 200, 95, 0.18)';
+    return 'rgba(255, 107, 126, 0.16)';
   }};
   color: ${props => {
-    if (props.$ivRank === null) return '#666';
-    return '#fff';
+    if (props.$ivRank === null) return 'var(--app-text-muted)';
+    return 'var(--app-text)';
+  }};
+  border: 1px solid ${props => {
+    if (props.$ivRank === null) return 'var(--app-border)';
+    if (props.$ivRank >= 50) return 'rgba(84, 214, 148, 0.24)';
+    if (props.$ivRank >= 25) return 'rgba(246, 200, 95, 0.24)';
+    return 'rgba(255, 107, 126, 0.22)';
   }};
 `
 

@@ -64,11 +64,26 @@ You need two tokens from TastyTrade:
 Create `.env.local` in the project root (this file is git-ignored):
 
 ```bash
+VITE_USE_FIREBASE_EMULATORS=true
+VITE_FIREBASE_PROJECT_ID=operatiunea-guvidul
+VITE_FIREBASE_AUTH_EMULATOR_URL=http://127.0.0.1:9099
+VITE_FIRESTORE_EMULATOR_HOST=127.0.0.1
+VITE_FIRESTORE_EMULATOR_PORT=8080
+
 # TastyTrade credentials — local dev fallback (used when Firebase Functions are unreachable)
 VITE_CLIENT_SECRET=your_40_char_hex_client_secret
 VITE_REFRESH_TOKEN=eyJhbGci...your_long_refresh_token_jwt
 ```
 
+You can copy the defaults from `.env.local.example`.
+
+Start Firebase emulators in a separate terminal:
+
+```bash
+npm run firebase:emulators
+```
+
+> **Note**: Auth + Firestore run fully local through Firebase Emulator Suite. Firestore emulator requires a local Java Runtime to be installed.
 > **Note**: In production, credentials are stored encrypted on the server via Firebase Functions. Locally, the app falls back to these env vars automatically when Functions are not reachable (CORS).
 
 ### 5. Run the dev server
@@ -172,6 +187,7 @@ firebase deploy --only functions
 
 ```bash
 npm run dev          # Start Vite dev server on :5173
+npm run firebase:emulators  # Start local Firebase Auth + Firestore emulators
 npm run build        # Production build → dist/
 npx tsc --noEmit     # TypeScript type check (zero errors required)
 npx cypress open     # Open Cypress E2E test runner

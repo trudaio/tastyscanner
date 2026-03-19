@@ -1,32 +1,16 @@
 import React, { useState } from 'react';
-import {
-    IonPage,
-    IonContent,
-    IonCard,
-    IonCardHeader,
-    IonCardTitle,
-    IonCardContent,
-    IonItem,
-    IonInput,
-    IonButton,
-    IonText,
-} from '@ionic/react';
+import { IonInput } from '@ionic/react';
 import { useHistory } from 'react-router-dom';
 import { FirebaseAuthService } from '../services/auth/firebase-auth.service';
-import styled from 'styled-components';
-
-const CenteredContainer = styled.div`
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100%;
-    padding: 20px;
-`;
-
-const StyledCard = styled(IonCard)`
-    max-width: 440px;
-    width: 100%;
-`;
+import { AuthLayout } from '../components/ui/auth-layout';
+import {
+    AuthField,
+    AuthForm,
+    AuthHelper,
+    AuthMessage,
+    AuthPrimaryButton,
+    AuthSecondaryButton,
+} from '../components/ui/auth-form';
 
 const authService = new FirebaseAuthService();
 
@@ -59,75 +43,69 @@ export const RegisterPage: React.FC = () => {
     };
 
     return (
-        <IonPage>
-            <IonContent>
-                <CenteredContainer>
-                    <StyledCard>
-                        <IonCardHeader>
-                            <IonCardTitle className="ion-text-center">Creeaza cont</IonCardTitle>
-                        </IonCardHeader>
-                        <IonCardContent>
-                            <form onSubmit={handleSubmit}>
+        <AuthLayout
+            badge="Provisionare acces"
+            brandTitle="Configurezi accesul. Calibrarea vine imediat dupa."
+            brandSubtitle="Crearea contului trebuie sa fie rapida, iar partea operationala ramane intr-un pas separat, controlat si explicit."
+            eyebrow="Cont nou"
+            subtitle="Deschizi contul, apoi continui in zona My Account pentru credentialele TastyTrade si configurarea initiala a mediului."
+            title="Provisioneaza workspace-ul"
+        >
+            <AuthForm onSubmit={handleSubmit}>
+                <AuthField>
+                    <IonInput
+                        label="Email"
+                        labelPlacement="stacked"
+                        type="email"
+                        placeholder="email@exemplu.com"
+                        value={email}
+                        onIonInput={e => setEmail(e.detail.value ?? '')}
+                        required
+                    />
+                </AuthField>
 
-                                <IonItem>
-                                    <IonInput
-                                        label="Email"
-                                        labelPlacement="stacked"
-                                        type="email"
-                                        placeholder="email@exemplu.com"
-                                        value={email}
-                                        onIonInput={e => setEmail(e.detail.value ?? '')}
-                                        required
-                                    />
-                                </IonItem>
+                <AuthField>
+                    <IonInput
+                        label="Parola"
+                        labelPlacement="stacked"
+                        type="password"
+                        placeholder="Minim 6 caractere"
+                        value={password}
+                        onIonInput={e => setPassword(e.detail.value ?? '')}
+                        required
+                    />
+                </AuthField>
 
-                                <IonItem>
-                                    <IonInput
-                                        label="Parola"
-                                        labelPlacement="stacked"
-                                        type="password"
-                                        placeholder="Minim 6 caractere"
-                                        value={password}
-                                        onIonInput={e => setPassword(e.detail.value ?? '')}
-                                        required
-                                    />
-                                </IonItem>
+                <AuthField>
+                    <IonInput
+                        label="Confirma parola"
+                        labelPlacement="stacked"
+                        type="password"
+                        placeholder="Repeta parola"
+                        value={confirmPassword}
+                        onIonInput={e => setConfirmPassword(e.detail.value ?? '')}
+                        required
+                    />
+                </AuthField>
 
-                                <IonItem>
-                                    <IonInput
-                                        label="Confirma parola"
-                                        labelPlacement="stacked"
-                                        type="password"
-                                        placeholder="Repeta parola"
-                                        value={confirmPassword}
-                                        onIonInput={e => setConfirmPassword(e.detail.value ?? '')}
-                                        required
-                                    />
-                                </IonItem>
+                <AuthHelper>
+                    <span>Parola securizeaza accesul in aplicatie. Credentialele brokerului se pastreaza separat, in fluxul dedicat de conectare.</span>
+                </AuthHelper>
 
-                                <IonButton
-                                    expand="block"
-                                    type="submit"
-                                    disabled={loading}
-                                    className="ion-margin-top"
-                                >
-                                    {loading ? 'Se creeaza contul...' : 'Inregistreaza-te'}
-                                </IonButton>
+                {error && (
+                    <AuthMessage color="danger">
+                        <p>{error}</p>
+                    </AuthMessage>
+                )}
 
-                                {error && (
-                                    <IonText color="danger">
-                                        <p>{error}</p>
-                                    </IonText>
-                                )}
+                <AuthPrimaryButton expand="block" type="submit" disabled={loading}>
+                    {loading ? 'Se creeaza contul...' : 'Provisioneaza contul'}
+                </AuthPrimaryButton>
 
-                                <IonButton fill="clear" expand="block" routerLink="/login">
-                                    Ai deja cont? Autentifica-te
-                                </IonButton>
-                            </form>
-                        </IonCardContent>
-                    </StyledCard>
-                </CenteredContainer>
-            </IonContent>
-        </IonPage>
+                <AuthSecondaryButton fill="outline" expand="block" routerLink="/login">
+                    Ai deja cont? Autentifica-te
+                </AuthSecondaryButton>
+            </AuthForm>
+        </AuthLayout>
     );
 };

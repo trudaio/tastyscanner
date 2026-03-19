@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ro">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Operatiunea Guvidul OG Preview</title>
+    <style>
+      :root {
+        --bg: #08111f;
+        --bg-soft: #0f1c31;
+        --line: rgba(162, 184, 219, 0.18);
+        --primary: #67a8ff;
+        --secondary: #7de2d1;
+        --text: #f3f7ff;
+        --muted: #c9d5eb;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at top left, rgba(103, 168, 255, 0.18), transparent 18%),
+          radial-gradient(circle at bottom right, rgba(125, 226, 209, 0.14), transparent 18%),
+          linear-gradient(180deg, #0b1526 0%, #081120 52%, #060d19 100%);
+        font-family: "Avenir Next", "Segoe UI", sans-serif;
+      }
+
+      .frame {
+        position: relative;
+        width: 1200px;
+        height: 630px;
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        gap: 28px;
+        padding: 42px;
+        color: var(--text);
+      }
+
+      .frame::before {
+        content: "";
+        position: absolute;
+        inset: 24px;
+        border-radius: 32px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        pointer-events: none;
+      }
+
+      .left {
+        display: grid;
+        align-content: center;
+        gap: 22px;
+        position: relative;
+        z-index: 1;
+      }
+
+      .kicker {
+        display: inline-flex;
+        width: fit-content;
+        padding: 10px 14px;
+        border-radius: 999px;
+        border: 1px solid rgba(103, 168, 255, 0.18);
+        background: rgba(103, 168, 255, 0.1);
+        color: var(--muted);
+        font-size: 16px;
+        font-weight: 800;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+      }
+
+      .brand img {
+        width: 112px;
+        height: 112px;
+        object-fit: contain;
+        flex-shrink: 0;
+      }
+
+      .brand-copy {
+        display: grid;
+        gap: 6px;
+      }
+
+      .brand-title {
+        font-size: 58px;
+        line-height: 0.96;
+        letter-spacing: -0.05em;
+        font-weight: 800;
+      }
+
+      .brand-subtitle {
+        font-size: 24px;
+        line-height: 1.42;
+        color: var(--muted);
+        max-width: 540px;
+      }
+
+      .metrics {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 4px;
+      }
+
+      .metric {
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        color: var(--muted);
+        font-size: 17px;
+        font-weight: 700;
+      }
+
+      .footer {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 6px;
+        color: var(--secondary);
+        font-size: 22px;
+        font-weight: 700;
+      }
+
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--primary), var(--secondary));
+        box-shadow: 0 0 0 6px rgba(125, 226, 209, 0.08);
+      }
+
+      .right {
+        position: relative;
+        display: grid;
+        align-items: center;
+        z-index: 1;
+      }
+
+      .preview {
+        position: relative;
+        overflow: hidden;
+        border-radius: 28px;
+        border: 1px solid var(--line);
+        background: rgba(15, 28, 49, 0.88);
+        box-shadow: 0 28px 60px rgba(0, 0, 0, 0.34);
+      }
+
+      .preview::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          linear-gradient(180deg, rgba(8, 17, 31, 0.08), rgba(8, 17, 31, 0.56));
+        pointer-events: none;
+      }
+
+      .preview img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .preview-badge {
+        position: absolute;
+        top: 18px;
+        left: 18px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(8, 17, 31, 0.76);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        color: var(--text);
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .preview-caption {
+        position: absolute;
+        left: 18px;
+        right: 18px;
+        bottom: 18px;
+        display: grid;
+        gap: 4px;
+      }
+
+      .preview-title {
+        color: var(--text);
+        font-size: 21px;
+        line-height: 1.3;
+        font-weight: 800;
+      }
+
+      .preview-subtitle {
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.45;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="frame">
+      <section class="left">
+        <div class="kicker">Open Graph Preview</div>
+        <div class="brand">
+          <img src="/logo-guvidul.png" alt="Operatiunea Guvidul" />
+          <div class="brand-copy">
+            <div class="brand-title">Operatiunea Guvidul</div>
+            <div class="brand-subtitle">
+              Workspace pentru selectie disciplinata, management de risc si executie intr-un flux coerent.
+            </div>
+          </div>
+        </div>
+
+        <div class="metrics">
+          <div class="metric">Scanner orientat pe selectie</div>
+          <div class="metric">Portofoliu si risc in acelasi flux</div>
+          <div class="metric">Date live si control operational</div>
+        </div>
+
+        <div class="footer">
+          <span class="dot"></span>
+          <span>operatiunea-guvidul.web.app</span>
+        </div>
+      </section>
+
+      <section class="right">
+        <div class="preview">
+          <img src="/screenshot-dashboard.jpg" alt="Dashboard Operatiunea Guvidul" />
+          <div class="preview-badge">Live workspace</div>
+          <div class="preview-caption">
+            <div class="preview-title">Scanner, pozitii si context de risc intr-o singura interfata</div>
+            <div class="preview-subtitle">Construit pentru workflow-ul de selectie, analiza si executie al strategiilor Iron Condor.</div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

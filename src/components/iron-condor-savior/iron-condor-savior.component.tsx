@@ -4,8 +4,10 @@ import styled from 'styled-components';
 import { useServices } from '../../hooks/use-services.hook';
 
 const Container = styled.div`
-    padding: 20px;
-    background-color: #0d0d1a;
+    width: min(100%, 1120px);
+    margin: 0 auto;
+    padding: clamp(18px, 3vw, 28px);
+    background: transparent;
     min-height: 100%;
 
     @media (max-width: 480px) {
@@ -14,21 +16,23 @@ const Container = styled.div`
 `;
 
 const Title = styled.h1`
-    color: #fff;
+    color: var(--app-text);
     font-size: 24px;
     margin: 0 0 8px 0;
 `;
 
 const Subtitle = styled.p`
-    color: #888;
+    color: var(--app-text-muted);
     font-size: 14px;
     margin: 0 0 24px 0;
 `;
 
 const SearchForm = styled.div`
-    background: #1a1a2e;
+    background: var(--app-panel-surface);
     padding: 20px;
-    border-radius: 12px;
+    border-radius: 20px;
+    border: 1px solid var(--app-border);
+    box-shadow: var(--app-shadow);
     margin-bottom: 24px;
 `;
 
@@ -51,7 +55,7 @@ const FormGroup = styled.div`
 `;
 
 const Label = styled.label`
-    color: #888;
+    color: var(--app-text-muted);
     font-size: 12px;
     text-transform: uppercase;
     font-weight: 500;
@@ -59,21 +63,21 @@ const Label = styled.label`
 
 const Input = styled.input`
     padding: 12px 16px;
-    background: #0d0d1a;
-    border: 1px solid #333;
-    border-radius: 8px;
-    color: #fff;
+    background: var(--app-subtle-surface);
+    border: 1px solid var(--app-border);
+    border-radius: 12px;
+    color: var(--app-text);
     font-size: 16px;
     width: 120px;
     box-sizing: border-box;
 
     &:focus {
         outline: none;
-        border-color: #ff6b35;
+        border-color: var(--ion-color-tertiary);
     }
 
     &::placeholder {
-        color: #555;
+        color: var(--app-text-muted);
     }
 
     @media (max-width: 480px) {
@@ -100,10 +104,10 @@ const CreditInput = styled(Input)`
 
 const SearchButton = styled.button`
     padding: 12px 32px;
-    background: #ff6b35;
-    border: none;
-    border-radius: 8px;
-    color: #fff;
+    background: linear-gradient(135deg, var(--ion-color-tertiary), #f6ad71);
+    border: 1px solid rgba(244, 162, 97, 0.2);
+    border-radius: 12px;
+    color: #1d1207;
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
@@ -111,11 +115,12 @@ const SearchButton = styled.button`
     height: 46px;
 
     &:hover {
-        background: #ff8c5a;
+        filter: brightness(1.02);
     }
 
     &:disabled {
-        background: #333;
+        background: var(--app-subtle-surface-2);
+        color: var(--app-text-muted);
         cursor: not-allowed;
     }
 
@@ -126,9 +131,10 @@ const SearchButton = styled.button`
 `;
 
 const CurrentPriceBox = styled.div`
-    background: #2a2a4e;
+    background: var(--app-subtle-surface);
     padding: 8px 16px;
-    border-radius: 8px;
+    border-radius: 12px;
+    border: 1px solid var(--app-border);
     display: flex;
     align-items: center;
     gap: 8px;
@@ -136,7 +142,7 @@ const CurrentPriceBox = styled.div`
 `;
 
 const PriceLabel = styled.span`
-    color: #888;
+    color: var(--app-text-muted);
     font-size: 12px;
 `;
 
@@ -158,32 +164,34 @@ const ResultsHeader = styled.div`
 `;
 
 const ResultsTitle = styled.h2`
-    color: #fff;
+    color: var(--app-text);
     font-size: 18px;
     margin: 0;
 `;
 
 const ResultsCount = styled.span`
-    color: #888;
+    color: var(--app-text-muted);
     font-size: 14px;
 `;
 
 const LoadingText = styled.div`
-    color: #888;
+    color: var(--app-text-muted);
     font-size: 14px;
     padding: 40px;
     text-align: center;
-    background: #1a1a2e;
-    border-radius: 8px;
+    background: var(--app-panel-surface);
+    border-radius: 16px;
+    border: 1px solid var(--app-border);
 `;
 
 const NoDataText = styled.div`
-    color: #666;
+    color: var(--app-text-muted);
     font-size: 14px;
     padding: 40px;
     text-align: center;
-    background: #1a1a2e;
-    border-radius: 8px;
+    background: var(--app-panel-surface);
+    border-radius: 16px;
+    border: 1px solid var(--app-border);
 `;
 
 const ResultsTableWrapper = styled.div`
@@ -196,20 +204,22 @@ const ResultsTable = styled.table`
     width: 100%;
     min-width: 820px;
     border-collapse: collapse;
-    background: #1a1a2e;
-    border-radius: 8px;
+    background: var(--app-panel-surface);
+    border-radius: 16px;
     overflow: hidden;
+    border: 1px solid var(--app-border);
+    box-shadow: var(--app-shadow);
 `;
 
 const Th = styled.th<{ $align?: string }>`
     padding: 12px 12px;
     text-align: ${props => props.$align || 'left'};
-    color: #888;
+    color: var(--app-text-muted);
     font-size: 11px;
     font-weight: 500;
     text-transform: uppercase;
-    background: #0d0d1a;
-    border-bottom: 1px solid #333;
+    background: var(--app-table-head-surface);
+    border-bottom: 1px solid var(--app-border);
 `;
 
 const Tr = styled.tr<{ $meetsTarget?: boolean }>`
@@ -226,16 +236,16 @@ const Td = styled.td<{ $align?: string; $positive?: boolean; $negative?: boolean
     color: ${props => {
         if (props.$positive) return '#4dff91';
         if (props.$negative) return '#ff4d6d';
-        if (props.$highlight) return '#ff6b35';
-        return '#fff';
+        if (props.$highlight) return 'var(--ion-color-tertiary)';
+        return 'var(--app-text)';
     }};
     font-size: 13px;
-    border-bottom: 1px solid #222;
+    border-bottom: 1px solid var(--app-border);
 `;
 
 const MeetsTargetBadge = styled.span`
     background: #4dff91;
-    color: #000;
+    color: #07140e;
     padding: 3px 8px;
     border-radius: 4px;
     font-size: 10px;
@@ -256,34 +266,35 @@ const StrikeRow = styled.div`
 `;
 
 const StrikeLabel = styled.span`
-    color: #666;
+    color: var(--app-text-muted);
     width: 20px;
 `;
 
 const StrikeValue = styled.span`
-    color: #fff;
+    color: var(--app-text);
 `;
 
 const TradeButton = styled.button`
     padding: 6px 12px;
-    background: #ff6b35;
-    border: none;
-    border-radius: 4px;
-    color: #fff;
+    background: linear-gradient(135deg, var(--ion-color-tertiary), #f6ad71);
+    border: 1px solid rgba(244, 162, 97, 0.2);
+    border-radius: 10px;
+    color: #1d1207;
     font-size: 11px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
 
     &:hover {
-        background: #ff8c5a;
+        filter: brightness(1.02);
     }
 `;
 
 const TargetInfoBox = styled.div`
-    background: linear-gradient(90deg, #ff6b35, #ff8c5a);
+    background: linear-gradient(135deg, rgba(244, 162, 97, 0.18), rgba(244, 162, 97, 0.12));
+    border: 1px solid rgba(244, 162, 97, 0.24);
     padding: 12px 20px;
-    border-radius: 8px;
+    border-radius: 16px;
     margin-bottom: 16px;
     display: flex;
     justify-content: space-between;
@@ -298,7 +309,7 @@ const TargetInfoBox = styled.div`
 `;
 
 const TargetInfoText = styled.div`
-    color: #fff;
+    color: var(--app-text);
     font-size: 14px;
 `;
 

@@ -27,7 +27,11 @@ import { SavedTestsPanelComponent } from './saved/saved-tests-panel';
 import {
     Container, Card, CardHeader, CardHeaderTitle, OptionalBadge,
     ChevronIcon, CardContent, ButtonRow, RunButton, CancelButton,
-    ProgressContainer, ProgressBar, ProgressText, ErrorBox, SectionTitle,
+    ProgressContainer, ProgressBar, ProgressText, ErrorBox,
+    Hero, HeroTop, HeroText, HeroEyebrow, HeroTitle, HeroSummary,
+    HeroMetrics, HeroMetric, HeroMetricLabel, HeroMetricValue,
+    PanelEmptyState, PanelEmptyText, PanelEmptyTitle, PanelHint, PanelHintRow,
+    WorkflowCard, WorkflowGrid, WorkflowStep, WorkflowText, WorkflowTitle,
 } from './backtest-styled';
 
 /* ─── Date helpers ───────────────────────────────────────────────────────── */
@@ -249,6 +253,58 @@ export const BacktestComponent: React.FC = observer(() => {
 
     return (
         <Container>
+            <Hero>
+                <HeroTop>
+                    <HeroText>
+                        <HeroEyebrow>Research Lab</HeroEyebrow>
+                        <HeroTitle>Backtest strategii</HeroTitle>
+                        <HeroSummary>
+                            Optimizeaza parametrii fara sa te pierzi in setari. Structura este gandita sa functioneze bine si pe desktop, si pe tableta,
+                            iar pe mobil ordinea sectiunilor ramane aceeasi: setup, capital, exits, apoi rularea efectiva.
+                        </HeroSummary>
+                    </HeroText>
+                </HeroTop>
+
+                <HeroMetrics>
+                    <HeroMetric>
+                        <HeroMetricLabel>Tickers selectate</HeroMetricLabel>
+                        <HeroMetricValue>{tickers.length}</HeroMetricValue>
+                    </HeroMetric>
+                    <HeroMetric>
+                        <HeroMetricLabel>Fereastra test</HeroMetricLabel>
+                        <HeroMetricValue>{startDate} → {endDate}</HeroMetricValue>
+                    </HeroMetric>
+                    <HeroMetric>
+                        <HeroMetricLabel>Capital initial</HeroMetricLabel>
+                        <HeroMetricValue>${capital.toLocaleString('en-US')}</HeroMetricValue>
+                    </HeroMetric>
+                </HeroMetrics>
+            </Hero>
+
+            <WorkflowGrid>
+                <WorkflowCard>
+                    <WorkflowStep>1. Configure</WorkflowStep>
+                    <WorkflowTitle>Alege structura si capitalul</WorkflowTitle>
+                    <WorkflowText>
+                        Setezi ticker-ele, DTE, tipul de iron condor si limitele de capital inainte sa rafinezi regulile.
+                    </WorkflowText>
+                </WorkflowCard>
+                <WorkflowCard>
+                    <WorkflowStep>2. Simulate</WorkflowStep>
+                    <WorkflowTitle>Ruleaza unul sau mai multe scenarii</WorkflowTitle>
+                    <WorkflowText>
+                        Foloseste profit target simplu sau batch mode ca sa vezi repede unde se schimba rezultatul semnificativ.
+                    </WorkflowText>
+                </WorkflowCard>
+                <WorkflowCard>
+                    <WorkflowStep>3. Review</WorkflowStep>
+                    <WorkflowTitle>Salveaza doar ce merita retinut</WorkflowTitle>
+                    <WorkflowText>
+                        Cand un setup e promitator, salvezi testul si il reincarci mai tarziu fara sa pierzi contextul initial.
+                    </WorkflowText>
+                </WorkflowCard>
+            </WorkflowGrid>
+
             {/* ─── Strategy Setup (always visible) ────────────────────── */}
             <StrategySetupSection
                 tickers={tickers}
@@ -386,8 +442,21 @@ export const BacktestComponent: React.FC = observer(() => {
                 />
             )}
 
+            {!bt.results && !bt.batchResults && !bt.isRunning && !bt.error && (
+                <PanelEmptyState>
+                    <PanelEmptyTitle>Rezultatele apar aici dupa primul run</PanelEmptyTitle>
+                    <PanelEmptyText>
+                        Completarea formularului este doar primul pas. Dupa rulare vei vedea equity curve, breakdown pe ticker, istoric de trade-uri si comparatii intre scenarii.
+                    </PanelEmptyText>
+                    <PanelHintRow>
+                        <PanelHint>{tickers.length} ticker selectat{tickers.length === 1 ? '' : 'e'}</PanelHint>
+                        <PanelHint>{batchMode ? `${batchTargets.length} scenarii batch` : 'single scenario'}</PanelHint>
+                        <PanelHint>{startDate} → {endDate}</PanelHint>
+                    </PanelHintRow>
+                </PanelEmptyState>
+            )}
+
             {/* ─── Saved Tests ─────────────────────────────────────────── */}
-            <SectionTitle style={{ marginTop: 32 }}>Saved Tests</SectionTitle>
             <SavedTestsPanelComponent onLoadTest={handleLoadTest} />
         </Container>
     );

@@ -7,6 +7,7 @@
 import React, { useState, useMemo } from 'react';
 import {
     TableContainer, Table, Th, Td, Badge, ChipsRow, Chip,
+    PanelHeader, PanelHeaderText, PanelHeaderTitle,
     formatDollar, plColor, EXIT_REASON_LABELS,
 } from '../backtest-styled';
 import type { IBacktestTrade } from '../../../services/backtest/backtest-engine.interface';
@@ -30,6 +31,12 @@ export const TradeHistoryTableComponent: React.FC<Props> = ({ trades }) => {
 
     return (
         <>
+            <PanelHeader>
+                <PanelHeaderTitle>Jurnal executii</PanelHeaderTitle>
+                <PanelHeaderText>
+                    Filtreaza rapid pe ticker si vezi unde iesirea vine din profit target, stop loss sau expirare.
+                </PanelHeaderText>
+            </PanelHeader>
             <ChipsRow>
                 <Chip $active={tradeFilter === 'ALL'} onClick={() => setTradeFilter('ALL')}>ALL</Chip>
                 {uniqueTickers.map(t => (
@@ -54,7 +61,7 @@ export const TradeHistoryTableComponent: React.FC<Props> = ({ trades }) => {
                     </thead>
                     <tbody>
                         {filteredTrades.map((t: IBacktestTrade) => {
-                            const reason = EXIT_REASON_LABELS[t.exitReason] || { label: t.exitReason, color: '#888' };
+                            const reason = EXIT_REASON_LABELS[t.exitReason] || { label: t.exitReason, color: '#8a96ad' };
                             return (
                                 <tr key={t.id}>
                                     <Td>{t.id}</Td>

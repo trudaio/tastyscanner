@@ -1,135 +1,201 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { observer } from 'mobx-react-lite';
 import styled from 'styled-components';
 import { IonSpinner } from '@ionic/react';
+import { useHistory } from 'react-router-dom';
 import { useServices } from '../../hooks/use-services.hook';
-import {
-    IGuvidHistorySummary,
-    IDailyICPL,
-    IIronCondorTrade,
-    ITickerSummary,
-    IMonthSummary,
-} from '../../services/iron-condor-analytics/iron-condor-analytics.interface';
-
-/* ─── Types ──────────────────────────────────────────────── */
+import { IDailyICPL, IGuvidHistorySummary } from '../../services/iron-condor-analytics/iron-condor-analytics.interface';
 
 type SortKey = 'openDate' | 'ticker' | 'profit' | 'status';
 type SortDir = 'asc' | 'desc';
 
-/* ─── Layout ──────────────────────────────────────────────── */
-
 const Container = styled.div`
-    padding: 20px;
-    background: #0d0d1a;
+    width: min(100%, 1120px);
+    margin: 0 auto;
+    padding: clamp(18px, 3vw, 28px);
+    background: transparent;
     min-height: 100%;
-    @media (max-width: 480px) { padding: 12px; }
+
+    @media (max-width: 480px) {
+        padding: 16px;
+    }
+`;
+
+const Hero = styled.div`
+    display: grid;
+    gap: 18px;
+    padding: clamp(20px, 3vw, 28px);
+    border-radius: var(--app-radius-lg);
+    background: var(--app-hero-surface);
+    border: 1px solid var(--app-hero-border);
+    box-shadow: var(--app-shadow);
+    margin-bottom: 20px;
 `;
 
 const TopBar = styled.div`
     display: flex;
-    align-items: center;
-    gap: 12px;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
     flex-wrap: wrap;
-    margin-bottom: 20px;
+`;
+
+const HeroText = styled.div`
+    display: grid;
+    gap: 10px;
+    max-width: 72ch;
+`;
+
+const Eyebrow = styled.div`
+    color: var(--ion-color-primary);
+    font-size: 0.78rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
 `;
 
 const Title = styled.h1`
-    color: #fff;
-    font-size: 22px;
     margin: 0;
-    flex: 1;
-    white-space: nowrap;
+    color: var(--app-text);
+    font-size: clamp(1.7rem, 3.4vw, 2.35rem);
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+`;
+
+const Summary = styled.p`
+    margin: 0;
+    color: var(--app-text-soft);
+    line-height: 1.6;
 `;
 
 const RefreshBtn = styled.button`
-    padding: 7px 20px;
-    background: #4a9eff;
-    border: none;
-    border-radius: 6px;
-    color: #fff;
-    font-size: 13px;
-    font-weight: 600;
+    min-height: 46px;
+    padding: 10px 18px;
+    background: linear-gradient(135deg, #67a8ff, #7de2d1);
+    border: 1px solid rgba(103, 168, 255, 0.2);
+    border-radius: 14px;
+    color: #08111f;
+    font-size: 0.92rem;
+    font-weight: 800;
     cursor: pointer;
     white-space: nowrap;
-    &:hover { background: #3a8eef; }
-    &:disabled { background: #333; cursor: not-allowed; }
+    box-shadow: 0 16px 28px rgba(103, 168, 255, 0.18);
+    transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+
+    &:hover {
+        transform: translateY(-1px);
+        filter: brightness(0.99);
+    }
+
+    &:disabled {
+        background: var(--app-subtle-surface-2);
+        border-color: var(--app-border);
+        color: var(--app-text-muted);
+        cursor: not-allowed;
+        box-shadow: none;
+        transform: none;
+    }
 `;
 
-/* ─── Stat Cards ─────────────────────────────────────────── */
-
 const MetricsRow = styled.div`
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 12px;
-    margin-bottom: 24px;
-    flex-wrap: wrap;
+    margin-top: 18px;
+
+    @media (max-width: 980px) {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    @media (max-width: 620px) {
+        grid-template-columns: 1fr;
+    }
 `;
 
 const MetricCard = styled.div<{ $color?: string }>`
-    background: #1a1a2e;
-    border-radius: 8px;
-    padding: 14px 18px;
-    min-width: 120px;
-    flex: 1;
-    border-left: 4px solid ${p => p.$color || '#4a9eff'};
-    @media (max-width: 480px) {
-        padding: 10px 14px;
-        min-width: 100px;
+    position: relative;
+    padding: 14px 16px;
+    border-radius: 16px;
+    background: var(--app-panel-surface);
+    border: 1px solid var(--app-border);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    overflow: hidden;
+
+    &::before {
+        content: '';
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 4px;
+        background: ${p => p.$color || '#67a8ff'};
     }
 `;
 
 const MetricLabel = styled.div`
-    color: #888;
-    font-size: 10px;
+    color: var(--app-text-muted);
+    font-size: 0.72rem;
     text-transform: uppercase;
-    margin-bottom: 4px;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.1em;
+    font-weight: 800;
+    margin-bottom: 6px;
 `;
 
 const MetricValue = styled.div<{ $color?: string }>`
-    color: ${p => p.$color || '#fff'};
-    font-size: 18px;
-    font-weight: 700;
+    color: ${p => p.$color || 'var(--app-text)'};
+    font-size: 1.2rem;
+    font-weight: 800;
 `;
-
-/* ─── Section titles ─────────────────────────────────────── */
-
-const SectionTitle = styled.h2`
-    color: #fff;
-    font-size: 16px;
-    margin: 28px 0 12px 0;
-    font-weight: 600;
-`;
-
-/* ─── Ticker filter ──────────────────────────────────────── */
 
 const TickerFilterRow = styled.div`
     display: flex;
-    gap: 6px;
+    gap: 8px;
     flex-wrap: wrap;
-    margin-bottom: 12px;
+    margin: 0 0 18px;
     align-items: center;
+    padding: 10px;
+    border-radius: 18px;
+    background: var(--app-subtle-surface);
+    border: 1px solid var(--app-border);
 `;
 
 const TickerFilterBtn = styled.button<{ $active?: boolean }>`
-    padding: 5px 12px;
-    background: ${p => p.$active ? '#4a9eff' : '#1a1a2e'};
-    border: 1px solid ${p => p.$active ? '#4a9eff' : '#333'};
-    border-radius: 6px;
-    color: #fff;
+    padding: 8px 14px;
+    background: ${p => p.$active ? 'rgba(103, 168, 255, 0.18)' : 'var(--app-subtle-surface)'};
+    border: 1px solid ${p => p.$active ? 'rgba(103, 168, 255, 0.28)' : 'var(--app-border)'};
+    border-radius: 999px;
+    color: ${p => p.$active ? 'var(--app-text)' : 'var(--app-text-soft)'};
     font-size: 12px;
-    font-weight: ${p => p.$active ? 600 : 400};
+    font-weight: 700;
     cursor: pointer;
-    &:hover { background: ${p => p.$active ? '#4a9eff' : '#2a2a3e'}; }
 `;
 
-/* ─── Table ───────────────────────────────────────────────── */
+const SectionTitle = styled.h2`
+    color: var(--app-text);
+    font-size: 1rem;
+    margin: 28px 0 12px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+`;
 
-const TableWrap = styled.div`
-    background: #1a1a2e;
-    border-radius: 8px;
+const Panel = styled.div`
+    background: var(--app-panel-surface);
+    border-radius: 18px;
+    border: 1px solid var(--app-border);
+    box-shadow: var(--app-shadow);
+    overflow: hidden;
+`;
+
+const TableWrap = styled(Panel)`
+    display: block;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    margin-bottom: 24px;
+
+    tbody tr:hover {
+        background: var(--app-hover-surface);
+    }
+
+    @media (max-width: 860px) {
+        display: none;
+    }
 `;
 
 const Table = styled.table`
@@ -138,67 +204,186 @@ const Table = styled.table`
 `;
 
 const Th = styled.th<{ $align?: string }>`
-    padding: 10px 14px;
-    background: #2a2a3e;
-    color: #888;
+    padding: 14px 16px;
+    background: var(--app-table-head-surface);
+    color: var(--app-text-muted);
     font-size: 11px;
     text-transform: uppercase;
-    font-weight: 500;
+    font-weight: 700;
+    letter-spacing: 0.08em;
     text-align: ${p => p.$align ?? 'left'};
     white-space: nowrap;
 `;
 
 const SortableTh = styled(Th)<{ $active?: boolean }>`
     cursor: pointer;
-    user-select: none;
-    color: ${p => p.$active ? '#4a9eff' : '#888'};
-    &:hover { color: #fff; }
+    color: ${p => p.$active ? 'var(--app-text)' : 'var(--app-text-muted)'};
 `;
 
 const Td = styled.td<{ $align?: string }>`
-    padding: 10px 14px;
-    border-bottom: 1px solid #1e1e32;
-    color: #fff;
+    padding: 14px 16px;
+    color: var(--app-text);
     font-size: 13px;
+    border-bottom: 1px solid var(--app-border);
     text-align: ${p => p.$align ?? 'left'};
+    white-space: nowrap;
 `;
 
 const PLValue = styled.span<{ $value: number }>`
-    color: ${p => p.$value > 0 ? '#4dff91' : p.$value < 0 ? '#ff4d6d' : '#888'};
-    font-weight: 600;
+    color: ${p => p.$value > 0 ? '#4dff91' : p.$value < 0 ? '#ff6b7e' : 'var(--app-text-muted)'};
+    font-weight: 700;
 `;
 
 const WinRateValue = styled.span<{ $pct: number }>`
-    color: ${p => p.$pct >= 60 ? '#4dff91' : p.$pct >= 40 ? '#ffaa00' : '#ff4d6d'};
-    font-weight: 600;
+    color: ${p => p.$pct >= 60 ? '#4dff91' : p.$pct >= 40 ? '#ffaa00' : '#ff6b7e'};
+    font-weight: 700;
 `;
-
-/* ─── Status badges ──────────────────────────────────────── */
 
 const StatusBadge = styled.span<{ $status: string }>`
     display: inline-block;
     font-size: 10px;
-    font-weight: 700;
-    padding: 2px 8px;
-    border-radius: 4px;
+    font-weight: 800;
+    padding: 4px 8px;
+    border-radius: 999px;
     ${p => {
         switch (p.$status) {
-            case 'open': return 'background: rgba(74,158,255,0.15); border: 1px solid #4a9eff; color: #4a9eff;';
-            case 'closed': return 'background: rgba(77,255,145,0.15); border: 1px solid #4dff91; color: #4dff91;';
-            case 'expired': return 'background: rgba(255,170,0,0.12); border: 1px solid #ffaa00; color: #ffaa00;';
-            default: return 'background: #2a2a3e; color: #888;';
+            case 'open':
+                return 'background: rgba(103, 168, 255, 0.15); border: 1px solid rgba(103, 168, 255, 0.3); color: #67a8ff;';
+            case 'closed':
+                return 'background: rgba(77, 255, 145, 0.15); border: 1px solid rgba(77, 255, 145, 0.3); color: #4dff91;';
+            case 'expired':
+                return 'background: rgba(255, 170, 0, 0.15); border: 1px solid rgba(255, 170, 0, 0.3); color: #ffaa00;';
+            default:
+                return 'background: rgba(255,255,255,0.08); color: #cbd6ea;';
         }
     }}
 `;
 
-/* ─── Calendar ───────────────────────────────────────────── */
+const MobileCardList = styled.div`
+    display: none;
 
-const CalendarContainer = styled.div`
-    background: #1a1a2e;
-    border-radius: 8px;
-    padding: 20px;
-    margin-bottom: 24px;
+    @media (max-width: 860px) {
+        display: grid;
+        gap: 12px;
+    }
+`;
+
+const MobileCard = styled.div`
+    padding: 16px;
+    border-radius: 18px;
+    background: var(--app-panel-solid);
+    border: 1px solid var(--app-border);
+    box-shadow: var(--app-shadow);
+`;
+
+const MobileCardTop = styled.div`
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+`;
+
+const MobileTitle = styled.div`
+    color: var(--app-text);
+    font-weight: 800;
+    font-size: 1rem;
+`;
+
+const MobileSub = styled.div`
+    margin-top: 4px;
+    color: var(--app-text-muted);
+    font-size: 0.82rem;
+`;
+
+const MobileGrid = styled.div`
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+`;
+
+const MobileMetric = styled.div`
+    padding: 12px;
+    border-radius: 14px;
+    background: var(--app-subtle-surface);
+    border: 1px solid var(--app-border);
+`;
+
+const MobileMetricLabel = styled.div`
+    color: var(--app-text-muted);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 5px;
+`;
+
+const MobileMetricValue = styled.div`
+    color: var(--app-text);
+    font-weight: 700;
+    line-height: 1.35;
+`;
+
+const EmptyState = styled.div`
+    display: grid;
+    gap: 14px;
+    justify-items: center;
+    padding: 30px 22px;
+    border-radius: 22px;
+    border: 1px dashed rgba(162, 184, 219, 0.24);
+    background: var(--app-subtle-surface);
+    color: var(--app-text-soft);
+    text-align: center;
+    line-height: 1.6;
+`;
+
+const EmptyStateTitle = styled.div`
+    color: var(--app-text);
+    font-size: 1.12rem;
+    font-weight: 800;
+    margin-bottom: 8px;
+`;
+
+const EmptyStateText = styled.div`
+    color: var(--app-text-soft);
+    max-width: 58ch;
+    margin: 0 auto;
+`;
+
+const EmptyStateActions = styled.div`
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+`;
+
+const EmptyStateAction = styled.button<{ $primary?: boolean }>`
+    min-height: 46px;
+    padding: 0 16px;
+    border-radius: 14px;
+    border: 1px solid ${p => p.$primary ? 'transparent' : 'var(--app-border)'};
+    background: ${p => p.$primary ? 'linear-gradient(135deg, #67a8ff, #7de2d1)' : 'var(--app-subtle-surface)'};
+    color: ${p => p.$primary ? '#08111f' : 'var(--app-text)'};
+    font-size: 0.9rem;
+    font-weight: 800;
+    cursor: pointer;
+`;
+
+const DaySummaryRow = styled.div`
+    display: flex;
+    gap: 16px;
+    margin-bottom: 12px;
+    font-size: 0.9rem;
+    flex-wrap: wrap;
+`;
+
+const CalendarContainer = styled(Panel)`
+    padding: 18px;
     overflow-x: auto;
+`;
+
+const CalendarScroller = styled.div`
+    min-width: 640px;
 `;
 
 const CalendarMonthRow = styled.div`
@@ -206,72 +391,70 @@ const CalendarMonthRow = styled.div`
 `;
 
 const CalendarMonthLabel = styled.div`
-    color: #fff;
+    color: var(--app-text);
     font-size: 14px;
-    font-weight: 600;
+    font-weight: 700;
     margin-bottom: 8px;
 `;
 
 const CalendarDaysGrid = styled.div`
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 3px;
+    gap: 4px;
 `;
 
 const CalendarDayHeader = styled.div`
     text-align: center;
-    color: #666;
+    color: var(--app-text-muted);
     font-size: 10px;
-    font-weight: 600;
+    font-weight: 700;
     padding: 4px;
     text-transform: uppercase;
 `;
 
 const CalendarDay = styled.div<{ $hasData: boolean; $isProfit: boolean; $isEmpty?: boolean }>`
-    min-height: 48px;
-    padding: 4px;
-    border-radius: 4px;
+    min-height: 52px;
+    padding: 6px;
+    border-radius: 8px;
     display: flex;
     flex-direction: column;
     background: ${p => {
         if (p.$isEmpty) return 'transparent';
-        if (!p.$hasData) return '#1f1f35';
-        return p.$isProfit ? 'rgba(77, 255, 145, 0.18)' : 'rgba(255, 77, 109, 0.18)';
+        if (!p.$hasData) return 'rgba(255,255,255,0.03)';
+        return p.$isProfit ? 'rgba(77, 255, 145, 0.18)' : 'rgba(255, 107, 126, 0.18)';
     }};
     border: 1px solid ${p => {
         if (p.$isEmpty) return 'transparent';
-        if (!p.$hasData) return '#2a2a3e';
-        return p.$isProfit ? 'rgba(77, 255, 145, 0.3)' : 'rgba(255, 77, 109, 0.3)';
+        if (!p.$hasData) return 'rgba(162, 184, 219, 0.1)';
+        return p.$isProfit ? 'rgba(77, 255, 145, 0.26)' : 'rgba(255, 107, 126, 0.26)';
     }};
-    @media (max-width: 480px) { min-height: 36px; }
 `;
 
 const CalendarDayNum = styled.div<{ $isToday?: boolean }>`
     font-size: 11px;
-    color: ${p => p.$isToday ? '#4a9eff' : '#666'};
-    font-weight: ${p => p.$isToday ? 700 : 400};
+    color: ${p => p.$isToday ? '#67a8ff' : 'var(--app-text-muted)'};
+    font-weight: ${p => p.$isToday ? 800 : 600};
 `;
 
 const CalendarDayPL = styled.div<{ $value: number }>`
     font-size: 10px;
-    font-weight: 600;
-    color: ${p => p.$value > 0 ? '#4dff91' : '#ff4d6d'};
+    font-weight: 700;
+    color: ${p => p.$value > 0 ? '#4dff91' : '#ff6b7e'};
     margin-top: auto;
 `;
 
 const CalendarDayTrades = styled.div`
     font-size: 9px;
-    color: #666;
+    color: var(--app-text-muted);
 `;
 
-const DaySummaryRow = styled.div`
+const LoadingRow = styled.div`
     display: flex;
-    gap: 16px;
-    margin-bottom: 12px;
-    font-size: 13px;
+    align-items: center;
+    gap: 12px;
+    padding: 28px 4px;
+    color: var(--app-text-muted);
 `;
-
-/* ─── Helpers ─────────────────────────────────────────────── */
 
 const fmtCur = (v: number): string => {
     const abs = Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -281,11 +464,10 @@ const fmtCur = (v: number): string => {
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-/* ─── Component ───────────────────────────────────────────── */
-
 export const GuvidHistoryComponent: React.FC = observer(() => {
     const services = useServices();
     const account = services.brokerAccount.currentAccount;
+    const history = useHistory();
 
     const [summary, setSummary] = useState<IGuvidHistorySummary | null>(null);
     const [loading, setLoading] = useState(false);
@@ -306,7 +488,9 @@ export const GuvidHistoryComponent: React.FC = observer(() => {
         }
     };
 
-    useEffect(() => { fetchHistory(); }, [account]);
+    useEffect(() => {
+        void fetchHistory();
+    }, [account]);
 
     const toggleSort = useCallback((key: SortKey) => {
         setSortKey(prev => {
@@ -319,30 +503,25 @@ export const GuvidHistoryComponent: React.FC = observer(() => {
         });
     }, []);
 
-    /* Ticker list for filter */
     const tickerList = useMemo(() => {
         if (!summary) return [];
         return [...new Set(summary.trades.map(t => t.ticker))].sort();
     }, [summary]);
 
-    /* Ticker breakdown from summary */
     const tickerBreakdown = useMemo(() => {
         if (!summary) return [];
-        return Array.from(summary.byTicker.values())
-            .sort((a, b) => b.totalProfit - a.totalProfit);
+        return Array.from(summary.byTicker.values()).sort((a, b) => b.totalProfit - a.totalProfit);
     }, [summary]);
 
-    /* Monthly breakdown from summary */
     const monthlyBreakdown = useMemo(() => {
         if (!summary) return [];
-        return Array.from(summary.byMonth.values())
-            .sort((a, b) => a.month.localeCompare(b.month));
+        return Array.from(summary.byMonth.values()).sort((a, b) => a.month.localeCompare(b.month));
     }, [summary]);
 
-    /* Per-ticker P&L/day + avg duration */
     const tickerExtraStats = useMemo(() => {
         const map = new Map<string, { plPerDay: number; avgDuration: number }>();
         if (!summary) return map;
+
         for (const [ticker, ts] of summary.byTicker.entries()) {
             const closed = summary.trades.filter(
                 t => t.ticker === ticker && t.status !== 'open' && t.openDate && (t.closeDate || t.expirationDate),
@@ -361,13 +540,14 @@ export const GuvidHistoryComponent: React.FC = observer(() => {
             }
             map.set(ticker, { plPerDay, avgDuration });
         }
+
         return map;
     }, [summary]);
 
-    /* Per-month P&L/day + avg duration */
     const monthExtraStats = useMemo(() => {
         const map = new Map<string, { plPerDay: number; avgDuration: number }>();
         if (!summary) return map;
+
         for (const [month, ms] of summary.byMonth.entries()) {
             const daysInMonth = summary.dailyPL.filter(d => d.date.substring(0, 7) === month).length;
             const plPerDay = daysInMonth > 0 ? ms.totalProfit / daysInMonth : 0;
@@ -376,6 +556,7 @@ export const GuvidHistoryComponent: React.FC = observer(() => {
                 const cd = t.closeDate || t.expirationDate;
                 return cd && cd.substring(0, 7) === month;
             });
+
             let avgDuration = 0;
             if (closed.length > 0) {
                 let tot = 0;
@@ -384,36 +565,39 @@ export const GuvidHistoryComponent: React.FC = observer(() => {
                 }
                 avgDuration = tot / closed.length;
             }
+
             map.set(month, { plPerDay, avgDuration });
         }
+
         return map;
     }, [summary]);
 
-    /* Filtered + sorted trades */
     const sortedTrades = useMemo(() => {
         if (!summary) return [];
-        let trades = tickerFilter
-            ? summary.trades.filter(t => t.ticker === tickerFilter)
-            : [...summary.trades];
-
+        const trades = tickerFilter ? summary.trades.filter(t => t.ticker === tickerFilter) : [...summary.trades];
         const mul = sortDir === 'asc' ? 1 : -1;
+
         trades.sort((a, b) => {
             switch (sortKey) {
-                case 'openDate': return a.openDate.localeCompare(b.openDate) * mul;
-                case 'ticker': return a.ticker.localeCompare(b.ticker) * mul;
+                case 'openDate':
+                    return a.openDate.localeCompare(b.openDate) * mul;
+                case 'ticker':
+                    return a.ticker.localeCompare(b.ticker) * mul;
                 case 'profit': {
                     const pa = a.status === 'open' ? a.openCredit : a.profit;
                     const pb = b.status === 'open' ? b.openCredit : b.profit;
                     return (pa - pb) * mul;
                 }
-                case 'status': return a.status.localeCompare(b.status) * mul;
-                default: return 0;
+                case 'status':
+                    return a.status.localeCompare(b.status) * mul;
+                default:
+                    return 0;
             }
         });
-        return trades;
-    }, [summary, tickerFilter, sortKey, sortDir]);
 
-    /* Calendar data: build month grids from dailyPL */
+        return trades;
+    }, [summary, sortDir, sortKey, tickerFilter]);
+
     const calendarMonths = useMemo(() => {
         if (!summary) return [];
 
@@ -421,27 +605,21 @@ export const GuvidHistoryComponent: React.FC = observer(() => {
         const year = now.getFullYear();
         const currentMonth = now.getMonth();
         const todayStr = now.toISOString().split('T')[0];
-
-        // Build a lookup from dailyPL
         const plMap = new Map<string, IDailyICPL>();
-        for (const d of summary.dailyPL) {
-            plMap.set(d.date, d);
-        }
+
+        for (const d of summary.dailyPL) plMap.set(d.date, d);
 
         const months: Array<{
             label: string;
             days: Array<{ date: string; dayNum: number; pl: number; trades: number; hasData: boolean; isEmpty: boolean; isToday: boolean }>;
         }> = [];
 
-        // Show Jan through current month
         for (let m = 0; m <= currentMonth; m++) {
             const firstDay = new Date(year, m, 1);
             const daysInMonth = new Date(year, m + 1, 0).getDate();
-            const startDow = firstDay.getDay(); // 0=Sun
-
+            const startDow = firstDay.getDay();
             const days: typeof months[0]['days'] = [];
 
-            // Empty cells before the 1st
             for (let i = 0; i < startDow; i++) {
                 days.push({ date: '', dayNum: 0, pl: 0, trades: 0, hasData: false, isEmpty: true, isToday: false });
             }
@@ -460,7 +638,6 @@ export const GuvidHistoryComponent: React.FC = observer(() => {
                 });
             }
 
-            // Pad end to complete last week
             while (days.length % 7 !== 0) {
                 days.push({ date: '', dayNum: 0, pl: 0, trades: 0, hasData: false, isEmpty: true, isToday: false });
             }
@@ -472,17 +649,17 @@ export const GuvidHistoryComponent: React.FC = observer(() => {
     }, [summary]);
 
     const sortArrow = (key: SortKey) => {
-        if (sortKey !== key) return ' \u21C5';
-        return sortDir === 'asc' ? ' \u25B2' : ' \u25BC';
+        if (sortKey !== key) return ' ⇅';
+        return sortDir === 'asc' ? ' ▲' : ' ▼';
     };
 
     if (loading && !summary) {
         return (
             <Container>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '40px 0', color: '#666' }}>
+                <LoadingRow>
                     <IonSpinner name="crescent" />
-                    <span>Loading YTD Iron Condor history...</span>
-                </div>
+                    <span>Se incarca istoricul YTD pentru Iron Condors...</span>
+                </LoadingRow>
             </Container>
         );
     }
@@ -490,208 +667,109 @@ export const GuvidHistoryComponent: React.FC = observer(() => {
     if (!summary) {
         return (
             <Container>
-                <TopBar>
-                    <Title>Guvid History</Title>
-                    <RefreshBtn onClick={fetchHistory} disabled={loading}>
-                        {loading ? 'Loading...' : '\u21BB Refresh'}
-                    </RefreshBtn>
-                </TopBar>
-                <div style={{ color: '#444', textAlign: 'center', padding: '40px' }}>
-                    No data available. Connect your TastyTrade account to see IC performance.
-                </div>
+                <Hero>
+                    <TopBar>
+                        <HeroText>
+                            <Eyebrow>History</Eyebrow>
+                            <Title>Istoric Guvid</Title>
+                            <Summary>Ai nevoie de contul TastyTrade conectat ca sa vezi performanta istorica, distribuția pe ticker si calendarul de P&L.</Summary>
+                        </HeroText>
+                        <RefreshBtn onClick={() => void fetchHistory()} disabled={loading}>
+                            {loading ? 'Se incarca...' : 'Reincearca'}
+                        </RefreshBtn>
+                    </TopBar>
+                </Hero>
+                <EmptyState>
+                    <EmptyStateTitle>{account ? 'Istoricul nu este gata inca' : 'Conecteaza brokerul pentru istoric'}</EmptyStateTitle>
+                    <EmptyStateText>
+                        {account
+                            ? 'Aplicatia nu are inca trades inchise sau sincronizarea istorica nu a livrat rezultate. Poti relansa incarcarea sau continua analiza in scanner.'
+                            : 'Istoricul devine util dupa ce configurezi credentialele TastyTrade si lasi sincronizarea sa incarce trades inchise, distributii pe ticker si calendarul zilnic de P&L.'}
+                    </EmptyStateText>
+                    <EmptyStateActions>
+                        {!account && (
+                            <EmptyStateAction $primary type="button" onClick={() => history.push('/account')}>
+                                Mergi la cont
+                            </EmptyStateAction>
+                        )}
+                        <EmptyStateAction type="button" onClick={() => history.push('/app')}>
+                            Deschide scannerul
+                        </EmptyStateAction>
+                    </EmptyStateActions>
+                </EmptyState>
             </Container>
         );
     }
 
     const ytd = summary.yearToDate;
-
-    // Realized P&L = only from closed/expired trades (NOT open positions)
     const realizedPL = ytd.totalWins + ytd.totalLosses;
     const avgProfitPerClosed = ytd.closedTrades > 0 ? realizedPL / ytd.closedTrades : 0;
-
-    // P&L per day — realized P&L / number of unique trading days that had closings
     const tradingDays = summary.dailyPL.length;
     const plPerDay = tradingDays > 0 ? realizedPL / tradingDays : 0;
 
-    // Average day duration — mean calendar days from openDate to closeDate for closed trades
     const closedForDuration = summary.trades.filter(
         t => t.status !== 'open' && t.openDate && (t.closeDate || t.expirationDate),
     );
+
     let avgDaysHeld = 0;
     if (closedForDuration.length > 0) {
         let totalDays = 0;
         for (const t of closedForDuration) {
             const open = new Date(t.openDate);
             const close = new Date(t.closeDate || t.expirationDate);
-            const diffMs = close.getTime() - open.getTime();
-            totalDays += Math.max(0, Math.round(diffMs / (1000 * 60 * 60 * 24)));
+            totalDays += Math.max(0, Math.round((close.getTime() - open.getTime()) / 86400000));
         }
         avgDaysHeld = totalDays / closedForDuration.length;
     }
 
     return (
         <Container>
-            {/* ─── Header ───────────────────────────────────────── */}
-            <TopBar>
-                <Title>Guvid History</Title>
-                <RefreshBtn onClick={fetchHistory} disabled={loading}>
-                    {loading ? 'Loading...' : '\u21BB Refresh'}
-                </RefreshBtn>
-            </TopBar>
+            <Hero>
+                <TopBar>
+                    <HeroText>
+                        <Eyebrow>History</Eyebrow>
+                        <Title>Istoric Guvid</Title>
+                        <Summary>Vezi cum performeaza sistemul in timp: win rate, P&L realizat, distributie pe ticker si zilele care muta cel mai mult rezultatul anual.</Summary>
+                    </HeroText>
+                    <RefreshBtn onClick={() => void fetchHistory()} disabled={loading}>
+                        {loading ? 'Se actualizeaza...' : 'Actualizeaza'}
+                    </RefreshBtn>
+                </TopBar>
 
-            {/* ─── Section 1: Stat Cards (closed trades only) ──── */}
-            <MetricsRow>
-                <MetricCard $color="#4a9eff">
-                    <MetricLabel>Closed IC Trades</MetricLabel>
-                    <MetricValue>{ytd.closedTrades}</MetricValue>
-                </MetricCard>
-                <MetricCard $color={ytd.winRate >= 60 ? '#4dff91' : ytd.winRate >= 40 ? '#ffaa00' : '#ff4d6d'}>
-                    <MetricLabel>Win Rate</MetricLabel>
-                    <MetricValue $color={ytd.winRate >= 60 ? '#4dff91' : ytd.winRate >= 40 ? '#ffaa00' : '#ff4d6d'}>
-                        {ytd.winRate.toFixed(1)}%
-                    </MetricValue>
-                </MetricCard>
-                <MetricCard $color={realizedPL >= 0 ? '#4dff91' : '#ff4d6d'}>
-                    <MetricLabel>Total P&L</MetricLabel>
-                    <MetricValue $color={realizedPL >= 0 ? '#4dff91' : '#ff4d6d'}>
-                        {fmtCur(realizedPL)}
-                    </MetricValue>
-                </MetricCard>
-                <MetricCard $color={avgProfitPerClosed >= 0 ? '#4dff91' : '#ff4d6d'}>
-                    <MetricLabel>Avg Profit / Trade</MetricLabel>
-                    <MetricValue $color={avgProfitPerClosed >= 0 ? '#4dff91' : '#ff4d6d'}>
-                        {fmtCur(avgProfitPerClosed)}
-                    </MetricValue>
-                </MetricCard>
-                <MetricCard $color={plPerDay >= 0 ? '#4dff91' : '#ff4d6d'}>
-                    <MetricLabel>P&L / Day</MetricLabel>
-                    <MetricValue $color={plPerDay >= 0 ? '#4dff91' : '#ff4d6d'}>
-                        {fmtCur(plPerDay)}
-                    </MetricValue>
-                </MetricCard>
-                <MetricCard $color="#4a9eff">
-                    <MetricLabel>Avg Duration</MetricLabel>
-                    <MetricValue>
-                        {avgDaysHeld.toFixed(1)}d
-                    </MetricValue>
-                </MetricCard>
-            </MetricsRow>
-
-            {/* ─── Section 2: Trades by Ticker ──────────────────── */}
-            <SectionTitle>Trades by Ticker</SectionTitle>
-            <TableWrap>
-                <Table style={{ minWidth: 650 }}>
-                    <thead>
-                        <tr>
-                            <Th>Ticker</Th>
-                            <Th $align="center">Trades</Th>
-                            <Th $align="center">Profitable</Th>
-                            <Th $align="center">Unprofitable</Th>
-                            <Th $align="right">Win Rate</Th>
-                            <Th $align="right">Total P&L</Th>
-                            <Th $align="right">P&L / Day</Th>
-                            <Th $align="right">Avg Duration</Th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {tickerBreakdown.map(ts => {
-                            const extra = tickerExtraStats.get(ts.ticker);
-                            return (
-                                <tr key={ts.ticker}>
-                                    <Td><strong>{ts.ticker}</strong></Td>
-                                    <Td $align="center">{ts.totalTrades}</Td>
-                                    <Td $align="center" style={{ color: '#4dff91' }}>{ts.profitableTrades}</Td>
-                                    <Td $align="center" style={{ color: '#ff4d6d' }}>{ts.totalTrades - ts.profitableTrades}</Td>
-                                    <Td $align="right"><WinRateValue $pct={ts.winRate}>{ts.winRate.toFixed(1)}%</WinRateValue></Td>
-                                    <Td $align="right"><PLValue $value={ts.totalProfit}>{fmtCur(ts.totalProfit)}</PLValue></Td>
-                                    <Td $align="right"><PLValue $value={extra?.plPerDay ?? 0}>{fmtCur(extra?.plPerDay ?? 0)}</PLValue></Td>
-                                    <Td $align="right">{(extra?.avgDuration ?? 0).toFixed(1)}d</Td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </Table>
-            </TableWrap>
-
-            {/* ─── Section 3: Monthly P&L ───────────────────────── */}
-            <SectionTitle>Monthly P&L</SectionTitle>
-            <TableWrap>
-                <Table style={{ minWidth: 600 }}>
-                    <thead>
-                        <tr>
-                            <Th>Month</Th>
-                            <Th $align="center">Trades</Th>
-                            <Th $align="center">Profitable</Th>
-                            <Th $align="right">Win Rate</Th>
-                            <Th $align="right">Total P&L</Th>
-                            <Th $align="right">P&L / Day</Th>
-                            <Th $align="right">Avg Duration</Th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {monthlyBreakdown.map(ms => {
-                            const extra = monthExtraStats.get(ms.month);
-                            return (
-                                <tr key={ms.month}>
-                                    <Td><strong>{ms.month}</strong></Td>
-                                    <Td $align="center">{ms.totalTrades}</Td>
-                                    <Td $align="center" style={{ color: '#4dff91' }}>{ms.profitableTrades}</Td>
-                                    <Td $align="right"><WinRateValue $pct={ms.winRate}>{ms.winRate.toFixed(1)}%</WinRateValue></Td>
-                                    <Td $align="right"><PLValue $value={ms.totalProfit}>{fmtCur(ms.totalProfit)}</PLValue></Td>
-                                    <Td $align="right"><PLValue $value={extra?.plPerDay ?? 0}>{fmtCur(extra?.plPerDay ?? 0)}</PLValue></Td>
-                                    <Td $align="right">{(extra?.avgDuration ?? 0).toFixed(1)}d</Td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </Table>
-            </TableWrap>
-
-            {/* ─── Section 4: Calendar Heatmap ──────────────────── */}
-            <SectionTitle>Daily P&L Calendar</SectionTitle>
-            <DaySummaryRow>
-                <span style={{ color: '#4dff91' }}>{summary.profitableDaysCount} profitable days</span>
-                <span style={{ color: '#888' }}>|</span>
-                <span style={{ color: '#ff4d6d' }}>{summary.unprofitableDaysCount} unprofitable days</span>
-            </DaySummaryRow>
-            <CalendarContainer>
-                {calendarMonths.map(month => (
-                    <CalendarMonthRow key={month.label}>
-                        <CalendarMonthLabel>{month.label}</CalendarMonthLabel>
-                        <CalendarDaysGrid>
-                            {DAY_NAMES.map(d => <CalendarDayHeader key={d}>{d}</CalendarDayHeader>)}
-                            {month.days.map((day, idx) => (
-                                <CalendarDay
-                                    key={`${month.label}-${idx}`}
-                                    $hasData={day.hasData}
-                                    $isProfit={day.pl > 0}
-                                    $isEmpty={day.isEmpty}
-                                >
-                                    {!day.isEmpty && (
-                                        <>
-                                            <CalendarDayNum $isToday={day.isToday}>{day.dayNum}</CalendarDayNum>
-                                            {day.hasData && (
-                                                <>
-                                                    <CalendarDayPL $value={day.pl}>{fmtCur(day.pl)}</CalendarDayPL>
-                                                    <CalendarDayTrades>{day.trades} IC{day.trades !== 1 ? 's' : ''}</CalendarDayTrades>
-                                                </>
-                                            )}
-                                        </>
-                                    )}
-                                </CalendarDay>
-                            ))}
-                        </CalendarDaysGrid>
-                    </CalendarMonthRow>
-                ))}
-            </CalendarContainer>
-
-            {/* ─── Section 5: Trade History ──────────────────────── */}
-            <SectionTitle>Trade History</SectionTitle>
+                <MetricsRow>
+                    <MetricCard $color="#67a8ff">
+                        <MetricLabel>Trades inchise</MetricLabel>
+                        <MetricValue>{ytd.closedTrades}</MetricValue>
+                    </MetricCard>
+                    <MetricCard $color={ytd.winRate >= 60 ? '#4dff91' : ytd.winRate >= 40 ? '#ffaa00' : '#ff6b7e'}>
+                        <MetricLabel>Win rate</MetricLabel>
+                        <MetricValue $color={ytd.winRate >= 60 ? '#4dff91' : ytd.winRate >= 40 ? '#ffaa00' : '#ff6b7e'}>
+                            {ytd.winRate.toFixed(1)}%
+                        </MetricValue>
+                    </MetricCard>
+                    <MetricCard $color={realizedPL >= 0 ? '#4dff91' : '#ff6b7e'}>
+                        <MetricLabel>P&amp;L total</MetricLabel>
+                        <MetricValue $color={realizedPL >= 0 ? '#4dff91' : '#ff6b7e'}>{fmtCur(realizedPL)}</MetricValue>
+                    </MetricCard>
+                    <MetricCard $color={avgProfitPerClosed >= 0 ? '#4dff91' : '#ff6b7e'}>
+                        <MetricLabel>Profit mediu / trade</MetricLabel>
+                        <MetricValue $color={avgProfitPerClosed >= 0 ? '#4dff91' : '#ff6b7e'}>{fmtCur(avgProfitPerClosed)}</MetricValue>
+                    </MetricCard>
+                    <MetricCard $color={plPerDay >= 0 ? '#4dff91' : '#ff6b7e'}>
+                        <MetricLabel>P&amp;L / zi</MetricLabel>
+                        <MetricValue $color={plPerDay >= 0 ? '#4dff91' : '#ff6b7e'}>{fmtCur(plPerDay)}</MetricValue>
+                    </MetricCard>
+                    <MetricCard $color="#f4a261">
+                        <MetricLabel>Durata medie</MetricLabel>
+                        <MetricValue>{avgDaysHeld.toFixed(1)}d</MetricValue>
+                    </MetricCard>
+                </MetricsRow>
+            </Hero>
 
             {tickerList.length > 1 && (
                 <TickerFilterRow>
                     <TickerFilterBtn $active={tickerFilter === null} onClick={() => setTickerFilter(null)}>
-                        ALL ({summary.trades.length})
+                        Toate simbolurile
                     </TickerFilterBtn>
                     {tickerList.map(ticker => (
                         <TickerFilterBtn
@@ -705,69 +783,34 @@ export const GuvidHistoryComponent: React.FC = observer(() => {
                 </TickerFilterRow>
             )}
 
+            <SectionTitle>Trades by Ticker</SectionTitle>
             <TableWrap>
-                <Table style={{ minWidth: 1000 }}>
+                <Table>
                     <thead>
                         <tr>
-                            <Th>Order ID</Th>
-                            <SortableTh $active={sortKey === 'ticker'} onClick={() => toggleSort('ticker')}>
-                                Ticker{sortArrow('ticker')}
-                            </SortableTh>
-                            <SortableTh $active={sortKey === 'openDate'} onClick={() => toggleSort('openDate')}>
-                                Open Date{sortArrow('openDate')}
-                            </SortableTh>
-                            <Th>Close Date</Th>
-                            <Th>Expiration</Th>
-                            <Th>Put Spread</Th>
-                            <Th>Call Spread</Th>
-                            <Th $align="right">Credit</Th>
-                            <Th $align="right">Debit / Current</Th>
-                            <SortableTh $align="right" $active={sortKey === 'profit'} onClick={() => toggleSort('profit')}>
-                                P&L{sortArrow('profit')}
-                            </SortableTh>
-                            <SortableTh $align="center" $active={sortKey === 'status'} onClick={() => toggleSort('status')}>
-                                Status{sortArrow('status')}
-                            </SortableTh>
+                            <Th>Ticker</Th>
+                            <Th $align="center">Trades</Th>
+                            <Th $align="center">Profitable</Th>
+                            <Th $align="center">Unprofitable</Th>
+                            <Th $align="right">Win Rate</Th>
+                            <Th $align="right">Total P&amp;L</Th>
+                            <Th $align="right">P&amp;L / Day</Th>
+                            <Th $align="right">Avg Duration</Th>
                         </tr>
                     </thead>
                     <tbody>
-                        {sortedTrades.length === 0 ? (
-                            <tr>
-                                <Td colSpan={11} $align="center" style={{ color: '#444', padding: '24px' }}>
-                                    {tickerFilter ? `No IC trades for ${tickerFilter}` : 'No IC trades found'}
-                                </Td>
-                            </tr>
-                        ) : sortedTrades.map(trade => {
-                            const pl = trade.status === 'open' ? trade.openCredit : trade.profit;
-                            const debitOrCurrent = trade.status === 'open'
-                                ? (trade.currentPrice > 0 ? fmtCur(trade.currentPrice) : '\u2014')
-                                : fmtCur(trade.closeDebit);
-
+                        {tickerBreakdown.map(ts => {
+                            const extra = tickerExtraStats.get(ts.ticker);
                             return (
-                                <tr key={trade.id}>
-                                    <Td style={{ fontSize: 11, color: '#666' }}>
-                                        {trade.openOrderIds.slice(0, 2).join(', ')}
-                                        {trade.openOrderIds.length > 2 ? '...' : ''}
-                                    </Td>
-                                    <Td><strong>{trade.ticker}</strong></Td>
-                                    <Td>{trade.openDate}</Td>
-                                    <Td>
-                                        {trade.status === 'open'
-                                            ? <StatusBadge $status="open">OPEN</StatusBadge>
-                                            : (trade.closeDate || trade.expirationDate)
-                                        }
-                                    </Td>
-                                    <Td>{trade.expirationDate}</Td>
-                                    <Td>{trade.putBuyStrike}/{trade.putSellStrike}</Td>
-                                    <Td>{trade.callSellStrike}/{trade.callBuyStrike}</Td>
-                                    <Td $align="right">{fmtCur(trade.openCredit)}</Td>
-                                    <Td $align="right">{debitOrCurrent}</Td>
-                                    <Td $align="right"><PLValue $value={pl}>{fmtCur(pl)}</PLValue></Td>
-                                    <Td $align="center">
-                                        <StatusBadge $status={trade.status}>
-                                            {trade.status.toUpperCase()}
-                                        </StatusBadge>
-                                    </Td>
+                                <tr key={ts.ticker}>
+                                    <Td><strong>{ts.ticker}</strong></Td>
+                                    <Td $align="center">{ts.totalTrades}</Td>
+                                    <Td $align="center"><PLValue $value={1}>{ts.profitableTrades}</PLValue></Td>
+                                    <Td $align="center"><PLValue $value={-1}>{ts.totalTrades - ts.profitableTrades}</PLValue></Td>
+                                    <Td $align="right"><WinRateValue $pct={ts.winRate}>{ts.winRate.toFixed(1)}%</WinRateValue></Td>
+                                    <Td $align="right"><PLValue $value={ts.totalProfit}>{fmtCur(ts.totalProfit)}</PLValue></Td>
+                                    <Td $align="right"><PLValue $value={extra?.plPerDay ?? 0}>{fmtCur(extra?.plPerDay ?? 0)}</PLValue></Td>
+                                    <Td $align="right">{(extra?.avgDuration ?? 0).toFixed(1)}d</Td>
                                 </tr>
                             );
                         })}
@@ -775,11 +818,212 @@ export const GuvidHistoryComponent: React.FC = observer(() => {
                 </Table>
             </TableWrap>
 
+            <MobileCardList>
+                {tickerBreakdown.map(ts => {
+                    const extra = tickerExtraStats.get(ts.ticker);
+                    return (
+                        <MobileCard key={ts.ticker}>
+                            <MobileCardTop>
+                                <div>
+                                    <MobileTitle>{ts.ticker}</MobileTitle>
+                                    <MobileSub>{ts.totalTrades} trades inchise</MobileSub>
+                                </div>
+                                <WinRateValue $pct={ts.winRate}>{ts.winRate.toFixed(1)}%</WinRateValue>
+                            </MobileCardTop>
+                            <MobileGrid>
+                                <MobileMetric>
+                                    <MobileMetricLabel>Total P&amp;L</MobileMetricLabel>
+                                    <MobileMetricValue><PLValue $value={ts.totalProfit}>{fmtCur(ts.totalProfit)}</PLValue></MobileMetricValue>
+                                </MobileMetric>
+                                <MobileMetric>
+                                    <MobileMetricLabel>P&amp;L / zi</MobileMetricLabel>
+                                    <MobileMetricValue><PLValue $value={extra?.plPerDay ?? 0}>{fmtCur(extra?.plPerDay ?? 0)}</PLValue></MobileMetricValue>
+                                </MobileMetric>
+                                <MobileMetric>
+                                    <MobileMetricLabel>Profitable</MobileMetricLabel>
+                                    <MobileMetricValue>{ts.profitableTrades}</MobileMetricValue>
+                                </MobileMetric>
+                                <MobileMetric>
+                                    <MobileMetricLabel>Durata medie</MobileMetricLabel>
+                                    <MobileMetricValue>{(extra?.avgDuration ?? 0).toFixed(1)}d</MobileMetricValue>
+                                </MobileMetric>
+                            </MobileGrid>
+                        </MobileCard>
+                    );
+                })}
+            </MobileCardList>
+
+            <SectionTitle>Monthly P&amp;L</SectionTitle>
+            <TableWrap>
+                <Table>
+                    <thead>
+                        <tr>
+                            <Th>Month</Th>
+                            <Th $align="center">Trades</Th>
+                            <Th $align="center">Profitable</Th>
+                            <Th $align="right">Win Rate</Th>
+                            <Th $align="right">Total P&amp;L</Th>
+                            <Th $align="right">P&amp;L / Day</Th>
+                            <Th $align="right">Avg Duration</Th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {monthlyBreakdown.map(ms => {
+                            const extra = monthExtraStats.get(ms.month);
+                            return (
+                                <tr key={ms.month}>
+                                    <Td><strong>{ms.month}</strong></Td>
+                                    <Td $align="center">{ms.totalTrades}</Td>
+                                    <Td $align="center"><PLValue $value={1}>{ms.profitableTrades}</PLValue></Td>
+                                    <Td $align="right"><WinRateValue $pct={ms.winRate}>{ms.winRate.toFixed(1)}%</WinRateValue></Td>
+                                    <Td $align="right"><PLValue $value={ms.totalProfit}>{fmtCur(ms.totalProfit)}</PLValue></Td>
+                                    <Td $align="right"><PLValue $value={extra?.plPerDay ?? 0}>{fmtCur(extra?.plPerDay ?? 0)}</PLValue></Td>
+                                    <Td $align="right">{(extra?.avgDuration ?? 0).toFixed(1)}d</Td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </Table>
+            </TableWrap>
+
+            <MobileCardList>
+                {monthlyBreakdown.map(ms => {
+                    const extra = monthExtraStats.get(ms.month);
+                    return (
+                        <MobileCard key={ms.month}>
+                            <MobileCardTop>
+                                <div>
+                                    <MobileTitle>{ms.month}</MobileTitle>
+                                    <MobileSub>{ms.totalTrades} trades</MobileSub>
+                                </div>
+                                <WinRateValue $pct={ms.winRate}>{ms.winRate.toFixed(1)}%</WinRateValue>
+                            </MobileCardTop>
+                            <MobileGrid>
+                                <MobileMetric>
+                                    <MobileMetricLabel>Total P&amp;L</MobileMetricLabel>
+                                    <MobileMetricValue><PLValue $value={ms.totalProfit}>{fmtCur(ms.totalProfit)}</PLValue></MobileMetricValue>
+                                </MobileMetric>
+                                <MobileMetric>
+                                    <MobileMetricLabel>P&amp;L / zi</MobileMetricLabel>
+                                    <MobileMetricValue><PLValue $value={extra?.plPerDay ?? 0}>{fmtCur(extra?.plPerDay ?? 0)}</PLValue></MobileMetricValue>
+                                </MobileMetric>
+                                <MobileMetric>
+                                    <MobileMetricLabel>Profitable</MobileMetricLabel>
+                                    <MobileMetricValue>{ms.profitableTrades}</MobileMetricValue>
+                                </MobileMetric>
+                                <MobileMetric>
+                                    <MobileMetricLabel>Durata medie</MobileMetricLabel>
+                                    <MobileMetricValue>{(extra?.avgDuration ?? 0).toFixed(1)}d</MobileMetricValue>
+                                </MobileMetric>
+                            </MobileGrid>
+                        </MobileCard>
+                    );
+                })}
+            </MobileCardList>
+
+            <SectionTitle>Daily P&amp;L Calendar</SectionTitle>
+            <DaySummaryRow>
+                <span style={{ color: '#4dff91' }}>{summary.profitableDaysCount} zile profitabile</span>
+                <span style={{ color: 'var(--app-text-muted)' }}>|</span>
+                <span style={{ color: '#ff6b7e' }}>{summary.unprofitableDaysCount} zile negative</span>
+            </DaySummaryRow>
+            <CalendarContainer>
+                <CalendarScroller>
+                    {calendarMonths.map(month => (
+                        <CalendarMonthRow key={month.label}>
+                            <CalendarMonthLabel>{month.label}</CalendarMonthLabel>
+                            <CalendarDaysGrid>
+                                {DAY_NAMES.map(d => <CalendarDayHeader key={d}>{d}</CalendarDayHeader>)}
+                                {month.days.map((day, idx) => (
+                                    <CalendarDay
+                                        key={`${month.label}-${idx}`}
+                                        $hasData={day.hasData}
+                                        $isProfit={day.pl > 0}
+                                        $isEmpty={day.isEmpty}
+                                    >
+                                        {!day.isEmpty && (
+                                            <>
+                                                <CalendarDayNum $isToday={day.isToday}>{day.dayNum}</CalendarDayNum>
+                                                {day.hasData && (
+                                                    <>
+                                                        <CalendarDayPL $value={day.pl}>{fmtCur(day.pl)}</CalendarDayPL>
+                                                        <CalendarDayTrades>{day.trades} IC{day.trades !== 1 ? 's' : ''}</CalendarDayTrades>
+                                                    </>
+                                                )}
+                                            </>
+                                        )}
+                                    </CalendarDay>
+                                ))}
+                            </CalendarDaysGrid>
+                        </CalendarMonthRow>
+                    ))}
+                </CalendarScroller>
+            </CalendarContainer>
+
+            <SectionTitle>Trade History ({sortedTrades.length})</SectionTitle>
+            <TableWrap>
+                <Table>
+                    <thead>
+                        <tr>
+                            <SortableTh $active={sortKey === 'openDate'} onClick={() => toggleSort('openDate')}>Open Date{sortArrow('openDate')}</SortableTh>
+                            <SortableTh $active={sortKey === 'ticker'} onClick={() => toggleSort('ticker')}>Ticker{sortArrow('ticker')}</SortableTh>
+                            <Th>Expiration</Th>
+                            <Th>Strikes</Th>
+                            <SortableTh $align="center" $active={sortKey === 'status'} onClick={() => toggleSort('status')}>Status{sortArrow('status')}</SortableTh>
+                            <SortableTh $align="right" $active={sortKey === 'profit'} onClick={() => toggleSort('profit')}>P&amp;L{sortArrow('profit')}</SortableTh>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {sortedTrades.map(trade => {
+                            const realized = trade.status === 'open' ? trade.openCredit : trade.profit;
+                            return (
+                                <tr key={trade.id}>
+                                    <Td>{trade.openDate}</Td>
+                                    <Td><strong>{trade.ticker}</strong></Td>
+                                    <Td>{trade.expirationDate}</Td>
+                                    <Td>{trade.putBuyStrike}/{trade.putSellStrike} · {trade.callSellStrike}/{trade.callBuyStrike}</Td>
+                                    <Td $align="center"><StatusBadge $status={trade.status}>{trade.status}</StatusBadge></Td>
+                                    <Td $align="right"><PLValue $value={realized}>{fmtCur(realized)}</PLValue></Td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </Table>
+            </TableWrap>
+
+            <MobileCardList>
+                {sortedTrades.map(trade => {
+                    const realized = trade.status === 'open' ? trade.openCredit : trade.profit;
+                    return (
+                        <MobileCard key={trade.id}>
+                            <MobileCardTop>
+                                <div>
+                                    <MobileTitle>{trade.ticker}</MobileTitle>
+                                    <MobileSub>{trade.openDate} → {trade.expirationDate}</MobileSub>
+                                </div>
+                                <StatusBadge $status={trade.status}>{trade.status}</StatusBadge>
+                            </MobileCardTop>
+                            <MobileGrid>
+                                <MobileMetric>
+                                    <MobileMetricLabel>Strikes</MobileMetricLabel>
+                                    <MobileMetricValue>{trade.putBuyStrike}/{trade.putSellStrike}</MobileMetricValue>
+                                    <MobileMetricValue>{trade.callSellStrike}/{trade.callBuyStrike}</MobileMetricValue>
+                                </MobileMetric>
+                                <MobileMetric>
+                                    <MobileMetricLabel>P&amp;L</MobileMetricLabel>
+                                    <MobileMetricValue><PLValue $value={realized}>{fmtCur(realized)}</PLValue></MobileMetricValue>
+                                </MobileMetric>
+                            </MobileGrid>
+                        </MobileCard>
+                    );
+                })}
+            </MobileCardList>
+
             {loading && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '20px 0', color: '#666' }}>
+                <LoadingRow>
                     <IonSpinner name="crescent" />
-                    <span>Refreshing data...</span>
-                </div>
+                    <span>Se actualizeaza istoricul...</span>
+                </LoadingRow>
             )}
         </Container>
     );

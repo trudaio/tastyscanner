@@ -84,7 +84,7 @@ export const LegSelectionSection: React.FC<LegSelectionSectionProps> = ({
                     </Chip>
                 </ChipsRow>
                 {asymmetricDelta && (
-                    <div style={{ color: '#888', fontSize: 11, marginTop: -6, marginBottom: 8 }}>
+                    <div style={{ color: 'var(--app-text-muted)', fontSize: 11, marginTop: -6, marginBottom: 8 }}>
                         Different delta targets for put and call sides (e.g., 20 put / 15 call)
                     </div>
                 )}
@@ -128,9 +128,9 @@ export const LegSelectionSection: React.FC<LegSelectionSectionProps> = ({
                                 style={{ width: 80 }}
                             />
                         ) : callDeltaDisplay ? (
-                            <span style={{ color: '#888', fontSize: 13 }}>{callDeltaDisplay}</span>
+                            <span style={{ color: 'var(--app-text-muted)', fontSize: 13 }}>{callDeltaDisplay}</span>
                         ) : (
-                            <span style={{ color: '#fff', fontSize: 13 }}>{targetDelta}</span>
+                            <span style={{ color: 'var(--app-text)', fontSize: 13 }}>{targetDelta}</span>
                         )}
                     </LegCriteria>
                     <LegValue>Sell OTM Call (~{callDelta}Δ)</LegValue>
@@ -156,7 +156,7 @@ export const LegSelectionSection: React.FC<LegSelectionSectionProps> = ({
                     <LegLabel $type="buy">Long Call</LegLabel>
                     <LegCriteria>
                         <span>Wing Width</span>
-                        <span style={{ color: '#fff', fontSize: 13 }}>${wingWidth}</span>
+                        <span style={{ color: 'var(--app-text)', fontSize: 13 }}>${wingWidth}</span>
                     </LegCriteria>
                     <LegValue>${wingWidth} above short call</LegValue>
                 </LegRow>

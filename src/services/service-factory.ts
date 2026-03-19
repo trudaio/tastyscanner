@@ -31,8 +31,11 @@ import {ITradeLogService} from "./trade-log/trade-log.interface";
 import {TradeLogService} from "./trade-log/trade-log.service";
 import type { ICredentialsService } from './credentials/credentials.service.interface';
 import { CredentialsService } from './credentials/credentials.service';
+import type { IBrokerCredentialsService } from './credentials/broker-credentials.service.interface';
+import { BrokerCredentialsService } from './credentials/broker-credentials.service';
 import type { IBacktestService } from './backtest/backtest-engine.interface';
 import { BacktestService } from './backtest/backtest.service';
+import { BrokerType } from './broker-provider/broker-provider.interface';
 
 export class ServiceFactory implements IServiceFactory {
 
@@ -40,6 +43,7 @@ export class ServiceFactory implements IServiceFactory {
 
     private _clientSecret = '';
     private _refreshToken = '';
+    private _brokerType: BrokerType = BrokerType.TastyTrade;
 
     constructor() {
         makeObservable(this, {
@@ -50,7 +54,7 @@ export class ServiceFactory implements IServiceFactory {
         // Auto-initialize when Firebase auth confirms user
         onAuthStateChanged(auth, (user) => {
             if (user) {
-                this.credentials.loadCredentials()
+                this.brokerCredentials.loadCredentials()
                     .then((creds) => {
                         if (creds) {
                             this.initialize(creds.clientSecret, creds.refreshToken);
@@ -69,9 +73,10 @@ export class ServiceFactory implements IServiceFactory {
         });
     }
 
-    initialize(clientSecret: string, refreshToken: string): void {
+    initialize(clientSecret: string, refreshToken: string, brokerType: BrokerType = BrokerType.TastyTrade): void {
         this._clientSecret = clientSecret;
         this._refreshToken = refreshToken;
+        this._brokerType = brokerType;
         this._marketDataProvider = new Lazy<IMarketDataProviderService>(
             () => new MarketDataProviderService(this._clientSecret, this._refreshToken)
         );
@@ -92,6 +97,11 @@ export class ServiceFactory implements IServiceFactory {
     private _credentials: Lazy<ICredentialsService> = new Lazy<ICredentialsService>(() => new CredentialsService());
     get credentials(): ICredentialsService {
         return this._credentials.value;
+    }
+
+    private _brokerCredentials: Lazy<IBrokerCredentialsService> = new Lazy<IBrokerCredentialsService>(() => new BrokerCredentialsService());
+    get brokerCredentials(): IBrokerCredentialsService {
+        return this._brokerCredentials.value;
     }
 
     private _tickers: Lazy<ITickersService> = new Lazy<ITickersService>(() => new TickersService(this));

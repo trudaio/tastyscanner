@@ -10,6 +10,9 @@ import {IIronCondorAnalyticsService} from "./iron-condor-analytics/iron-condor-a
 import {IWatchlistDataService} from "./watchlist-data/watchlist-data.service.interface";
 import {ITradingDashboardService} from "./trading-dashboard/trading-dashboard.interface";
 import {IIronCondorSaviorService} from "./iron-condor-savior/iron-condor-savior.interface";
+import {ITradeLogService} from "./trade-log/trade-log.interface";
+import type { ICredentialsService } from './credentials/credentials.service.interface';
+import type { IBacktestService } from './backtest/backtest-engine.interface';
 
 export interface IServiceFactory {
     readonly tickers: ITickersService;
@@ -24,4 +27,9 @@ export interface IServiceFactory {
     readonly watchlistData: IWatchlistDataService;
     readonly tradingDashboard: ITradingDashboardService;
     readonly ironCondorSavior: IIronCondorSaviorService;
+    readonly tradeLog: ITradeLogService;
+    readonly credentials: ICredentialsService;
+    readonly backtest: IBacktestService;
+    readonly isInitialized: boolean;
+    initialize(clientSecret: string, refreshToken: string): void;
 }

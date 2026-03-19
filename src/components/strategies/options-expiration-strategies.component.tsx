@@ -14,6 +14,7 @@ import {
 import {OptionsStrategyComponent} from "./options-strategy.component";
 import {IonAccordion, IonChip, IonItem, IonLabel} from "@ionic/react";
 import styled, {css} from "styled-components";
+import {useServices} from "../../hooks/use-services.hook";
 
 function computeHeaderColor(expirationType: OptionExpirationTypeEnum) {
     switch (expirationType) {
@@ -55,22 +56,27 @@ const StrategiesCountBox = styled(IonChip)`
     min-width: 50px;
     text-align: center;
     justify-content: center;
-    
+
+`
+
+const PositionsCountBox = styled(IonChip)`
+    --background: var(--ion-color-warning);
+    --color: var(--ion-color-warning-contrast);
+    min-width: 36px;
+    text-align: center;
+    justify-content: center;
+    font-size: 0.85em;
 `
 
 const StrategiesBox = styled.div`
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 12px;
     padding: 12px;
 
-    @media (max-width: 900px) {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
-    @media (max-width: 600px) {
+    @media (max-width: 400px) {
         grid-template-columns: 1fr;
-        gap: 10px;
+        gap: 8px;
         padding: 8px;
     }
 `
@@ -83,11 +89,12 @@ interface OptionsExpirationStrategiesComponentProps {
     onTrade: (strategy: IOptionsStrategyViewModel) => void;
 }
 export const OptionsExpirationStrategiesComponent: React.FC<OptionsExpirationStrategiesComponentProps> = observer((props) => {
-
+    const services = useServices();
 
     const strategies = props.strategies;
     const bestPop = Math.max(...strategies.map(strategy => strategy.pop));
     const bestRiskReward = Math.min(...strategies.map(strategy => strategy.riskRewardRatio));
+    const positionCount = services.positions.getPositionsForExpiration(props.expiration.expirationDate).length;
 
 
     let label = `${props.expiration.expirationDate} (${props.expiration.daysToExpiration} days) - ${props.expiration.expirationType}`;
@@ -106,6 +113,11 @@ export const OptionsExpirationStrategiesComponent: React.FC<OptionsExpirationStr
                         <StrategiesCountBox>
                             {strategies.length}
                         </StrategiesCountBox>
+                        {positionCount > 0 && (
+                            <PositionsCountBox>
+                                {positionCount}
+                            </PositionsCountBox>
+                        )}
                         <IonLabel>
                             {label}
                         </IonLabel>

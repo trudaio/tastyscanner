@@ -13,11 +13,11 @@ type DeltaBias = 'bullish' | 'bearish' | 'neutral';
 export const StrategyBox = styled.div<{$isBestPop: boolean; $isBestRiskReward: boolean; $hasConflict: boolean; $deltaBias: DeltaBias}>`
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 24px;
+    gap: 6px;
+    padding: 12px;
 
     @media (max-width: 480px) {
-        padding: 12px;
+        padding: 8px;
     }
 
     /* Delta bias background - applied first as base */

@@ -6,6 +6,7 @@ import {PutCreditSpreadModel} from "./put-credit-spread.model";
 import {CallCreditSpreadModel} from "./call-credit-spread.model";
 import {CreditSpreadModel} from "./credit-spread.model";
 import {OptionStrikeModel} from "./option-strike.model";
+import {IcType} from "../services/settings/settings.service.interface";
 
 
 export class StrategiesBuilder {
@@ -41,6 +42,32 @@ export class StrategiesBuilder {
         return this._filterByDelta(this.expiration.getOTMCalls());
     }
 
+    /**
+     * Returns the wing widths for put and call sides based on icType.
+     * - symmetric: same width for both sides
+     * - bullish: wider put wing (more protection downside), narrower call wing
+     * - bearish: wider call wing (more protection upside), narrower put wing
+     */
+    private _getAsymmetricWings(baseWing: number, icType: IcType): { putWing: number; callWing: number } {
+        const availableWings = this.services.settings.strategyFilters.availableWings;
+        const idx = availableWings.indexOf(baseWing);
+
+        if (icType === 'symmetric' || availableWings.length < 2) {
+            return { putWing: baseWing, callWing: baseWing };
+        }
+
+        const widerWing = availableWings[Math.min(idx + 1, availableWings.length - 1)];
+        const narrowerWing = availableWings[Math.max(idx - 1, 0)];
+
+        if (icType === 'bullish') {
+            // Bullish = wider put side (protection on downside), narrower call side
+            return { putWing: widerWing, callWing: narrowerWing };
+        } else {
+            // Bearish = wider call side (protection on upside), narrower put side
+            return { putWing: narrowerWing, callWing: widerWing };
+        }
+    }
+
     buildIronCondors(): IronCondorModel[] {
         const puts = this.getPutsByDelta().groupByKey(put => put.absoluteDeltaPercent.toString());
         const calls = this.getCallsByDelta().groupByKey(call => call.absoluteDeltaPercent.toString());
@@ -49,34 +76,63 @@ export class StrategiesBuilder {
         const callsDeltas = Object.keys(calls).map(d => parseFloat(d)).sort((a, b) => b - a);
 
         const condors: IronCondorModel[] = [];
+        const filters = this.services.settings.strategyFilters;
+        const icType = filters.icType;
 
-        const maxIndex = Math.min(putsDeltas.length, callsDeltas.length) - 1;
+        // Build (shortPutDelta, shortCallDelta) pairs according to IC type bias:
+        //   symmetric → matched indices (same delta both sides, delta-neutral)
+        //   bullish   → all combos where shortPutDelta − shortCallDelta ≥ 5 (net positive delta ≥ +5)
+        //   bearish   → all combos where shortCallDelta − shortPutDelta ≥ 5 (net negative delta ≤ −5)
+        const deltaPairs: Array<[number, number]> = [];
+        if (icType === 'symmetric') {
+            const maxIndex = Math.min(putsDeltas.length, callsDeltas.length) - 1;
+            for (let i = 0; i <= maxIndex; i++) {
+                deltaPairs.push([putsDeltas[i], callsDeltas[i]]);
+            }
+        } else {
+            for (const pd of putsDeltas) {
+                for (const cd of callsDeltas) {
+                    if (icType === 'bullish' && pd - cd >= 5) deltaPairs.push([pd, cd]);
+                    if (icType === 'bearish' && cd - pd >= 5) deltaPairs.push([pd, cd]);
+                }
+            }
+        }
 
-        for(let i = 0; i <= maxIndex; i++) {
-            const stoPuts = puts[putsDeltas[i].toString()];
-            const stoCalls = calls[callsDeltas[i].toString()];
-            for(const stoPut of stoPuts) {
-                for(const stoCall of stoCalls) {
-                    for(const wingWidth of this.wings) {
-                        const btoPut = this.expiration.getStrikeByPrice(stoPut.strike.strikePrice - wingWidth)?.put;
-                        if(!btoPut) {
-                            continue;
-                        }
-                        const btoCall = this.expiration.getStrikeByPrice(stoCall.strike.strikePrice + wingWidth)?.call;
-                        if(!btoCall) {
-                            continue;
-                        }
-                        if(this._hasGoodBidAskSpread([btoPut, stoPut, stoCall, btoCall])) {
-                            condors.push(new IronCondorModel(wingWidth, btoPut, stoPut, stoCall, btoCall, this.services));
-                        }
+        for (const [putDelta, callDelta] of deltaPairs) {
+            const stoPuts = puts[putDelta.toString()];
+            const stoCalls = calls[callDelta.toString()];
+            if (!stoPuts || !stoCalls) continue;
 
+            for (const stoPut of stoPuts) {
+                for (const stoCall of stoCalls) {
+                    for (const baseWing of this.wings) {
+                        const { putWing, callWing } = this._getAsymmetricWings(baseWing, icType);
+
+                        const btoPut = this.expiration.getStrikeByPrice(stoPut.strike.strikePrice - putWing)?.put;
+                        if (!btoPut) continue;
+                        const btoCall = this.expiration.getStrikeByPrice(stoCall.strike.strikePrice + callWing)?.call;
+                        if (!btoCall) continue;
+
+                        if (this._hasGoodBidAskSpread([btoPut, stoPut, stoCall, btoCall])) {
+                            const maxWing = Math.max(putWing, callWing);
+                            condors.push(new IronCondorModel(maxWing, btoPut, stoPut, stoCall, btoCall, this.services));
+                        }
                     }
                 }
             }
         }
 
-        return condors.sort((a, b) => a.riskRewardRatio - b.riskRewardRatio);
+        // Apply EV / Alpha / POP / Credit filters
+        const filtered = condors.filter(c => {
+            if (filters.minPop > 0 && c.pop < filters.minPop) return false;
+            if (filters.minExpectedValue !== 0 && c.expectedValue < filters.minExpectedValue) return false;
+            if (filters.minAlpha !== 0 && c.alpha < filters.minAlpha) return false;
+            if (filters.minCredit > 0 && c.credit < filters.minCredit) return false;
+            return true;
+        });
 
+        // Sort by alpha descending (best statistical edge first)
+        return filtered.sort((a, b) => b.alpha - a.alpha);
     }
 
     buildPutCreditSpreads(): PutCreditSpreadModel[] {

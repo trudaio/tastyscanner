@@ -5,12 +5,12 @@ import {
     IIronCondorAnalyticsService,
     IIronCondorTrade,
     IIronCondorSummary,
+    IGuvidHistorySummary,
+    IDailyICPL,
     ITickerSummary,
     IMonthSummary,
-    IRawOrder,
-    IRawTransaction
 } from "./iron-condor-analytics.interface";
-import { IOrderRawData, ITransactionRawData } from "../market-data-provider/market-data-provider.service.interface";
+import { IOrderRawData, ITransactionRawData, IPositionRawData } from "../market-data-provider/market-data-provider.service.interface";
 
 interface ParsedOptionSymbol {
     underlying: string;
@@ -33,6 +33,11 @@ export class IronCondorAnalyticsService extends ServiceBase implements IIronCond
     lastFetchDate: Date | null = null;
     trades: IIronCondorTrade[] = [];
 
+    // Map weekly/variant symbols to main underlying (SPXW → SPX, etc.)
+    private static readonly SYMBOL_MAP: Record<string, string> = {
+        'SPXW': 'SPX',
+    };
+
     private parseOptionSymbol(symbol: string): ParsedOptionSymbol | null {
         // TastyTrade option symbol format: UNDERLYING  YYMMDDCP00STRIKE
         // Example: SPY   260212P00580000 -> SPY, 2026-02-12, P, 580
@@ -47,127 +52,129 @@ export class IronCondorAnalyticsService extends ServiceBase implements IIronCond
         const month = dateStr.substring(2, 4);
         const day = dateStr.substring(4, 6);
 
+        const trimmed = underlying.trim();
+        const mapped = IronCondorAnalyticsService.SYMBOL_MAP[trimmed] || trimmed;
+
         return {
-            underlying: underlying.trim(),
+            underlying: mapped,
             expirationDate: `${year}-${month}-${day}`,
             optionType: optionType as 'C' | 'P',
             strikePrice: parseFloat(strikeStr) / 1000
         };
     }
 
-    private isIronCondorOrder(order: IOrderRawData): boolean {
-        // An iron condor has exactly 4 legs:
-        // 1. BTO Put (lower strike) - protection
-        // 2. STO Put (higher strike) - sell put spread
-        // 3. STO Call (lower strike) - sell call spread
-        // 4. BTO Call (higher strike) - protection
+    /**
+     * Extract ALL credit spread patterns from a single order, regardless of leg count.
+     * This handles:
+     *   - 2-leg orders (simple credit spread)
+     *   - 4-leg orders (iron condor = put spread + call spread, OR roll = close spread + open spread)
+     *   - 8-leg orders (double roll, e.g. GLD call spread roll for qty=2)
+     *
+     * Algorithm: group legs by {optionType, expirationDate, direction (Open vs Close)},
+     * then within each group pair Buy + Sell legs into spreads.
+     */
+    private extractSpreadsFromOrder(order: IOrderRawData): Array<{ type: 'put' | 'call', details: any }> {
+        if (!order.legs || order.legs.length < 2) return [];
 
-        if (!order.legs || order.legs.length !== 4) {
-            return false;
-        }
-
-        const legs = order.legs.map(leg => {
-            const parsed = this.parseOptionSymbol(leg.symbol);
-            return {
-                ...leg,
-                parsed,
-                action: leg.action
-            };
-        }).filter(leg => leg.parsed !== null);
-
-        if (legs.length !== 4) {
-            console.log(`[IC Analytics] Order ${order.id}: Only ${legs.length} legs parsed successfully`);
-            return false;
-        }
-
-        // Check for 2 puts and 2 calls
-        const puts = legs.filter(l => l.parsed!.optionType === 'P');
-        const calls = legs.filter(l => l.parsed!.optionType === 'C');
-
-        if (puts.length !== 2 || calls.length !== 2) {
-            console.log(`[IC Analytics] Order ${order.id}: Not an iron condor - puts: ${puts.length}, calls: ${calls.length}`);
-            return false;
-        }
-
-        // Check for correct actions (1 buy, 1 sell for each)
-        const putActions = puts.map(p => p.action);
-        const callActions = calls.map(c => c.action);
-
-        const hasButAndSellPut = putActions.includes('Buy to Open') && putActions.includes('Sell to Open') ||
-                                  putActions.includes('Buy to Close') && putActions.includes('Sell to Close');
-        const hasBuyAndSellCall = callActions.includes('Buy to Open') && callActions.includes('Sell to Open') ||
-                                   callActions.includes('Buy to Close') && callActions.includes('Sell to Close');
-
-        if (!hasButAndSellPut || !hasBuyAndSellCall) {
-            console.log(`[IC Analytics] Order ${order.id}: Wrong actions - putActions: ${putActions.join(', ')}, callActions: ${callActions.join(', ')}`);
-            return false;
-        }
-
-        console.log(`[IC Analytics] Order ${order.id}: IS an iron condor!`);
-        return true;
-    }
-
-    private isCreditSpread(order: IOrderRawData): { type: 'put' | 'call', details: any } | null {
-        // Credit spread has 2 legs: 1 buy, 1 sell, same option type
-        if (!order.legs || order.legs.length !== 2) return null;
-
-        const legs = order.legs.map(leg => ({
+        const parsedLegs = order.legs.map(leg => ({
             ...leg,
             parsed: this.parseOptionSymbol(leg.symbol)
         })).filter(leg => leg.parsed !== null);
 
-        if (legs.length !== 2) return null;
+        if (parsedLegs.length < 2) return [];
 
-        // Both legs must be same option type (both puts or both calls)
-        const optionTypes = legs.map(l => l.parsed!.optionType);
-        if (optionTypes[0] !== optionTypes[1]) return null;
+        // Group legs by {optionType, expirationDate, direction}
+        const groups = new Map<string, typeof parsedLegs>();
+        for (const leg of parsedLegs) {
+            const isOpening = leg.action.includes('Open');
+            const key = `${leg.parsed!.optionType}-${leg.parsed!.expirationDate}-${isOpening ? 'open' : 'close'}`;
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key)!.push(leg);
+        }
 
-        // One buy, one sell
-        const actions = legs.map(l => l.action);
-        const hasBuy = actions.some(a => a.includes('Buy'));
-        const hasSell = actions.some(a => a.includes('Sell'));
-        if (!hasBuy || !hasSell) return null;
+        const spreads: Array<{ type: 'put' | 'call', details: any }> = [];
+        let spreadIdx = 0;
 
-        legs.sort((a, b) => a.parsed!.strikePrice - b.parsed!.strikePrice);
+        for (const [, groupLegs] of groups) {
+            if (groupLegs.length < 2) continue;
 
-        // Calculate price
-        let totalPrice = 0;
-        for (const leg of order.legs) {
-            if (leg.fills && leg.fills.length > 0) {
-                const fillPrice = parseFloat(leg.fills[0]['fill-price']) * leg.quantity * 100;
-                if (leg.action.includes('Buy')) {
-                    totalPrice -= fillPrice;
-                } else {
-                    totalPrice += fillPrice;
+            // Within each group, pair Buy + Sell legs by strike proximity
+            const buyLegs = groupLegs.filter(l => l.action.includes('Buy'));
+            const sellLegs = groupLegs.filter(l => l.action.includes('Sell'));
+
+            if (buyLegs.length === 0 || sellLegs.length === 0) continue;
+
+            // Sort both arrays by strike
+            buyLegs.sort((a, b) => a.parsed!.strikePrice - b.parsed!.strikePrice);
+            sellLegs.sort((a, b) => a.parsed!.strikePrice - b.parsed!.strikePrice);
+
+            // Pair them: for each sell leg, find the closest unpaired buy leg
+            const usedBuys = new Set<number>();
+            for (const sellLeg of sellLegs) {
+                let bestBuyIdx = -1;
+                let bestDist = Infinity;
+                for (let i = 0; i < buyLegs.length; i++) {
+                    if (usedBuys.has(i)) continue;
+                    const dist = Math.abs(buyLegs[i].parsed!.strikePrice - sellLeg.parsed!.strikePrice);
+                    if (dist < bestDist && dist > 0) { // must be different strikes
+                        bestDist = dist;
+                        bestBuyIdx = i;
+                    }
                 }
+
+                if (bestBuyIdx < 0) continue;
+                usedBuys.add(bestBuyIdx);
+                const buyLeg = buyLegs[bestBuyIdx];
+
+                // Compute price for these two legs
+                let totalPrice = 0;
+                for (const leg of [sellLeg, buyLeg]) {
+                    if (leg.fills && leg.fills.length > 0) {
+                        const fillPrice = parseFloat(leg.fills[0]['fill-price']) * leg.quantity * 100;
+                        if (leg.action.includes('Buy')) {
+                            totalPrice -= fillPrice;
+                        } else {
+                            totalPrice += fillPrice;
+                        }
+                    }
+                }
+
+                const low = Math.min(sellLeg.parsed!.strikePrice, buyLeg.parsed!.strikePrice);
+                const high = Math.max(sellLeg.parsed!.strikePrice, buyLeg.parsed!.strikePrice);
+                const isOpening = sellLeg.action.includes('Open');
+                const spreadType = sellLeg.parsed!.optionType === 'P' ? 'put' : 'call';
+
+                // Use a compound spreadId to allow multiple spreads from one order
+                const spreadId = `${order.id}-${spreadIdx++}`;
+
+                spreads.push({
+                    type: spreadType as 'put' | 'call',
+                    details: {
+                        ticker: sellLeg.parsed!.underlying,
+                        expirationDate: sellLeg.parsed!.expirationDate,
+                        lowStrike: low,
+                        highStrike: high,
+                        quantity: Math.abs(sellLeg.quantity),
+                        price: totalPrice,
+                        date: order['received-at']?.split('T')[0] || order['created-at']?.split('T')[0],
+                        isOpening,
+                        orderId: spreadId,      // compound ID for unique tracking
+                        sourceOrderId: order.id  // original order ID
+                    }
+                });
             }
         }
 
-        const spreadType = optionTypes[0] === 'P' ? 'put' : 'call';
-        return {
-            type: spreadType as 'put' | 'call',
-            details: {
-                ticker: legs[0].parsed!.underlying,
-                expirationDate: legs[0].parsed!.expirationDate,
-                lowStrike: legs[0].parsed!.strikePrice,
-                highStrike: legs[1].parsed!.strikePrice,
-                quantity: Math.abs(legs[0].quantity),
-                price: totalPrice,
-                date: order['received-at']?.split('T')[0] || order['created-at']?.split('T')[0],
-                isOpening: actions.some(a => a.includes('Open')),
-                orderId: order.id
-            }
-        };
+        return spreads;
     }
 
     private findCreditSpreads(orders: IOrderRawData[]): Array<{ type: 'put' | 'call', details: any }> {
         const spreads: Array<{ type: 'put' | 'call', details: any }> = [];
         for (const order of orders) {
-            const spread = this.isCreditSpread(order);
-            if (spread) {
-                spreads.push(spread);
-            }
+            const extracted = this.extractSpreadsFromOrder(order);
+            spreads.push(...extracted);
         }
+        console.log(`[IC Analytics] Extracted ${spreads.length} spreads from ${orders.length} orders (opening: ${spreads.filter(s => s.details.isOpening).length}, closing: ${spreads.filter(s => !s.details.isOpening).length})`);
         return spreads;
     }
 
@@ -222,114 +229,307 @@ export class IronCondorAnalyticsService extends ServiceBase implements IIronCond
         return orders;
     }
 
-    private matchCreditSpreadPairs(spreads: Array<{ type: 'put' | 'call', details: any }>): IIronCondorTrade[] {
+    private matchCreditSpreadPairs(spreads: Array<{ type: 'put' | 'call', details: any }>): { trades: IIronCondorTrade[], usedIds: Set<string | number> } {
         const trades: IIronCondorTrade[] = [];
         const usedSpreadIds = new Set<string | number>();
 
-        // Group by ticker + expiration + isOpening
-        const grouped = new Map<string, Array<{ type: 'put' | 'call', details: any }>>();
-        for (const spread of spreads) {
-            const key = `${spread.details.ticker}-${spread.details.expirationDate}-${spread.details.isOpening}`;
-            if (!grouped.has(key)) {
-                grouped.set(key, []);
-            }
-            grouped.get(key)!.push(spread);
+        // Separate opening and closing spreads
+        const openSpreads = spreads.filter(s => s.details.isOpening);
+        const closeSpreads = spreads.filter(s => !s.details.isOpening);
+
+        console.log(`[IC Analytics] matchCreditSpreadPairs: ${openSpreads.length} opening, ${closeSpreads.length} closing spreads`);
+
+        // Group opening spreads by ticker + expiration
+        const openByGroup = new Map<string, Array<{ type: 'put' | 'call', details: any }>>();
+        for (const s of openSpreads) {
+            const key = `${s.details.ticker}-${s.details.expirationDate}`;
+            if (!openByGroup.has(key)) openByGroup.set(key, []);
+            openByGroup.get(key)!.push(s);
         }
 
-        // For each group, try to pair a put spread with a call spread
-        let tradeId = 1000; // Start high to avoid conflicts with 4-leg detection
-        for (const [key, groupSpreads] of grouped) {
-            const putSpreads = groupSpreads.filter(s => s.type === 'put' && !usedSpreadIds.has(s.details.orderId));
-            const callSpreads = groupSpreads.filter(s => s.type === 'call' && !usedSpreadIds.has(s.details.orderId));
+        // Group closing spreads by ticker + expiration
+        const closeByGroup = new Map<string, Array<{ type: 'put' | 'call', details: any }>>();
+        for (const s of closeSpreads) {
+            const key = `${s.details.ticker}-${s.details.expirationDate}`;
+            if (!closeByGroup.has(key)) closeByGroup.set(key, []);
+            closeByGroup.get(key)!.push(s);
+        }
 
-            // Match put spreads with call spreads (created on same day or within 1 day)
-            for (const putSpread of putSpreads) {
-                for (const callSpread of callSpreads) {
-                    if (usedSpreadIds.has(putSpread.details.orderId) || usedSpreadIds.has(callSpread.details.orderId)) continue;
+        let tradeId = 1000;
+        const now = new Date();
 
-                    // Check if spreads are from same day (or within 1 day)
-                    const putDate = new Date(putSpread.details.date);
-                    const callDate = new Date(callSpread.details.date);
+        for (const [groupKey, groupSpreads] of openByGroup) {
+            const putOpens = groupSpreads.filter(s => s.type === 'put' && !usedSpreadIds.has(s.details.orderId));
+            const callOpens = groupSpreads.filter(s => s.type === 'call' && !usedSpreadIds.has(s.details.orderId));
+
+            for (const putOpen of putOpens) {
+                for (const callOpen of callOpens) {
+                    if (usedSpreadIds.has(putOpen.details.orderId) || usedSpreadIds.has(callOpen.details.orderId)) continue;
+
+                    const putDate = new Date(putOpen.details.date);
+                    const callDate = new Date(callOpen.details.date);
                     const dayDiff = Math.abs(putDate.getTime() - callDate.getTime()) / (1000 * 60 * 60 * 24);
+                    if (dayDiff > 30) continue;
 
-                    if (dayDiff <= 1 && putSpread.details.isOpening && callSpread.details.isOpening) {
-                        // This is an opening iron condor
-                        usedSpreadIds.add(putSpread.details.orderId);
-                        usedSpreadIds.add(callSpread.details.orderId);
+                    usedSpreadIds.add(putOpen.details.orderId);
+                    usedSpreadIds.add(callOpen.details.orderId);
 
-                        const now = new Date();
-                        const expDate = new Date(putSpread.details.expirationDate);
-                        const openCredit = putSpread.details.price + callSpread.details.price;
+                    const openCredit = putOpen.details.price + callOpen.details.price;
+                    const expDate = new Date(putOpen.details.expirationDate);
 
-                        trades.push({
-                            id: `IC-2L-${tradeId++}`,
-                            ticker: putSpread.details.ticker,
-                            expirationDate: putSpread.details.expirationDate,
-                            openDate: putSpread.details.date,
-                            closeDate: null,
-                            status: expDate < now ? 'expired' : 'open',
-                            putBuyStrike: putSpread.details.lowStrike,
-                            putSellStrike: putSpread.details.highStrike,
-                            callSellStrike: callSpread.details.lowStrike,
-                            callBuyStrike: callSpread.details.highStrike,
-                            openCredit,
-                            closeDebit: 0,
-                            profit: expDate < now ? openCredit : 0,
-                            isProfitable: expDate < now ? openCredit > 0 : false,
-                            quantity: putSpread.details.quantity,
-                            openOrderIds: [String(putSpread.details.orderId), String(callSpread.details.orderId)],
-                            closeOrderIds: []
-                        });
+                    // Look for matching closing spreads (same ticker + expiration + strikes)
+                    const closingGroup = closeByGroup.get(groupKey) || [];
+
+                    const closePut = closingGroup.find(s =>
+                        s.type === 'put' &&
+                        !usedSpreadIds.has(s.details.orderId) &&
+                        s.details.lowStrike === putOpen.details.lowStrike &&
+                        s.details.highStrike === putOpen.details.highStrike
+                    );
+
+                    const closeCall = closingGroup.find(s =>
+                        s.type === 'call' &&
+                        !usedSpreadIds.has(s.details.orderId) &&
+                        s.details.lowStrike === callOpen.details.lowStrike &&
+                        s.details.highStrike === callOpen.details.highStrike
+                    );
+
+                    let status: 'open' | 'closed' | 'expired' = 'open';
+                    let closeDate: string | null = null;
+                    let closeDebit = 0;
+                    let profit = 0;
+
+                    if (closePut && closeCall) {
+                        // Both spreads were closed explicitly
+                        usedSpreadIds.add(closePut.details.orderId);
+                        usedSpreadIds.add(closeCall.details.orderId);
+                        status = 'closed';
+                        closeDate = closePut.details.date > closeCall.details.date
+                            ? closePut.details.date : closeCall.details.date;
+                        // Closing prices are typically negative (net debit), negate to get positive closeDebit
+                        closeDebit = -(closePut.details.price + closeCall.details.price);
+                        profit = openCredit - closeDebit;
+                        console.log(`[IC Analytics] 2-leg IC CLOSED: ${putOpen.details.ticker} ${putOpen.details.expirationDate} credit=$${openCredit.toFixed(2)} debit=$${closeDebit.toFixed(2)} profit=$${profit.toFixed(2)}`);
+                    } else if ((closePut || closeCall) && expDate < now) {
+                        // Partial close: one side closed (via roll), other side expired worthless
+                        if (closePut) usedSpreadIds.add(closePut.details.orderId);
+                        if (closeCall) usedSpreadIds.add(closeCall.details.orderId);
+                        status = 'closed';
+                        const closedSpread = closePut || closeCall;
+                        closeDate = closedSpread!.details.date;
+                        // Only the closed side has a debit; the expired side cost 0
+                        closeDebit = -(closedSpread!.details.price);
+                        profit = openCredit - closeDebit;
+                        const closedSide = closePut ? 'put' : 'call';
+                        console.log(`[IC Analytics] 2-leg IC PARTIAL CLOSE (${closedSide} rolled, other expired): ${putOpen.details.ticker} ${putOpen.details.expirationDate} credit=$${openCredit.toFixed(2)} debit=$${closeDebit.toFixed(2)} profit=$${profit.toFixed(2)}`);
+                    } else if (expDate < now) {
+                        status = 'expired';
+                        profit = openCredit;
+                        console.log(`[IC Analytics] 2-leg IC EXPIRED: ${putOpen.details.ticker} ${putOpen.details.expirationDate} profit=$${profit.toFixed(2)}`);
                     }
+
+                    const openDate = putOpen.details.date < callOpen.details.date
+                        ? putOpen.details.date : callOpen.details.date;
+
+                    trades.push({
+                        id: `IC-2L-${tradeId++}`,
+                        ticker: putOpen.details.ticker,
+                        expirationDate: putOpen.details.expirationDate,
+                        openDate,
+                        closeDate,
+                        status,
+                        putBuyStrike: putOpen.details.lowStrike,
+                        putSellStrike: putOpen.details.highStrike,
+                        callSellStrike: callOpen.details.lowStrike,
+                        callBuyStrike: callOpen.details.highStrike,
+                        openCredit,
+                        closeDebit,
+                        currentPrice: 0,
+                        profit,
+                        isProfitable: profit > 0,
+                        quantity: putOpen.details.quantity,
+                        openOrderIds: [String(putOpen.details.orderId), String(callOpen.details.orderId)],
+                        closeOrderIds: closePut && closeCall
+                            ? [String(closePut.details.orderId), String(closeCall.details.orderId)]
+                            : []
+                    });
                 }
             }
         }
 
-        return trades;
+        return { trades, usedIds: usedSpreadIds };
     }
 
-    private extractIronCondorDetails(order: IOrderRawData, isOpening: boolean): Partial<IIronCondorTrade> | null {
-        const legs = order.legs.map(leg => ({
-            ...leg,
-            parsed: this.parseOptionSymbol(leg.symbol)
-        })).filter(leg => leg.parsed !== null);
-
-        const puts = legs.filter(l => l.parsed!.optionType === 'P');
-        const calls = legs.filter(l => l.parsed!.optionType === 'C');
-
-        // Sort by strike price
-        puts.sort((a, b) => a.parsed!.strikePrice - b.parsed!.strikePrice);
-        calls.sort((a, b) => a.parsed!.strikePrice - b.parsed!.strikePrice);
-
-        const putBuy = puts[0];  // Lower strike put (BTO)
-        const putSell = puts[1]; // Higher strike put (STO)
-        const callSell = calls[0]; // Lower strike call (STO)
-        const callBuy = calls[1];  // Higher strike call (BTO)
-
-        // Calculate total price
-        let totalPrice = 0;
-        for (const leg of order.legs) {
-            if (leg.fills && leg.fills.length > 0) {
-                const fillPrice = parseFloat(leg.fills[0]['fill-price']) * leg.quantity * 100;
-                if (leg.action.includes('Buy')) {
-                    totalPrice -= fillPrice;
-                } else {
-                    totalPrice += fillPrice;
-                }
+    /**
+     * Find the opening credit for IC legs by matching option symbols against transactions.
+     */
+    private findCreditFromTransactions(
+        transactions: ITransactionRawData[],
+        legSymbols: string[]
+    ): number {
+        let totalCredit = 0;
+        for (const tx of transactions) {
+            if (!legSymbols.includes(tx.symbol)) continue;
+            if (!tx.action?.includes('Open')) continue;
+            const value = parseFloat(tx.value) || 0;
+            if (tx['value-effect'] === 'Credit') {
+                totalCredit += value;
+            } else {
+                totalCredit -= value;
             }
         }
+        return totalCredit;
+    }
 
-        return {
-            ticker: putBuy.parsed!.underlying,
-            expirationDate: putBuy.parsed!.expirationDate,
-            putBuyStrike: putBuy.parsed!.strikePrice,
-            putSellStrike: putSell.parsed!.strikePrice,
-            callSellStrike: callSell.parsed!.strikePrice,
-            callBuyStrike: callBuy.parsed!.strikePrice,
-            quantity: Math.abs(putBuy.quantity),
-            [isOpening ? 'openCredit' : 'closeDebit']: Math.abs(totalPrice),
-            [isOpening ? 'openDate' : 'closeDate']: order['received-at']?.split('T')[0] || order['created-at']?.split('T')[0]
-        };
+    /**
+     * Detect open Iron Condors from the positions API as a fallback.
+     * This catches ICs that were entered as individual legs, or spread pairs
+     * entered more than 30 days apart, or opened before the YTD transaction window.
+     */
+    private async detectOpenICsFromPositions(
+        accountNumber: string,
+        existingOpenTrades: IIronCondorTrade[],
+        allTransactions: ITransactionRawData[]
+    ): Promise<IIronCondorTrade[]> {
+        try {
+            const positions = await this.services.marketDataProvider.getPositions(accountNumber);
+            console.log(`[IC Analytics] Positions fallback: fetched ${positions.length} option positions`);
+
+            // Group by underlying + expiration
+            const groups = new Map<string, IPositionRawData[]>();
+            for (const pos of positions) {
+                const key = `${pos.underlyingSymbol}-${pos.expirationDate}`;
+                if (!groups.has(key)) groups.set(key, []);
+                groups.get(key)!.push(pos);
+            }
+
+            const newTrades: IIronCondorTrade[] = [];
+            let tradeId = 5000;
+
+            for (const [, groupPos] of groups) {
+                if (groupPos.length < 4) continue;
+
+                // Separate into 4 categories
+                const longPuts = groupPos
+                    .filter(p => p.optionType === 'P' && p.quantityDirection === 'Long')
+                    .sort((a, b) => a.strikePrice - b.strikePrice);
+                const shortPuts = groupPos
+                    .filter(p => p.optionType === 'P' && p.quantityDirection === 'Short')
+                    .sort((a, b) => a.strikePrice - b.strikePrice);
+                const shortCalls = groupPos
+                    .filter(p => p.optionType === 'C' && p.quantityDirection === 'Short')
+                    .sort((a, b) => a.strikePrice - b.strikePrice);
+                const longCalls = groupPos
+                    .filter(p => p.optionType === 'C' && p.quantityDirection === 'Long')
+                    .sort((a, b) => a.strikePrice - b.strikePrice);
+
+                if (longPuts.length === 0 || shortPuts.length === 0 ||
+                    shortCalls.length === 0 || longCalls.length === 0) continue;
+
+                // Build put spreads: long put (lower strike) + short put (higher strike)
+                const putSpreads: Array<{ longPut: IPositionRawData; shortPut: IPositionRawData }> = [];
+                const usedShortPuts = new Set<number>();
+                for (const lp of longPuts) {
+                    for (let i = 0; i < shortPuts.length; i++) {
+                        if (usedShortPuts.has(i)) continue;
+                        const sp = shortPuts[i];
+                        if (sp.strikePrice > lp.strikePrice) {
+                            putSpreads.push({ longPut: lp, shortPut: sp });
+                            usedShortPuts.add(i);
+                            break;
+                        }
+                    }
+                }
+
+                // Build call spreads: short call (lower strike) + long call (higher strike)
+                const callSpreads: Array<{ shortCall: IPositionRawData; longCall: IPositionRawData }> = [];
+                const usedLongCalls = new Set<number>();
+                for (const sc of shortCalls) {
+                    for (let i = 0; i < longCalls.length; i++) {
+                        if (usedLongCalls.has(i)) continue;
+                        const lc = longCalls[i];
+                        if (lc.strikePrice > sc.strikePrice) {
+                            callSpreads.push({ shortCall: sc, longCall: lc });
+                            usedLongCalls.add(i);
+                            break;
+                        }
+                    }
+                }
+
+                // Pair put spreads with call spreads
+                const count = Math.min(putSpreads.length, callSpreads.length);
+                for (let i = 0; i < count; i++) {
+                    const ps = putSpreads[i];
+                    const cs = callSpreads[i];
+
+                    // Check duplicate against ALL existing trades (open, closed, expired)
+                    // to avoid re-adding trades already detected from transactions
+                    const mappedUnderlying = IronCondorAnalyticsService.SYMBOL_MAP[ps.longPut.underlyingSymbol] || ps.longPut.underlyingSymbol;
+                    const isDuplicate = existingOpenTrades.some(t =>
+                        t.ticker === mappedUnderlying &&
+                        t.expirationDate === ps.longPut.expirationDate &&
+                        t.putBuyStrike === ps.longPut.strikePrice &&
+                        t.putSellStrike === ps.shortPut.strikePrice &&
+                        t.callSellStrike === cs.shortCall.strikePrice &&
+                        t.callBuyStrike === cs.longCall.strikePrice
+                    );
+
+                    if (isDuplicate) continue;
+
+                    // Find credit from transactions
+                    const legSymbols = [
+                        ps.longPut.symbol,
+                        ps.shortPut.symbol,
+                        cs.shortCall.symbol,
+                        cs.longCall.symbol
+                    ];
+                    const openCredit = this.findCreditFromTransactions(allTransactions, legSymbols);
+
+                    const qty = Math.min(
+                        ps.longPut.quantity,
+                        ps.shortPut.quantity,
+                        cs.shortCall.quantity,
+                        cs.longCall.quantity
+                    );
+
+                    // Find open date from transactions (check both action and transaction-sub-type)
+                    const openTx = allTransactions.find(tx =>
+                        legSymbols.includes(tx.symbol) &&
+                        (tx.action?.includes('Open') || tx['transaction-sub-type']?.includes('Open'))
+                    );
+                    const openDate = openTx?.['executed-at']?.split('T')[0] || '';
+
+                    newTrades.push({
+                        id: `IC-POS-${tradeId++}`,
+                        ticker: mappedUnderlying,
+                        expirationDate: ps.longPut.expirationDate,
+                        openDate,
+                        closeDate: null,
+                        status: 'open',
+                        putBuyStrike: ps.longPut.strikePrice,
+                        putSellStrike: ps.shortPut.strikePrice,
+                        callSellStrike: cs.shortCall.strikePrice,
+                        callBuyStrike: cs.longCall.strikePrice,
+                        openCredit,
+                        currentPrice: 0,
+                        closeDebit: 0,
+                        profit: 0,
+                        isProfitable: false,
+                        quantity: qty,
+                        openOrderIds: [],
+                        closeOrderIds: []
+                    });
+
+                    console.log(`[IC Analytics] Positions fallback found: ${mappedUnderlying} ${ps.longPut.expirationDate} ${ps.longPut.strikePrice}/${ps.shortPut.strikePrice}/${cs.shortCall.strikePrice}/${cs.longCall.strikePrice} qty=${qty} credit=$${openCredit.toFixed(2)}`);
+                }
+            }
+
+            console.log(`[IC Analytics] Positions fallback total: ${newTrades.length} additional ICs`);
+            return newTrades;
+        } catch (error) {
+            console.error('[IC Analytics] Error in positions fallback:', error);
+            return [];
+        }
     }
 
     async fetchYTDTrades(): Promise<IIronCondorTrade[]> {
@@ -372,7 +572,7 @@ export class IronCondorAnalyticsService extends ServiceBase implements IIronCond
 
                     if (Array.isArray(transactions) && transactions.length > 0) {
                         allTransactions.push(...transactions);
-                        pageOffset += transactions.length;
+                        pageOffset++;  // page-offset is a page NUMBER, not item offset
                         hasMore = transactions.length === pageSize;
                     } else {
                         hasMore = false;
@@ -395,120 +595,37 @@ export class IronCondorAnalyticsService extends ServiceBase implements IIronCond
             const ytdOrders = this.buildOrdersFromTransactions(allTransactions);
             console.log(`[IC Analytics] Built ${ytdOrders.length} orders from transactions`);
 
-            // All orders from transactions are already filled
-            const filledOrders = ytdOrders;
-            console.log(`[IC Analytics] Filled orders: ${filledOrders.length}`);
+            // ── Unified spread-based IC detection ──
+            // Extract ALL spreads from ALL orders (handles 2-leg, 4-leg ICs, 4-leg rolls, 8-leg rolls)
+            const creditSpreads = this.findCreditSpreads(ytdOrders);
 
-            // Group orders by underlying symbol and expiration to match opening/closing trades
-            const ironCondorOrders = filledOrders.filter(order => this.isIronCondorOrder(order));
-            console.log(`[IC Analytics] Found ${ironCondorOrders.length} iron condor orders (4-leg)`);
+            // Match put+call spread pairs into iron condors, with partial close support
+            const { trades } = this.matchCreditSpreadPairs(creditSpreads);
+            console.log(`[IC Analytics] Found ${trades.length} iron condors from unified spread detection`);
 
-            // Also look for iron condors entered as pairs of credit spreads
-            const creditSpreads = this.findCreditSpreads(filledOrders);
-            console.log(`[IC Analytics] Found ${creditSpreads.length} credit spread orders`);
-
-            // Group credit spreads by ticker + expiration to find iron condor pairs
-            const spreadPairs = this.matchCreditSpreadPairs(creditSpreads);
-            console.log(`[IC Analytics] Found ${spreadPairs.length} iron condors from spread pairs`);
-
-            // Group by ticker + expiration
-            const tradeGroups = new Map<string, IOrderRawData[]>();
-
-            for (const order of ironCondorOrders) {
-                const details = this.extractIronCondorDetails(order, true);
-                if (details && details.ticker && details.expirationDate) {
-                    const key = `${details.ticker}-${details.expirationDate}-${details.putBuyStrike}-${details.putSellStrike}-${details.callSellStrike}-${details.callBuyStrike}`;
-                    if (!tradeGroups.has(key)) {
-                        tradeGroups.set(key, []);
-                    }
-                    tradeGroups.get(key)!.push(order);
+            // Final pass: mark open trades with past expiration as expired
+            for (const trade of trades) {
+                if (trade.status === 'open' && new Date(trade.expirationDate) < now) {
+                    trade.status = 'expired';
+                    trade.profit = trade.openCredit;
+                    trade.isProfitable = trade.openCredit > 0;
+                    console.log(`[IC Analytics] Marked as expired: ${trade.ticker} ${trade.expirationDate} profit=$${trade.profit.toFixed(2)}`);
                 }
             }
 
-            // Process trade groups into IronCondorTrade objects
-            const trades: IIronCondorTrade[] = [];
-            let tradeId = 1;
+            console.log(`[IC Analytics] Trades from transactions: ${trades.length} (open: ${trades.filter(t => t.status === 'open').length}, closed: ${trades.filter(t => t.status === 'closed').length}, expired: ${trades.filter(t => t.status === 'expired').length})`);
 
-            for (const [key, orders] of tradeGroups) {
-                // Sort orders by date
-                orders.sort((a, b) =>
-                    new Date(a['received-at'] || a['created-at'] || '').getTime() -
-                    new Date(b['received-at'] || b['created-at'] || '').getTime()
-                );
+            // Fallback: detect open ICs from positions API
+            // This catches ICs entered as individual legs, or spread pairs opened far apart
+            // Pass ALL trades (not just open) to avoid re-adding closed/expired trades as open
+            const positionICs = await this.detectOpenICsFromPositions(
+                account.accountNumber,
+                trades,
+                allTransactions
+            );
+            trades.push(...positionICs);
 
-                // First order with "Open" action is opening, subsequent with "Close" is closing
-                const openingOrders = orders.filter(o =>
-                    o.legs.some(l => l.action.includes('Open'))
-                );
-                const closingOrders = orders.filter(o =>
-                    o.legs.some(l => l.action.includes('Close'))
-                );
-
-                for (const openOrder of openingOrders) {
-                    const openDetails = this.extractIronCondorDetails(openOrder, true);
-                    if (!openDetails) continue;
-
-                    // Find matching closing order (if any)
-                    const closeOrder = closingOrders.find(co => {
-                        const closeDetails = this.extractIronCondorDetails(co, false);
-                        return closeDetails &&
-                               closeDetails.putBuyStrike === openDetails.putBuyStrike &&
-                               closeDetails.putSellStrike === openDetails.putSellStrike &&
-                               closeDetails.callSellStrike === openDetails.callSellStrike &&
-                               closeDetails.callBuyStrike === openDetails.callBuyStrike;
-                    });
-
-                    const closeDetails = closeOrder ? this.extractIronCondorDetails(closeOrder, false) : null;
-
-                    // Determine if expired (expiration date has passed and no close order)
-                    const expDate = new Date(openDetails.expirationDate!);
-                    const isExpired = !closeOrder && expDate < now;
-
-                    const openCredit = openDetails.openCredit || 0;
-                    const closeDebit = closeDetails?.closeDebit || 0;
-                    const profit = openCredit - closeDebit;
-
-                    const trade: IIronCondorTrade = {
-                        id: `IC-${tradeId++}`,
-                        ticker: openDetails.ticker!,
-                        expirationDate: openDetails.expirationDate!,
-                        openDate: openDetails.openDate as string,
-                        closeDate: closeDetails?.closeDate as string || null,
-                        status: closeOrder ? 'closed' : (isExpired ? 'expired' : 'open'),
-                        putBuyStrike: openDetails.putBuyStrike!,
-                        putSellStrike: openDetails.putSellStrike!,
-                        callSellStrike: openDetails.callSellStrike!,
-                        callBuyStrike: openDetails.callBuyStrike!,
-                        openCredit,
-                        closeDebit,
-                        profit: isExpired ? openCredit : profit,
-                        isProfitable: isExpired ? openCredit > 0 : profit > 0,
-                        quantity: openDetails.quantity!,
-                        openOrderIds: [String(openOrder.id)],
-                        closeOrderIds: closeOrder ? [String(closeOrder.id)] : []
-                    };
-
-                    trades.push(trade);
-                    console.log(`[IC Analytics] Added trade (4-leg): ${trade.ticker} ${trade.expirationDate} - status: ${trade.status}, profit: $${trade.profit}`);
-                }
-            }
-
-            // Add iron condors from spread pairs
-            for (const pairTrade of spreadPairs) {
-                // Check if this trade isn't already captured by 4-leg detection
-                const isDuplicate = trades.some(t =>
-                    t.ticker === pairTrade.ticker &&
-                    t.expirationDate === pairTrade.expirationDate &&
-                    t.putBuyStrike === pairTrade.putBuyStrike &&
-                    t.putSellStrike === pairTrade.putSellStrike
-                );
-                if (!isDuplicate) {
-                    trades.push(pairTrade);
-                    console.log(`[IC Analytics] Added trade (2-leg pair): ${pairTrade.ticker} ${pairTrade.expirationDate} - status: ${pairTrade.status}, profit: $${pairTrade.profit}`);
-                }
-            }
-
-            console.log(`[IC Analytics] Total trades found: ${trades.length}`);
+            console.log(`[IC Analytics] Total trades found: ${trades.length} (${positionICs.length} from positions fallback)`);
 
             runInAction(() => {
                 this.trades = trades;
@@ -524,6 +641,145 @@ export class IronCondorAnalyticsService extends ServiceBase implements IIronCond
             runInAction(() => {
                 this.isLoading = false;
             });
+        }
+    }
+
+    /**
+     * Fetch open Iron Condors directly from positions API.
+     * Uses averageOpenPrice for credit, closePrice for current value.
+     * This is the primary method for the dashboard — no transaction history needed.
+     */
+    async fetchOpenICsFromPositions(): Promise<IIronCondorTrade[]> {
+        const account = this.services.brokerAccount.currentAccount;
+        if (!account) {
+            console.error('[IC Analytics] No account selected');
+            return [];
+        }
+
+        runInAction(() => { this.isLoading = true; });
+
+        try {
+            const positions = await this.services.marketDataProvider.getPositions(account.accountNumber);
+            console.log(`[IC Analytics] Positions: fetched ${positions.length} option positions`);
+
+            // Group by underlying + expiration
+            const groups = new Map<string, typeof positions>();
+            for (const pos of positions) {
+                const key = `${pos.underlyingSymbol}-${pos.expirationDate}`;
+                if (!groups.has(key)) groups.set(key, []);
+                groups.get(key)!.push(pos);
+            }
+
+            const trades: IIronCondorTrade[] = [];
+            let tradeId = 1;
+
+            for (const [, groupPos] of groups) {
+                if (groupPos.length < 4) continue;
+
+                const longPuts = groupPos
+                    .filter(p => p.optionType === 'P' && p.quantityDirection === 'Long')
+                    .sort((a, b) => a.strikePrice - b.strikePrice);
+                const shortPuts = groupPos
+                    .filter(p => p.optionType === 'P' && p.quantityDirection === 'Short')
+                    .sort((a, b) => a.strikePrice - b.strikePrice);
+                const shortCalls = groupPos
+                    .filter(p => p.optionType === 'C' && p.quantityDirection === 'Short')
+                    .sort((a, b) => a.strikePrice - b.strikePrice);
+                const longCalls = groupPos
+                    .filter(p => p.optionType === 'C' && p.quantityDirection === 'Long')
+                    .sort((a, b) => a.strikePrice - b.strikePrice);
+
+                if (!longPuts.length || !shortPuts.length || !shortCalls.length || !longCalls.length) continue;
+
+                // Build put spreads: long put (lower) + short put (higher)
+                const putSpreads: Array<{ lp: typeof longPuts[0]; sp: typeof shortPuts[0] }> = [];
+                const usedSP = new Set<number>();
+                for (const lp of longPuts) {
+                    for (let i = 0; i < shortPuts.length; i++) {
+                        if (usedSP.has(i)) continue;
+                        if (shortPuts[i].strikePrice > lp.strikePrice) {
+                            putSpreads.push({ lp, sp: shortPuts[i] });
+                            usedSP.add(i);
+                            break;
+                        }
+                    }
+                }
+
+                // Build call spreads: short call (lower) + long call (higher)
+                const callSpreads: Array<{ sc: typeof shortCalls[0]; lc: typeof longCalls[0] }> = [];
+                const usedLC = new Set<number>();
+                for (const sc of shortCalls) {
+                    for (let i = 0; i < longCalls.length; i++) {
+                        if (usedLC.has(i)) continue;
+                        if (longCalls[i].strikePrice > sc.strikePrice) {
+                            callSpreads.push({ sc, lc: longCalls[i] });
+                            usedLC.add(i);
+                            break;
+                        }
+                    }
+                }
+
+                // Pair put spreads with call spreads
+                const count = Math.min(putSpreads.length, callSpreads.length);
+                for (let i = 0; i < count; i++) {
+                    const { lp, sp } = putSpreads[i];
+                    const { sc, lc } = callSpreads[i];
+
+                    const multiplier = lp.multiplier || 100;
+                    const qty = Math.min(lp.quantity, sp.quantity, sc.quantity, lc.quantity);
+
+                    // Credit = (short prices - long prices) × multiplier × qty
+                    const openCredit = (
+                        sp.averageOpenPrice + sc.averageOpenPrice
+                        - lp.averageOpenPrice - lc.averageOpenPrice
+                    ) * multiplier * qty;
+
+                    // Current price to close = (short close prices - long close prices) × multiplier × qty
+                    const currentPrice = (
+                        sp.closePrice + sc.closePrice
+                        - lp.closePrice - lc.closePrice
+                    ) * multiplier * qty;
+
+                    const tickerMapped = IronCondorAnalyticsService.SYMBOL_MAP[lp.underlyingSymbol] || lp.underlyingSymbol;
+
+                    trades.push({
+                        id: `IC-${tradeId++}`,
+                        ticker: tickerMapped,
+                        expirationDate: lp.expirationDate,
+                        openDate: '',
+                        closeDate: null,
+                        status: 'open',
+                        putBuyStrike: lp.strikePrice,
+                        putSellStrike: sp.strikePrice,
+                        callSellStrike: sc.strikePrice,
+                        callBuyStrike: lc.strikePrice,
+                        openCredit,
+                        currentPrice,
+                        closeDebit: 0,
+                        profit: openCredit - currentPrice,
+                        isProfitable: openCredit > currentPrice,
+                        quantity: qty,
+                        openOrderIds: [],
+                        closeOrderIds: []
+                    });
+                }
+            }
+
+            // Sort by expiration
+            trades.sort((a, b) => a.expirationDate.localeCompare(b.expirationDate));
+
+            console.log(`[IC Analytics] Detected ${trades.length} open ICs from positions`);
+
+            runInAction(() => {
+                this.isLoading = false;
+                this.lastFetchDate = new Date();
+            });
+
+            return trades;
+        } catch (error) {
+            console.error('[IC Analytics] Error fetching ICs from positions:', error);
+            runInAction(() => { this.isLoading = false; });
+            return [];
         }
     }
 
@@ -577,7 +833,11 @@ export class IronCondorAnalyticsService extends ServiceBase implements IIronCond
         // Group by month - include ALL trades (open and closed)
         const byMonth = new Map<string, IMonthSummary>();
         for (const trade of trades) {
-            const month = trade.openDate.substring(0, 7); // YYYY-MM
+            // Use openDate if available, fall back to expirationDate
+            const dateSource = (trade.openDate && trade.openDate.length >= 7)
+                ? trade.openDate : trade.expirationDate;
+            const month = dateSource.substring(0, 7); // YYYY-MM
+            if (!month || month.length < 7) continue; // Skip trades with no valid date
             if (!byMonth.has(month)) {
                 byMonth.set(month, {
                     month,
@@ -614,6 +874,50 @@ export class IronCondorAnalyticsService extends ServiceBase implements IIronCond
             byTicker,
             byMonth,
             trades
+        };
+    }
+
+    async getHistorySummary(): Promise<IGuvidHistorySummary> {
+        const summary = await this.getSummary();
+
+        // Group closed/expired trades by close date to compute daily P&L
+        const dailyMap = new Map<string, { totalPL: number; count: number }>();
+
+        for (const trade of summary.trades) {
+            if (trade.status === 'open') continue;
+
+            // For expired trades with no explicit closeDate, use expirationDate
+            const date = trade.closeDate || trade.expirationDate;
+            if (!date) continue;
+
+            const dateKey = date.substring(0, 10); // YYYY-MM-DD
+
+            if (!dailyMap.has(dateKey)) {
+                dailyMap.set(dateKey, { totalPL: 0, count: 0 });
+            }
+            const day = dailyMap.get(dateKey)!;
+            day.totalPL += trade.profit;
+            day.count++;
+        }
+
+        // Convert to sorted array
+        const dailyPL: IDailyICPL[] = Array.from(dailyMap.entries())
+            .map(([date, data]) => ({
+                date,
+                totalPL: data.totalPL,
+                tradesClosedCount: data.count,
+                isProfitable: data.totalPL > 0,
+            }))
+            .sort((a, b) => a.date.localeCompare(b.date));
+
+        const profitableDaysCount = dailyPL.filter(d => d.totalPL > 0).length;
+        const unprofitableDaysCount = dailyPL.filter(d => d.totalPL < 0).length;
+
+        return {
+            ...summary,
+            dailyPL,
+            profitableDaysCount,
+            unprofitableDaysCount,
         };
     }
 

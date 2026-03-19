@@ -64,6 +64,25 @@ export abstract class CreditSpreadModel implements ICreditSpreadViewModel {
         });
     }
 
+    get maxProfit(): number {
+        return Math.round(this.credit * 100 * 100) / 100;
+    }
+
+    get maxLoss(): number {
+        return Math.round((this.wingsWidth - this.credit) * 100 * 100) / 100;
+    }
+
+    get expectedValue(): number {
+        const popDecimal = this.pop / 100;
+        const ev = (popDecimal * this.maxProfit) - ((1 - popDecimal) * this.maxLoss);
+        return Math.round(ev * 100) / 100;
+    }
+
+    get alpha(): number {
+        if (this.maxLoss === 0) return 0;
+        return Math.round((this.expectedValue / this.maxLoss) * 10000) / 100;
+    }
+
     get delta(): number {
         return  Math.round((this.btoOption.rawDelta - this.stoOption.rawDelta) * 10000) / 100;
     }

@@ -11,7 +11,11 @@ import {TastyMarketDataProvider} from "./tasty-market-data-provider";
 
 export class MarketDataProviderService implements IMarketDataProviderService {
 
-    private _currentProvider: IMarketDataProviderService = new TastyMarketDataProvider();
+    constructor(clientSecret: string, refreshToken: string) {
+        this._currentProvider = new TastyMarketDataProvider(clientSecret, refreshToken);
+    }
+
+    private _currentProvider: IMarketDataProviderService;
 
     async start(): Promise<void> {
         await this._currentProvider.start();

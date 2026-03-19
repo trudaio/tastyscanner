@@ -38,8 +38,10 @@ const WatchListComponent: React.FC<{watchList: IWatchListRawData}> = observer((p
 export const WatchListsComponent: React.FC = observer(() => {
     const [watchLists, setWatchLists] = useState<IWatchListRawData[]>();
     const services = useServices();
+    const isInitialized = services.isInitialized; // MobX observable — re-renders and re-runs effect when credentials are set
 
     useEffect(() => {
+        if (!isInitialized) return;
         services.marketDataProvider.getUserWatchLists().then(data => {
             setWatchLists(data);
 
@@ -61,7 +63,7 @@ export const WatchListsComponent: React.FC = observer(() => {
         return () => {
             services.watchlistData.stopAutoRefresh();
         };
-    }, [services.marketDataProvider, services.watchlistData]);
+    }, [isInitialized]); // eslint-disable-line react-hooks/exhaustive-deps
 
     return (
         <IonAccordionGroup>

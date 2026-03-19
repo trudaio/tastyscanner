@@ -17,6 +17,7 @@ export interface IIronCondorTrade {
     // Financials
     openCredit: number;      // Credit received when opening
     closeDebit: number;      // Debit paid when closing (0 if expired worthless)
+    currentPrice: number;    // Current cost to close (from positions close-price)
     profit: number;          // openCredit - closeDebit
     isProfitable: boolean;
 
@@ -64,9 +65,24 @@ export interface IMonthSummary {
     totalProfit: number;
 }
 
+export interface IDailyICPL {
+    date: string;              // YYYY-MM-DD
+    totalPL: number;           // Sum of P&L for all ICs closed that day
+    tradesClosedCount: number;
+    isProfitable: boolean;     // totalPL > 0
+}
+
+export interface IGuvidHistorySummary extends IIronCondorSummary {
+    dailyPL: IDailyICPL[];
+    profitableDaysCount: number;
+    unprofitableDaysCount: number;
+}
+
 export interface IIronCondorAnalyticsService {
     fetchYTDTrades(): Promise<IIronCondorTrade[]>;
+    fetchOpenICsFromPositions(): Promise<IIronCondorTrade[]>;
     getSummary(): Promise<IIronCondorSummary>;
+    getHistorySummary(): Promise<IGuvidHistorySummary>;
     exportToFile(filename: string): Promise<void>;
     readonly isLoading: boolean;
     readonly lastFetchDate: Date | null;

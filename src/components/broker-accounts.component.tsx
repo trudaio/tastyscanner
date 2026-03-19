@@ -2,7 +2,9 @@ import React from "react";
 import {observer} from "mobx-react";
 import {useServices} from "../hooks/use-services.hook";
 import styled from "styled-components";
-import {IonSelect, IonSelectOption} from "@ionic/react";
+import {IonButton, IonSelect, IonSelectOption} from "@ionic/react";
+import { signOut } from 'firebase/auth';
+import { auth } from '../firebase';
 
 const AccountsBox = styled.div`
     display: flex;
@@ -28,6 +30,17 @@ export const BrokerAccountsComponent: React.FC = observer(() => {
                     {account.accountNumber}
                 </IonSelectOption>))}
             </IonSelect>
+            <IonButton
+                fill="outline"
+                color="danger"
+                onClick={() => {
+                    void signOut(auth).then(() => {
+                        window.location.href = '/login';
+                    });
+                }}
+            >
+                Disconnect
+            </IonButton>
         </AccountsBox>
     )
 })

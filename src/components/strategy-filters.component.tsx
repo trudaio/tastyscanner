@@ -3,6 +3,7 @@ import { observer } from "mobx-react";
 import {useServices} from "../hooks/use-services.hook";
 import {IonChip, IonRadio, IonRadioGroup, IonRange, IonToggle} from "@ionic/react";
 import styled from "styled-components";
+import {IcType} from "../services/settings/settings.service.interface";
 
 const FiltersContainerBox = styled.div`
     display: flex;
@@ -106,6 +107,7 @@ interface SingleValueEditorComponentProps {
     value: number;
     onValueChanged: (value: number) => void;
     formatValue?: (value: number) => string;
+    step?: number;
 }
 const SingleValueEditorComponent: React.FC<SingleValueEditorComponentProps> = observer((props) => {
     return (
@@ -114,7 +116,7 @@ const SingleValueEditorComponent: React.FC<SingleValueEditorComponentProps> = ob
                 {props.label}
             </FilterLabelBox>
             <RangeBox>
-                <IonRange pin={true} min={props.min} max={props.max} value={props.value} onIonChange={e => {
+                <IonRange pin={true} min={props.min} max={props.max} step={props.step} value={props.value} onIonChange={e => {
                     props.onValueChanged(e.detail.value as number)
                 }}/>
                 <FilterValueBox>
@@ -226,6 +228,16 @@ export const StrategyFiltersComponent: React.FC = observer(() => {
 
             <SeparatorBox/>
 
+            <SingleValueEditorComponent label="Min credit"
+                                        min={1}
+                                        max={10}
+                                        step={0.5}
+                                        value={filters.minCredit}
+                                        formatValue={value => `${value.toFixed(2)}$`}
+                                        onValueChanged={value => filters.minCredit = value}/>
+
+            <SeparatorBox/>
+
             <FilterLabelBox>
                 Price to use
             </FilterLabelBox>
@@ -251,6 +263,52 @@ export const StrategyFiltersComponent: React.FC = observer(() => {
                     After earnings
                 </IonRadio>
 
+            </ByEarningDateRadioGroupBox>
+
+            <SeparatorBox/>
+
+            <SingleValueEditorComponent label="Min POP (%)"
+                                        min={0}
+                                        max={90}
+                                        value={filters.minPop}
+                                        formatValue={value => value === 0 ? 'Off' : `${value}%`}
+                                        onValueChanged={value => filters.minPop = value}/>
+
+            <SeparatorBox/>
+
+            <SingleValueEditorComponent label="Min Expected Value ($/contract)"
+                                        min={-200}
+                                        max={200}
+                                        value={filters.minExpectedValue}
+                                        formatValue={value => value === 0 ? 'Off' : `${value > 0 ? '+' : ''}$${value}`}
+                                        onValueChanged={value => filters.minExpectedValue = value}/>
+
+            <SeparatorBox/>
+
+            <SingleValueEditorComponent label="Min Alpha (% of risk)"
+                                        min={-100}
+                                        max={100}
+                                        value={filters.minAlpha}
+                                        formatValue={value => value === 0 ? 'Off' : `${value > 0 ? '+' : ''}${value}%`}
+                                        onValueChanged={value => filters.minAlpha = value}/>
+
+            <SeparatorBox/>
+
+            <FilterLabelBox>
+                IC Type
+            </FilterLabelBox>
+
+            <ByEarningDateRadioGroupBox value={filters.icType}
+                                        onIonChange={e => filters.icType = e.detail.value as IcType}>
+                <IonRadio value={"symmetric"} labelPlacement="end">
+                    Symmetric — equal wings
+                </IonRadio>
+                <IonRadio value={"bullish"} labelPlacement="end">
+                    Bullish — put Δ &gt; call Δ (net ≥ +5)
+                </IonRadio>
+                <IonRadio value={"bearish"} labelPlacement="end">
+                    Bearish — call Δ &gt; put Δ (net ≤ −5)
+                </IonRadio>
             </ByEarningDateRadioGroupBox>
 
         </FiltersContainerBox>

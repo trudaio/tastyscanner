@@ -7,6 +7,9 @@ import { DashboardPage } from './pages/DashboardPage';
 import { IronCondorSaviorPage } from './pages/IronCondorSaviorPage';
 import { AccountPage } from './pages/AccountPage';
 import { GreeksGuidePage } from './pages/GreeksGuidePage';
+import { GuvidHistoryPage } from './pages/GuvidHistoryPage';
+import { SuperAdminPage } from './pages/SuperAdminPage';
+import BacktestPage from './pages/BacktestPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { OnboardingPage } from './pages/OnboardingPage';
@@ -108,8 +111,17 @@ const App: React.FC = () => {
                                 <Route path="/account" exact={true}>
                                     <AccountPage />
                                 </Route>
+                                <Route path="/guvid-history" exact={true}>
+                                    <GuvidHistoryPage />
+                                </Route>
                                 <Route path="/guide" exact={true}>
                                     <GreeksGuidePage />
+                                </Route>
+                                <Route path="/backtest" exact={true}>
+                                    <BacktestPage />
+                                </Route>
+                                <Route path="/superadmin" exact={true}>
+                                    <SuperAdminPage />
                                 </Route>
                             </IonRouterOutlet>
                         </SplitPaneBox>

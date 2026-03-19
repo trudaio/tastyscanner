@@ -162,7 +162,7 @@ export const GreeksGuidePage: React.FC = () => {
                             </InterpretBox>
                             <WarningBox>
                                 Theta accelerates as expiration approaches. The last 21 days have the
-                                fastest decay &mdash; this is why we target 30-45 DTE entries and close at 21 DTE.
+                                fastest decay.
                             </WarningBox>
                         </IonCardContent>
                     </GuideCard>
@@ -191,8 +191,7 @@ export const GreeksGuidePage: React.FC = () => {
                                 &bull; Gamma increases as expiration approaches, making short positions riskier near expiry
                             </InterpretBox>
                             <WarningBox>
-                                Gamma risk is highest at-the-money and near expiration. This is another
-                                reason to manage trades at 21 DTE rather than holding to expiration.
+                                Gamma risk is highest at-the-money and near expiration.
                             </WarningBox>
                         </IonCardContent>
                     </GuideCard>
@@ -364,27 +363,41 @@ export const GreeksGuidePage: React.FC = () => {
 
                     <GuideCard>
                         <IonCardContent>
+                            <InterpretBox>
+                                <strong>Strategia Guvidul</strong> este o abordare sistematica pentru Iron Condors,
+                                destinata exclusiv <strong>indicilor</strong> (SPX, QQQ, IWM, RUT, SPY, GLD).
+                                Selecteaza toate combinatiile de Iron Condor cu <strong>POP &gt; 75-80%</strong> pe
+                                fiecare expirare pana in <strong>45-50 DTE</strong>.
+                                Pozitiile se inchid la <strong>75% din profitul maxim</strong> sau se lasa sa expire.
+                                Intrarile se fac la <strong>10:00 AM ora New York</strong> pentru lichiditate optima.
+                                Short strike delta: <strong>16-22</strong>.
+                            </InterpretBox>
+                        </IonCardContent>
+                    </GuideCard>
+
+                    <GuideCard>
+                        <IonCardContent>
                             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                 <thead>
                                     <tr style={{ borderBottom: '2px solid var(--ion-color-tertiary)' }}>
-                                        <th style={{ textAlign: 'left', padding: '8px' }}>Metric</th>
-                                        <th style={{ textAlign: 'left', padding: '8px' }}>Rule</th>
+                                        <th style={{ textAlign: 'left', padding: '8px' }}>Parametru</th>
+                                        <th style={{ textAlign: 'left', padding: '8px' }}>Regula</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {[
-                                        ['DTE at Entry', '5-45 days, enter at 10:00 AM NY time'],
+                                        ['Underlyings', 'Doar indici (SPX, QQQ, IWM, RUT, SPY, GLD)'],
+                                        ['DTE la intrare', 'Pana in 45-50 zile, intrare la 10:00 AM NY'],
                                         ['Short Strike Delta', '16-22'],
-                                        ['POP', '> 75%'],
-                                        ['EV', '> $0 (positive)'],
+                                        ['POP', '> 75-80%'],
+                                        ['EV', '> $0 (pozitiv)'],
                                         ['Alpha', '> 30%'],
                                         ['Risk/Reward', '< 2.5'],
-                                        ['IV Rank', '> 17 minimum'],
-                                        ['Net Delta', 'Your choice (symmetric, bullish, or bearish)'],
-                                        ['Theta', 'Positive (higher = better)'],
-                                        ['Profit Target', 'Close at minimum 75% of max profit'],
-                                        ['Management', 'Last day only, 1 hour before market close (3:00 PM ET)'],
-                                        ['Position Size', 'Max 5% of net liquidity'],
+                                        ['IV Rank', '> 17 minim'],
+                                        ['Net Delta', 'La alegere (simetric, bullish, sau bearish)'],
+                                        ['Theta', 'Pozitiv (mai mare = mai bine)'],
+                                        ['Profit Target', 'Inchide la 75% din profitul maxim sau lasa sa expire'],
+                                        ['Marime pozitie', 'Max 5% din net liquidity'],
                                     ].map(([metric, range]) => (
                                         <tr key={metric} style={{ borderBottom: '1px solid var(--ion-color-light-shade)' }}>
                                             <td style={{ padding: '8px', fontWeight: 600 }}>{metric}</td>

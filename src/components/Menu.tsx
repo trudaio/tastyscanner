@@ -21,8 +21,9 @@ import {WatchListsComponent} from "./watch-lists.component";
 import {TickerMenuItemComponent} from "./ticker-menu-item.component";
 import {BrokerAccountsComponent} from "./broker-accounts.component";
 import {AccountInfoComponent} from "./account-info.component";
-import {bookOutline, filterOutline, gridOutline, personCircleOutline, shieldOutline} from "ionicons/icons";
+import {bookOutline, filterOutline, gridOutline, personCircleOutline, shieldOutline, statsChartOutline, keyOutline, flaskOutline} from "ionicons/icons";
 import {useHistory} from "react-router-dom";
+import { auth } from '../firebase';
 
 const MenuHeaderContentBox = styled.div`
   display: flex;
@@ -143,13 +144,25 @@ const Menu: React.FC = observer(() => {
 
         <IonItem button routerLink="/dashboard" routerDirection="forward" lines="none" style={{ marginTop: '16px' }}>
           <IonIcon slot="start" icon={gridOutline} />
-          <IonLabel>Dashboard <span style={{ fontSize: '0.7rem', color: 'var(--ion-color-warning)', fontWeight: 600 }}>(working)</span></IonLabel>
+          <IonLabel>Guvid Management</IonLabel>
         </IonItem>
 
+        <IonItem button routerLink="/guvid-history" routerDirection="forward" lines="none">
+          <IonIcon slot="start" icon={statsChartOutline} />
+          <IonLabel>Guvid History</IonLabel>
+        </IonItem>
+
+        <IonItem button routerLink="/backtest" routerDirection="forward" lines="none">
+          <IonIcon slot="start" icon={flaskOutline} />
+          <IonLabel>Backtest</IonLabel>
+        </IonItem>
+
+        {/* IC Savior — temporarily hidden, will revisit later
         <IonItem button routerLink="/iron-condor-savior" routerDirection="forward" lines="none">
           <IonIcon slot="start" icon={shieldOutline} />
-          <IonLabel>🛟 IC Savior <span style={{ fontSize: '0.7rem', color: 'var(--ion-color-warning)', fontWeight: 600 }}>(working)</span></IonLabel>
+          <IonLabel>🛟 IC Savior</IonLabel>
         </IonItem>
+        */}
 
 
 <IonItem button routerLink="/guide" routerDirection="forward" lines="none">
@@ -161,6 +174,13 @@ const Menu: React.FC = observer(() => {
           <IonIcon slot="start" icon={personCircleOutline} />
           <IonLabel>My Account</IonLabel>
         </IonItem>
+
+        {auth.currentUser?.uid === '7OcSxAkz8eahmOJD2ddu4ElBPsf2' && (
+          <IonItem button routerLink="/superadmin" routerDirection="forward" lines="none">
+            <IonIcon slot="start" icon={keyOutline} />
+            <IonLabel>SuperAdmin</IonLabel>
+          </IonItem>
+        )}
 
         <WatchListsLabelBox>
           WATCH LISTS

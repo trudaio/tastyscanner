@@ -88,7 +88,7 @@ export class TradingDashboardService implements ITradingDashboardService {
 
                 if (Array.isArray(transactions) && transactions.length > 0) {
                     allTransactions.push(...transactions);
-                    pageOffset += transactions.length;
+                    pageOffset++;  // page-offset is a page NUMBER, not item offset
                     hasMore = transactions.length === pageSize;
                 } else {
                     hasMore = false;

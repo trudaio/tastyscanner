@@ -69,14 +69,26 @@ const BestRiskRewardLegendBox = styled(LegendBox)`
     color: var(--ion-color-primary-contrast);
 `
 
-const BestPopLegendBox = styled(LegendBox)`
+const BestPopLegendBox = styled(LegendBox)<{ $active?: boolean }>`
     background-color: var(--ion-color-warning-tint);
     color: var(--ion-color-warning-contrast);
+    cursor: pointer;
+    border: 2px solid ${p => p.$active ? 'var(--ion-color-warning-shade)' : 'transparent'};
+    opacity: ${p => p.$active ? 1 : 0.7};
+    transition: all 0.2s ease;
+    user-select: none;
+    &:hover { opacity: 1; }
 `
 
 
 
-const TabHeaderComponent: React.FC<{title: string}> = observer((props) => {
+interface TabHeaderProps {
+    title: string;
+    bestPopMode?: boolean;
+    onToggleBestPop?: () => void;
+}
+
+const TabHeaderComponent: React.FC<TabHeaderProps> = observer((props) => {
     return (
         <IonHeader>
             <IonToolbar>
@@ -89,7 +101,10 @@ const TabHeaderComponent: React.FC<{title: string}> = observer((props) => {
                             <BestRiskRewardLegendBox>
                                 Best risk/reward
                             </BestRiskRewardLegendBox>
-                            <BestPopLegendBox>
+                            <BestPopLegendBox
+                                $active={props.bestPopMode}
+                                onClick={props.onToggleBestPop}
+                            >
                                 Best POP
                             </BestPopLegendBox>
                         </LegendContainerBox>
@@ -106,6 +121,7 @@ const TabHeaderComponent: React.FC<{title: string}> = observer((props) => {
 export const TickerOptionsStrategiesComponent: React.FC = observer(() => {
     const services = useServices();
     const [currentStrategy, setCurrentStrategy] = useState<IOptionsStrategyViewModel | null>(null);
+    const [bestPopMode, setBestPopMode] = useState(false);
 
     const ticker = services.tickers.currentTicker;
     const currentTab = services.rawLocalStorage.getItem(RawLocalStorageKeys.currentStrategyTab) || CONDORS_TAB;
@@ -155,9 +171,9 @@ export const TickerOptionsStrategiesComponent: React.FC = observer(() => {
 
             <IonTab tab={CONDORS_TAB}>
                 <IonPage id={CONDORS_TAB}>
-                    <TabHeaderComponent title={"Iron Condors"}/>
+                    <TabHeaderComponent title={"Iron Condors"} bestPopMode={bestPopMode} onToggleBestPop={() => setBestPopMode(v => !v)}/>
                     <IonContent style={{ '--padding-bottom': '160px' } as React.CSSProperties}>
-                        <IronCondorsComponent ticker={ticker} onTrade={onTrade} />
+                        <IronCondorsComponent ticker={ticker} onTrade={onTrade} bestPopMode={bestPopMode} />
                     </IonContent>
                 </IonPage>
 

@@ -31,6 +31,8 @@ import {ITradeLogService} from "./trade-log/trade-log.interface";
 import {TradeLogService} from "./trade-log/trade-log.service";
 import type { ICredentialsService } from './credentials/credentials.service.interface';
 import { CredentialsService } from './credentials/credentials.service';
+import type { IBacktestService } from './backtest/backtest-engine.interface';
+import { BacktestService } from './backtest/backtest.service';
 
 export class ServiceFactory implements IServiceFactory {
 
@@ -157,6 +159,11 @@ export class ServiceFactory implements IServiceFactory {
     private _tradeLog: Lazy<ITradeLogService> = new Lazy<ITradeLogService>(() => new TradeLogService(this));
     get tradeLog(): ITradeLogService {
         return this._tradeLog.value;
+    }
+
+    private _backtest: Lazy<IBacktestService> = new Lazy<IBacktestService>(() => new BacktestService());
+    get backtest(): IBacktestService {
+        return this._backtest.value;
     }
 
 }

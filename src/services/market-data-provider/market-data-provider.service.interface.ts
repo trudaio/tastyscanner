@@ -130,6 +130,9 @@ export interface IPositionRawData {
     strikePrice: number;
     optionType: 'C' | 'P';
     expirationDate: string;
+    averageOpenPrice: number;
+    closePrice: number;
+    multiplier: number;
 }
 
 export interface IOrderLegRawData {

@@ -5,8 +5,15 @@ import {IOptionsStrategyViewModel} from "../../../models/options-strategy.view-m
 import {AllExpirationsStrategiesComponent} from "../all-expirations-strategies.component";
 import {useServices} from "../../../hooks/use-services.hook";
 import {NoEdgeBannerComponent} from "./no-edge-banner.component";
+import {BestPopSummaryComponent} from "./best-pop-summary.component";
 
-export const IronCondorsComponent: React.FC<{ticker: ITickerViewModel; onTrade: (strategy: IOptionsStrategyViewModel) => void;}> = observer((props) => {
+interface IronCondorsProps {
+    ticker: ITickerViewModel;
+    onTrade: (strategy: IOptionsStrategyViewModel) => void;
+    bestPopMode?: boolean;
+}
+
+export const IronCondorsComponent: React.FC<IronCondorsProps> = observer((props) => {
     const services = useServices();
     const filters = services.settings.strategyFilters;
     const expirations = props.ticker.getExpirationsWithIronCondors();
@@ -17,6 +24,10 @@ export const IronCondorsComponent: React.FC<{ticker: ITickerViewModel; onTrade: 
 
     if (noEdge) {
         return <NoEdgeBannerComponent symbol={props.ticker.symbol} />;
+    }
+
+    if (props.bestPopMode) {
+        return <BestPopSummaryComponent ticker={props.ticker} onTrade={props.onTrade} />;
     }
 
     return (

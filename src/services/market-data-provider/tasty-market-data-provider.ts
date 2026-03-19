@@ -359,7 +359,7 @@ export class TastyMarketDataProvider implements IMarketDataProviderService {
         const positions: any[] = await this._tastyClient.balancesAndPositionsService.getPositionsList(accountNumber, queryParams);
 
         return positions
-            .filter((pos: any) => pos['instrument-type'] === 'Equity Option')
+            .filter((pos: any) => (pos['instrument-type'] || '').includes('Option'))
             .map((pos: any) => {
                 // Parse the option symbol to extract strike price and option type
                 // TastyTrade option symbols format: SYMBOL  YYMMDDCSTRIKE or SYMBOL  YYMMDDPSTRIKE
@@ -399,7 +399,10 @@ export class TastyMarketDataProvider implements IMarketDataProviderService {
                     instrumentType: pos['instrument-type'],
                     strikePrice,
                     optionType,
-                    expirationDate
+                    expirationDate,
+                    averageOpenPrice: parseFloat(pos['average-open-price'] || '0'),
+                    closePrice: parseFloat(pos['close-price'] || '0'),
+                    multiplier: parseInt(pos['multiplier'] || '100', 10)
                 };
             });
     }

@@ -36,6 +36,8 @@ import { BrokerCredentialsService } from './credentials/broker-credentials.servi
 import type { IBacktestService } from './backtest/backtest-engine.interface';
 import { BacktestService } from './backtest/backtest.service';
 import { BrokerType } from './broker-provider/broker-provider.interface';
+import type { IDeltaAlertService } from './delta-alert/delta-alert.interface';
+import { DeltaAlertService } from './delta-alert/delta-alert.service';
 
 export class ServiceFactory implements IServiceFactory {
 
@@ -174,6 +176,11 @@ export class ServiceFactory implements IServiceFactory {
     private _backtest: Lazy<IBacktestService> = new Lazy<IBacktestService>(() => new BacktestService());
     get backtest(): IBacktestService {
         return this._backtest.value;
+    }
+
+    private _deltaAlert: Lazy<IDeltaAlertService> = new Lazy<IDeltaAlertService>(() => new DeltaAlertService(this));
+    get deltaAlert(): IDeltaAlertService {
+        return this._deltaAlert.value;
     }
 
 }

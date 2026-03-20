@@ -31,6 +31,8 @@ export interface ITradeLogLeg {
     strikePrice: number;
     expirationDate: string;
     midPrice: number;
+    delta?: number;           // absolute delta at time of entry
+    streamerSymbol?: string;  // dxFeed symbol for live greeks lookup
 }
 
 export type TradeLogStatus = 'open' | 'closed' | 'expired';

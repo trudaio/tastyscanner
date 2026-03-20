@@ -394,6 +394,8 @@ export const SendOrderDialogComponent: React.FC<SendOrderDialogComponentProps> =
                 strikePrice: leg.option.strikePrice,
                 expirationDate: leg.option.expirationDate,
                 midPrice: leg.option.midPrice,
+                delta: leg.option.absoluteDeltaPercent,
+                streamerSymbol: leg.option.streamerSymbol,
             })),
         });
 

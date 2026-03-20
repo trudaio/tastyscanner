@@ -10,5 +10,5 @@ export interface IOptionViewModel {
     readonly bidAskSpread: number;
     readonly expirationDate: string;
     readonly daysToExpiration: number;
-
+    readonly streamerSymbol: string;
 }

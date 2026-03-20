@@ -10,6 +10,7 @@ import { GreeksGuidePage } from './pages/GreeksGuidePage';
 import { GuvidHistoryPage } from './pages/GuvidHistoryPage';
 import { SuperAdminPage } from './pages/SuperAdminPage';
 import BacktestPage from './pages/BacktestPage';
+import { DeltaAlertPage } from './pages/DeltaAlertPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { OnboardingPage } from './pages/OnboardingPage';
@@ -119,6 +120,9 @@ const App: React.FC = () => {
                                 </Route>
                                 <Route path="/backtest" exact={true}>
                                     <BacktestPage />
+                                </Route>
+                                <Route path="/delta-alert" exact={true}>
+                                    <DeltaAlertPage />
                                 </Route>
                                 <Route path="/superadmin" exact={true}>
                                     <SuperAdminPage />

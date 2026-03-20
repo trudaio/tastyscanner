@@ -4,11 +4,18 @@ import styled from 'styled-components';
 import { IonSpinner } from '@ionic/react';
 import { useServices } from '../../hooks/use-services.hook';
 import { ITransactionRawData } from '../../services/market-data-provider/market-data-provider.service.interface';
+import {
+    IGuvidHistorySummary,
+    IIronCondorTrade,
+    ITickerSummary,
+    IMonthSummary,
+} from '../../services/iron-condor-analytics/iron-condor-analytics.interface';
 
 /* ─── Types ──────────────────────────────────────────────── */
 
 type SortKey = 'date' | 'action' | 'symbol' | 'quantity' | 'price' | 'value' | 'fees';
 type SortDir = 'asc' | 'desc';
+type ICSortKey = 'openDate' | 'ticker' | 'profit' | 'status';
 
 interface IRoundTrip {
     symbol: string;
@@ -232,6 +239,91 @@ const SortIcon = styled.span`
     opacity: 0.7;
 `;
 
+/* ─── IC Trades styled components ────────────────────────── */
+
+const SectionTitle = styled.h2`
+    color: #fff;
+    font-size: 16px;
+    margin: 28px 0 12px 0;
+    font-weight: 600;
+`;
+
+const ICTableWrap = styled.div`
+    background: #1a1a2e;
+    border-radius: 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-bottom: 24px;
+`;
+
+const ICTh = styled.th<{ $align?: string; $active?: boolean; $sortable?: boolean }>`
+    padding: 10px 14px;
+    background: #2a2a3e;
+    color: ${p => p.$active ? '#4a9eff' : '#888'};
+    font-size: 11px;
+    text-transform: uppercase;
+    font-weight: 500;
+    text-align: ${p => p.$align ?? 'left'};
+    white-space: nowrap;
+    cursor: ${p => p.$sortable ? 'pointer' : 'default'};
+    user-select: none;
+    &:hover { color: ${p => p.$sortable ? '#fff' : 'inherit'}; }
+`;
+
+const ICTd = styled.td<{ $align?: string }>`
+    padding: 10px 14px;
+    border-bottom: 1px solid #1e1e32;
+    color: #fff;
+    font-size: 13px;
+    text-align: ${p => p.$align ?? 'left'};
+`;
+
+const PLValue = styled.span<{ $value: number }>`
+    color: ${p => p.$value > 0 ? '#4dff91' : p.$value < 0 ? '#ff4d6d' : '#888'};
+    font-weight: 600;
+`;
+
+const WinRateValue = styled.span<{ $pct: number }>`
+    color: ${p => p.$pct >= 60 ? '#4dff91' : p.$pct >= 40 ? '#ffaa00' : '#ff4d6d'};
+    font-weight: 600;
+`;
+
+const StatusBadge = styled.span<{ $status: string }>`
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    ${p => {
+        switch (p.$status) {
+            case 'open': return 'background: rgba(74,158,255,0.15); border: 1px solid #4a9eff; color: #4a9eff;';
+            case 'closed': return 'background: rgba(77,255,145,0.15); border: 1px solid #4dff91; color: #4dff91;';
+            case 'expired': return 'background: rgba(255,170,0,0.12); border: 1px solid #ffaa00; color: #ffaa00;';
+            default: return 'background: #2a2a3e; color: #888;';
+        }
+    }}
+`;
+
+const TickerFilterRow = styled.div`
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+    align-items: center;
+`;
+
+const TickerFilterBtn = styled.button<{ $active?: boolean }>`
+    padding: 5px 12px;
+    background: ${p => p.$active ? '#4a9eff' : '#1a1a2e'};
+    border: 1px solid ${p => p.$active ? '#4a9eff' : '#333'};
+    border-radius: 6px;
+    color: #fff;
+    font-size: 12px;
+    font-weight: ${p => p.$active ? 600 : 400};
+    cursor: pointer;
+    &:hover { background: ${p => p.$active ? '#4a9eff' : '#2a2a3e'}; }
+`;
+
 /* ─── Helpers ────────────────────────────────────────────── */
 
 function fmtDate(iso: string): string {
@@ -243,6 +335,11 @@ function fmtDate(iso: string): string {
 function fmtCurrency(val: number): string {
     return val.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
 }
+
+const fmtCur = (v: number): string => {
+    const abs = Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return v >= 0 ? `$${abs}` : `-$${abs}`;
+};
 
 function parseMoney(s: string | undefined): number {
     if (!s) return 0;
@@ -276,11 +373,18 @@ export const TransactionHistoryComponent: React.FC = observer(() => {
     const [transactions, setTransactions] = useState<ITransactionRawData[]>([]);
     const [error, setError] = useState<string | null>(null);
 
-    const [tab, setTab] = useState<'all' | 'roundtrips'>('all');
+    const [tab, setTab] = useState<'all' | 'roundtrips' | 'ic-trades'>('all');
     const [filterTicker, setFilterTicker] = useState('');
     const [filterType, setFilterType] = useState('');
     const [sortKey, setSortKey] = useState<SortKey>('date');
     const [sortDir, setSortDir] = useState<SortDir>('desc');
+
+    // IC Trades state
+    const [icSummary, setIcSummary] = useState<IGuvidHistorySummary | null>(null);
+    const [icLoading, setIcLoading] = useState(false);
+    const [icSortKey, setIcSortKey] = useState<ICSortKey>('openDate');
+    const [icSortDir, setIcSortDir] = useState<SortDir>('desc');
+    const [icTickerFilter, setIcTickerFilter] = useState<string | null>(null);
 
     const accountNumber = services.brokerAccount.accounts[0]?.accountNumber ?? '';
 
@@ -317,9 +421,27 @@ export const TransactionHistoryComponent: React.FC = observer(() => {
         }
     }, [accountNumber, startDate, endDate, services.marketDataProvider]);
 
+    const fetchICHistory = useCallback(async () => {
+        setIcLoading(true);
+        try {
+            const data = await services.ironCondorAnalytics.getHistorySummary();
+            setIcSummary(data);
+        } catch (e) {
+            console.error('[Transaction History] IC fetch error:', e);
+        } finally {
+            setIcLoading(false);
+        }
+    }, [services.ironCondorAnalytics]);
+
     useEffect(() => {
         fetchTransactions();
     }, [fetchTransactions]);
+
+    useEffect(() => {
+        if (tab === 'ic-trades' && !icSummary && !icLoading) {
+            fetchICHistory();
+        }
+    }, [tab, icSummary, icLoading, fetchICHistory]);
 
     /* ─── Filter + Sort ────────────────────────────────────── */
 
@@ -425,7 +547,49 @@ export const TransactionHistoryComponent: React.FC = observer(() => {
         return { totalPnl, totalFeesPaid, tradeCount, winRate };
     }, [filtered, roundTrips]);
 
-    /* ─── Sort handler ─────────────────────────────────────── */
+    /* ─── IC Trades computed ───────────────────────────────── */
+
+    const icTickerList = useMemo(() => {
+        if (!icSummary) return [];
+        return [...new Set(icSummary.trades.map((t: IIronCondorTrade) => t.ticker))].sort();
+    }, [icSummary]);
+
+    const icTickerBreakdown = useMemo(() => {
+        if (!icSummary) return [];
+        return Array.from(icSummary.byTicker.values())
+            .sort((a: ITickerSummary, b: ITickerSummary) => b.totalProfit - a.totalProfit);
+    }, [icSummary]);
+
+    const icMonthlyBreakdown = useMemo(() => {
+        if (!icSummary) return [];
+        return Array.from(icSummary.byMonth.values())
+            .sort((a: IMonthSummary, b: IMonthSummary) => a.month.localeCompare(b.month));
+    }, [icSummary]);
+
+    const icSortedTrades = useMemo(() => {
+        if (!icSummary) return [];
+        let trades = icTickerFilter
+            ? icSummary.trades.filter((t: IIronCondorTrade) => t.ticker === icTickerFilter)
+            : [...icSummary.trades];
+
+        const mul = icSortDir === 'asc' ? 1 : -1;
+        trades.sort((a: IIronCondorTrade, b: IIronCondorTrade) => {
+            switch (icSortKey) {
+                case 'openDate': return a.openDate.localeCompare(b.openDate) * mul;
+                case 'ticker': return a.ticker.localeCompare(b.ticker) * mul;
+                case 'profit': {
+                    const pa = a.status === 'open' ? a.openCredit : a.profit;
+                    const pb = b.status === 'open' ? b.openCredit : b.profit;
+                    return (pa - pb) * mul;
+                }
+                case 'status': return a.status.localeCompare(b.status) * mul;
+                default: return 0;
+            }
+        });
+        return trades;
+    }, [icSummary, icTickerFilter, icSortKey, icSortDir]);
+
+    /* ─── Sort handlers ────────────────────────────────────── */
 
     const handleSort = (key: SortKey) => {
         if (sortKey === key) {
@@ -436,9 +600,23 @@ export const TransactionHistoryComponent: React.FC = observer(() => {
         }
     };
 
+    const toggleICSort = (key: ICSortKey) => {
+        if (icSortKey === key) {
+            setIcSortDir(d => d === 'asc' ? 'desc' : 'asc');
+        } else {
+            setIcSortKey(key);
+            setIcSortDir(key === 'openDate' ? 'desc' : 'asc');
+        }
+    };
+
     const sortIcon = (key: SortKey) => {
         if (sortKey !== key) return <SortIcon>↕</SortIcon>;
         return <SortIcon>{sortDir === 'asc' ? '↑' : '↓'}</SortIcon>;
+    };
+
+    const icSortArrow = (key: ICSortKey) => {
+        if (icSortKey !== key) return ' \u21C5';
+        return icSortDir === 'asc' ? ' \u25B2' : ' \u25BC';
     };
 
     const txTypes = useMemo(() => {
@@ -446,82 +624,159 @@ export const TransactionHistoryComponent: React.FC = observer(() => {
         return Array.from(types).sort();
     }, [transactions]);
 
+    /* ─── IC Stats ─────────────────────────────────────────── */
+
+    const icStats = useMemo(() => {
+        if (!icSummary) return null;
+        const ytd = icSummary.yearToDate;
+        const realizedPL = ytd.totalWins + ytd.totalLosses;
+        const tradingDays = icSummary.dailyPL.length;
+        const plPerDay = tradingDays > 0 ? realizedPL / tradingDays : 0;
+        const avgProfitPerClosed = ytd.closedTrades > 0 ? realizedPL / ytd.closedTrades : 0;
+
+        const closedForDuration = icSummary.trades.filter(
+            (t: IIronCondorTrade) => t.status !== 'open' && t.openDate && (t.closeDate || t.expirationDate),
+        );
+        let avgDaysHeld = 0;
+        if (closedForDuration.length > 0) {
+            let totalDays = 0;
+            for (const t of closedForDuration) {
+                const open = new Date(t.openDate);
+                const close = new Date(t.closeDate || t.expirationDate);
+                totalDays += Math.max(0, Math.round((close.getTime() - open.getTime()) / (1000 * 60 * 60 * 24)));
+            }
+            avgDaysHeld = totalDays / closedForDuration.length;
+        }
+
+        return { ytd, realizedPL, plPerDay, avgProfitPerClosed, avgDaysHeld };
+    }, [icSummary]);
+
     /* ─── Render ─────────────────────────────────────────────── */
 
     return (
         <Container>
             <TopBar>
                 <Title>Istoric Tranzactii</Title>
-                <RefreshBtn onClick={fetchTransactions} disabled={loading}>
-                    {loading ? 'Loading...' : 'Refresh'}
-                </RefreshBtn>
+                {tab !== 'ic-trades' && (
+                    <RefreshBtn onClick={fetchTransactions} disabled={loading}>
+                        {loading ? 'Loading...' : 'Refresh'}
+                    </RefreshBtn>
+                )}
+                {tab === 'ic-trades' && (
+                    <RefreshBtn onClick={fetchICHistory} disabled={icLoading}>
+                        {icLoading ? 'Loading...' : '\u21BB Refresh IC'}
+                    </RefreshBtn>
+                )}
             </TopBar>
 
-            {/* Summary metrics */}
-            <MetricsRow>
-                <MetricCard $color={summary.totalPnl >= 0 ? '#4caf50' : '#f44336'}>
-                    <MetricLabel>Total P&L</MetricLabel>
-                    <MetricValue $color={summary.totalPnl >= 0 ? '#4caf50' : '#f44336'}>
-                        {fmtCurrency(summary.totalPnl)}
-                    </MetricValue>
-                </MetricCard>
-                <MetricCard $color="#ff9800">
-                    <MetricLabel>Total Fees</MetricLabel>
-                    <MetricValue $color="#ff9800">{fmtCurrency(summary.totalFeesPaid)}</MetricValue>
-                </MetricCard>
-                <MetricCard $color="#4a9eff">
-                    <MetricLabel>Transactions</MetricLabel>
-                    <MetricValue>{summary.tradeCount}</MetricValue>
-                </MetricCard>
-                <MetricCard $color="#9c27b0">
-                    <MetricLabel>Win Rate</MetricLabel>
-                    <MetricValue>{summary.winRate.toFixed(1)}%</MetricValue>
-                </MetricCard>
-            </MetricsRow>
+            {/* Summary metrics (raw transactions) */}
+            {tab !== 'ic-trades' && (
+                <MetricsRow>
+                    <MetricCard $color={summary.totalPnl >= 0 ? '#4caf50' : '#f44336'}>
+                        <MetricLabel>Total P&L</MetricLabel>
+                        <MetricValue $color={summary.totalPnl >= 0 ? '#4caf50' : '#f44336'}>
+                            {fmtCurrency(summary.totalPnl)}
+                        </MetricValue>
+                    </MetricCard>
+                    <MetricCard $color="#ff9800">
+                        <MetricLabel>Total Fees</MetricLabel>
+                        <MetricValue $color="#ff9800">{fmtCurrency(summary.totalFeesPaid)}</MetricValue>
+                    </MetricCard>
+                    <MetricCard $color="#4a9eff">
+                        <MetricLabel>Transactions</MetricLabel>
+                        <MetricValue>{summary.tradeCount}</MetricValue>
+                    </MetricCard>
+                    <MetricCard $color="#9c27b0">
+                        <MetricLabel>Win Rate</MetricLabel>
+                        <MetricValue>{summary.winRate.toFixed(1)}%</MetricValue>
+                    </MetricCard>
+                </MetricsRow>
+            )}
 
-            {/* Filters */}
-            <FiltersRow>
-                <FilterGroup>
-                    <FilterLabel>Start Date</FilterLabel>
-                    <FilterInput
-                        type="date"
-                        value={startDate}
-                        onChange={e => setStartDate(e.target.value)}
-                    />
-                </FilterGroup>
-                <FilterGroup>
-                    <FilterLabel>End Date</FilterLabel>
-                    <FilterInput
-                        type="date"
-                        value={endDate}
-                        onChange={e => setEndDate(e.target.value)}
-                    />
-                </FilterGroup>
-                <FilterGroup>
-                    <FilterLabel>Ticker</FilterLabel>
-                    <FilterInput
-                        type="text"
-                        placeholder="e.g. SPY"
-                        value={filterTicker}
-                        onChange={e => setFilterTicker(e.target.value)}
-                        style={{ width: '100px' }}
-                    />
-                </FilterGroup>
-                <FilterGroup>
-                    <FilterLabel>Type</FilterLabel>
-                    <FilterSelect value={filterType} onChange={e => setFilterType(e.target.value)}>
-                        <option value="">All Types</option>
-                        {txTypes.map(t => (
-                            <option key={t} value={t}>{t}</option>
-                        ))}
-                    </FilterSelect>
-                </FilterGroup>
-            </FiltersRow>
+            {/* IC summary metrics */}
+            {tab === 'ic-trades' && icStats && (
+                <MetricsRow>
+                    <MetricCard $color="#4a9eff">
+                        <MetricLabel>Closed IC Trades</MetricLabel>
+                        <MetricValue>{icStats.ytd.closedTrades}</MetricValue>
+                    </MetricCard>
+                    <MetricCard $color={icStats.ytd.winRate >= 60 ? '#4dff91' : icStats.ytd.winRate >= 40 ? '#ffaa00' : '#ff4d6d'}>
+                        <MetricLabel>Win Rate</MetricLabel>
+                        <MetricValue $color={icStats.ytd.winRate >= 60 ? '#4dff91' : icStats.ytd.winRate >= 40 ? '#ffaa00' : '#ff4d6d'}>
+                            {icStats.ytd.winRate.toFixed(1)}%
+                        </MetricValue>
+                    </MetricCard>
+                    <MetricCard $color={icStats.realizedPL >= 0 ? '#4dff91' : '#ff4d6d'}>
+                        <MetricLabel>Total P&L</MetricLabel>
+                        <MetricValue $color={icStats.realizedPL >= 0 ? '#4dff91' : '#ff4d6d'}>
+                            {fmtCur(icStats.realizedPL)}
+                        </MetricValue>
+                    </MetricCard>
+                    <MetricCard $color={icStats.avgProfitPerClosed >= 0 ? '#4dff91' : '#ff4d6d'}>
+                        <MetricLabel>Avg Profit / Trade</MetricLabel>
+                        <MetricValue $color={icStats.avgProfitPerClosed >= 0 ? '#4dff91' : '#ff4d6d'}>
+                            {fmtCur(icStats.avgProfitPerClosed)}
+                        </MetricValue>
+                    </MetricCard>
+                    <MetricCard $color={icStats.plPerDay >= 0 ? '#4dff91' : '#ff4d6d'}>
+                        <MetricLabel>P&L / Day</MetricLabel>
+                        <MetricValue $color={icStats.plPerDay >= 0 ? '#4dff91' : '#ff4d6d'}>
+                            {fmtCur(icStats.plPerDay)}
+                        </MetricValue>
+                    </MetricCard>
+                    <MetricCard $color="#4a9eff">
+                        <MetricLabel>Avg Duration</MetricLabel>
+                        <MetricValue>{icStats.avgDaysHeld.toFixed(1)}d</MetricValue>
+                    </MetricCard>
+                </MetricsRow>
+            )}
+
+            {/* Filters (only for raw transaction tabs) */}
+            {tab !== 'ic-trades' && (
+                <FiltersRow>
+                    <FilterGroup>
+                        <FilterLabel>Start Date</FilterLabel>
+                        <FilterInput
+                            type="date"
+                            value={startDate}
+                            onChange={e => setStartDate(e.target.value)}
+                        />
+                    </FilterGroup>
+                    <FilterGroup>
+                        <FilterLabel>End Date</FilterLabel>
+                        <FilterInput
+                            type="date"
+                            value={endDate}
+                            onChange={e => setEndDate(e.target.value)}
+                        />
+                    </FilterGroup>
+                    <FilterGroup>
+                        <FilterLabel>Ticker</FilterLabel>
+                        <FilterInput
+                            type="text"
+                            placeholder="e.g. SPY"
+                            value={filterTicker}
+                            onChange={e => setFilterTicker(e.target.value)}
+                            style={{ width: '100px' }}
+                        />
+                    </FilterGroup>
+                    <FilterGroup>
+                        <FilterLabel>Type</FilterLabel>
+                        <FilterSelect value={filterType} onChange={e => setFilterType(e.target.value)}>
+                            <option value="">All Types</option>
+                            {txTypes.map(t => (
+                                <option key={t} value={t}>{t}</option>
+                            ))}
+                        </FilterSelect>
+                    </FilterGroup>
+                </FiltersRow>
+            )}
 
             {/* Tabs */}
             <TabsRow>
                 <Tab $active={tab === 'all'} onClick={() => setTab('all')}>All Transactions</Tab>
                 <Tab $active={tab === 'roundtrips'} onClick={() => setTab('roundtrips')}>Round Trips</Tab>
+                <Tab $active={tab === 'ic-trades'} onClick={() => setTab('ic-trades')}>Iron Condor Trades</Tab>
             </TabsRow>
 
             {/* Error */}
@@ -531,8 +786,8 @@ export const TransactionHistoryComponent: React.FC = observer(() => {
                 </div>
             )}
 
-            {/* Loading */}
-            {loading && (
+            {/* Loading (raw transactions) */}
+            {loading && tab !== 'ic-trades' && (
                 <SpinnerBox>
                     <IonSpinner name="crescent" style={{ color: '#4a9eff' }} />
                 </SpinnerBox>
@@ -666,6 +921,177 @@ export const TransactionHistoryComponent: React.FC = observer(() => {
                         </tbody>
                     </Table>
                 </TableWrapper>
+            )}
+
+            {/* Iron Condor Trades Tab */}
+            {tab === 'ic-trades' && (
+                <>
+                    {icLoading && (
+                        <SpinnerBox>
+                            <IonSpinner name="crescent" style={{ color: '#4a9eff' }} />
+                        </SpinnerBox>
+                    )}
+
+                    {!icLoading && !icSummary && (
+                        <EmptyState>No IC trade data available. Connect your TastyTrade account.</EmptyState>
+                    )}
+
+                    {!icLoading && icSummary && (
+                        <>
+                            {/* Trades by Ticker */}
+                            <SectionTitle>Trades by Ticker</SectionTitle>
+                            <ICTableWrap>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 650 }}>
+                                    <thead>
+                                        <tr>
+                                            <ICTh>Ticker</ICTh>
+                                            <ICTh $align="center">Trades</ICTh>
+                                            <ICTh $align="center">Profitable</ICTh>
+                                            <ICTh $align="center">Unprofitable</ICTh>
+                                            <ICTh $align="right">Win Rate</ICTh>
+                                            <ICTh $align="right">Total P&L</ICTh>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {icTickerBreakdown.length === 0 ? (
+                                            <tr>
+                                                <ICTd colSpan={6} $align="center" style={{ color: '#444', padding: '24px' }}>
+                                                    No ticker data
+                                                </ICTd>
+                                            </tr>
+                                        ) : icTickerBreakdown.map((ts: ITickerSummary) => (
+                                            <tr key={ts.ticker}>
+                                                <ICTd><strong>{ts.ticker}</strong></ICTd>
+                                                <ICTd $align="center">{ts.totalTrades}</ICTd>
+                                                <ICTd $align="center" style={{ color: '#4dff91' }}>{ts.profitableTrades}</ICTd>
+                                                <ICTd $align="center" style={{ color: '#ff4d6d' }}>{ts.totalTrades - ts.profitableTrades}</ICTd>
+                                                <ICTd $align="right"><WinRateValue $pct={ts.winRate}>{ts.winRate.toFixed(1)}%</WinRateValue></ICTd>
+                                                <ICTd $align="right"><PLValue $value={ts.totalProfit}>{fmtCur(ts.totalProfit)}</PLValue></ICTd>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </ICTableWrap>
+
+                            {/* Monthly P&L */}
+                            <SectionTitle>Monthly P&L</SectionTitle>
+                            <ICTableWrap>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 500 }}>
+                                    <thead>
+                                        <tr>
+                                            <ICTh>Month</ICTh>
+                                            <ICTh $align="center">Trades</ICTh>
+                                            <ICTh $align="center">Profitable</ICTh>
+                                            <ICTh $align="right">Win Rate</ICTh>
+                                            <ICTh $align="right">Total P&L</ICTh>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {icMonthlyBreakdown.length === 0 ? (
+                                            <tr>
+                                                <ICTd colSpan={5} $align="center" style={{ color: '#444', padding: '24px' }}>
+                                                    No monthly data
+                                                </ICTd>
+                                            </tr>
+                                        ) : icMonthlyBreakdown.map((ms: IMonthSummary) => (
+                                            <tr key={ms.month}>
+                                                <ICTd><strong>{ms.month}</strong></ICTd>
+                                                <ICTd $align="center">{ms.totalTrades}</ICTd>
+                                                <ICTd $align="center" style={{ color: '#4dff91' }}>{ms.profitableTrades}</ICTd>
+                                                <ICTd $align="right"><WinRateValue $pct={ms.winRate}>{ms.winRate.toFixed(1)}%</WinRateValue></ICTd>
+                                                <ICTd $align="right"><PLValue $value={ms.totalProfit}>{fmtCur(ms.totalProfit)}</PLValue></ICTd>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </ICTableWrap>
+
+                            {/* Trade History */}
+                            <SectionTitle>Trade History</SectionTitle>
+
+                            {icTickerList.length > 1 && (
+                                <TickerFilterRow>
+                                    <TickerFilterBtn $active={icTickerFilter === null} onClick={() => setIcTickerFilter(null)}>
+                                        ALL ({icSummary.trades.length})
+                                    </TickerFilterBtn>
+                                    {icTickerList.map(ticker => (
+                                        <TickerFilterBtn
+                                            key={ticker}
+                                            $active={icTickerFilter === ticker}
+                                            onClick={() => setIcTickerFilter(ticker)}
+                                        >
+                                            {ticker}
+                                        </TickerFilterBtn>
+                                    ))}
+                                </TickerFilterRow>
+                            )}
+
+                            <ICTableWrap>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1000 }}>
+                                    <thead>
+                                        <tr>
+                                            <ICTh $sortable $active={icSortKey === 'ticker'} onClick={() => toggleICSort('ticker')}>
+                                                Ticker{icSortArrow('ticker')}
+                                            </ICTh>
+                                            <ICTh $sortable $active={icSortKey === 'openDate'} onClick={() => toggleICSort('openDate')}>
+                                                Open Date{icSortArrow('openDate')}
+                                            </ICTh>
+                                            <ICTh>Close Date</ICTh>
+                                            <ICTh>Expiration</ICTh>
+                                            <ICTh>Put Spread</ICTh>
+                                            <ICTh>Call Spread</ICTh>
+                                            <ICTh $align="right">Credit</ICTh>
+                                            <ICTh $align="right">Debit / Current</ICTh>
+                                            <ICTh $align="right" $sortable $active={icSortKey === 'profit'} onClick={() => toggleICSort('profit')}>
+                                                P&L{icSortArrow('profit')}
+                                            </ICTh>
+                                            <ICTh $align="center" $sortable $active={icSortKey === 'status'} onClick={() => toggleICSort('status')}>
+                                                Status{icSortArrow('status')}
+                                            </ICTh>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {icSortedTrades.length === 0 ? (
+                                            <tr>
+                                                <ICTd colSpan={10} $align="center" style={{ color: '#444', padding: '24px' }}>
+                                                    {icTickerFilter ? `No IC trades for ${icTickerFilter}` : 'No IC trades found'}
+                                                </ICTd>
+                                            </tr>
+                                        ) : icSortedTrades.map((trade: IIronCondorTrade) => {
+                                            const pl = trade.status === 'open' ? trade.openCredit : trade.profit;
+                                            const debitOrCurrent = trade.status === 'open'
+                                                ? (trade.currentPrice > 0 ? fmtCur(trade.currentPrice) : '\u2014')
+                                                : fmtCur(trade.closeDebit);
+                                            return (
+                                                <tr key={trade.id}>
+                                                    <ICTd><strong>{trade.ticker}</strong></ICTd>
+                                                    <ICTd>{trade.openDate}</ICTd>
+                                                    <ICTd>
+                                                        {trade.status === 'open'
+                                                            ? <StatusBadge $status="open">OPEN</StatusBadge>
+                                                            : (trade.closeDate || trade.expirationDate)
+                                                        }
+                                                    </ICTd>
+                                                    <ICTd>{trade.expirationDate}</ICTd>
+                                                    <ICTd>{trade.putBuyStrike}/{trade.putSellStrike}</ICTd>
+                                                    <ICTd>{trade.callSellStrike}/{trade.callBuyStrike}</ICTd>
+                                                    <ICTd $align="right">{fmtCur(trade.openCredit)}</ICTd>
+                                                    <ICTd $align="right">{debitOrCurrent}</ICTd>
+                                                    <ICTd $align="right"><PLValue $value={pl}>{fmtCur(pl)}</PLValue></ICTd>
+                                                    <ICTd $align="center">
+                                                        <StatusBadge $status={trade.status}>
+                                                            {trade.status.toUpperCase()}
+                                                        </StatusBadge>
+                                                    </ICTd>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </ICTableWrap>
+                        </>
+                    )}
+                </>
             )}
         </Container>
     );

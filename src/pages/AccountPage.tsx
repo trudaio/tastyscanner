@@ -15,6 +15,7 @@ import styled from 'styled-components';
 import { useServices } from '../hooks/use-services.hook';
 import { checkmarkCircleOutline, closeCircleOutline, eyeOutline, eyeOffOutline } from 'ionicons/icons';
 import { observer } from 'mobx-react-lite';
+import { BrokerAccountListComponent } from '../components/broker-manager/broker-account-list.component';
 
 const PageBox = styled.div`
     max-width: 600px;
@@ -278,10 +279,17 @@ export const AccountPage: React.FC = observer(() => {
                         </IonCardContent>
                     </IonCard>
 
-                    {/* ── Credentiale TastyTrade ───────────────────────── */}
+                    {/* ── Broker Accounts (multi-broker) ───────────────── */}
+                    <IonCard>
+                        <IonCardContent>
+                            <BrokerAccountListComponent />
+                        </IonCardContent>
+                    </IonCard>
+
+                    {/* ── Update TastyTrade Credentials ─────────────────── */}
                     <IonCard>
                         <IonCardHeader>
-                            <SectionTitle>Credentiale TastyTrade</SectionTitle>
+                            <SectionTitle>Actualizeaza credentiale TastyTrade</SectionTitle>
                         </IonCardHeader>
                         <IonCardContent>
                             {/* Status indicator */}

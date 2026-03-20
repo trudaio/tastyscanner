@@ -1,7 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { observer } from 'mobx-react-lite';
 import styled from 'styled-components';
 import { useServices } from '../hooks/use-services.hook';
+import { BrokerType } from '../services/broker-provider/broker-provider.interface';
+import type { IBrokerAccount } from '../services/credentials/broker-credentials.service.interface';
+import type { ITastyTradeCredentials } from '../services/broker-provider/broker-provider.interface';
 
 /* ─── containers ─────────────────────────────────────────── */
 const AccountInfoContainer = styled.div`
@@ -166,6 +169,44 @@ const LoadingText = styled.div`
     padding: 8px;
 `;
 
+/* ── Broker switcher ──────────────────────────────────────────── */
+const BrokerSwitcherRow = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+`;
+
+const BrokerBadge = styled.span<{ $broker: BrokerType }>`
+    display: inline-flex;
+    align-items: center;
+    background: ${p => p.$broker === BrokerType.TastyTrade ? '#ff6b35' : '#dc3545'};
+    color: #fff;
+    font-size: 0.55rem;
+    font-weight: 800;
+    padding: 2px 5px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    flex-shrink: 0;
+`;
+
+const BrokerSelect = styled.select`
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 5px;
+    color: #ccc;
+    font-size: 11px;
+    padding: 4px 6px;
+    flex: 1;
+    cursor: pointer;
+    outline: none;
+    &:hover { border-color: rgba(255,255,255,0.25); }
+    option { background: #1a1a2e; color: #ccc; }
+`;
+
 const RefreshBtn = styled.button`
     background: none;
     border: 1px solid #333;
@@ -201,6 +242,34 @@ export const AccountInfoComponent: React.FC = observer(() => {
     const [kellyData, setKellyData] = useState<{
         kelly: number; halfKelly: number; winRate: number; wlRatio: number; maxBet: number;
     } | null>(null);
+
+    // ── Broker switcher ─────────────────────────────────────────
+    const [brokerAccounts, setBrokerAccounts] = useState<IBrokerAccount[]>([]);
+    const [activeAccountId, setActiveAccountId] = useState<string | null>(null);
+
+    const loadBrokerAccounts = useCallback(async () => {
+        try {
+            const list = await services.brokerCredentials.listBrokerAccounts();
+            setBrokerAccounts(list);
+            const active = list.find(a => a.isActive);
+            if (active) setActiveAccountId(active.id);
+        } catch { /* ignore */ }
+    }, [services.brokerCredentials]);
+
+    useEffect(() => { void loadBrokerAccounts(); }, [loadBrokerAccounts]);
+
+    const handleSwitchBroker = async (id: string) => {
+        if (id === activeAccountId) return;
+        try {
+            await services.brokerCredentials.setActiveBrokerAccount(id);
+            const selected = brokerAccounts.find(a => a.id === id);
+            if (selected?.brokerType === BrokerType.TastyTrade) {
+                const creds = selected.credentials as ITastyTradeCredentials;
+                services.initialize(creds.clientSecret, creds.refreshToken);
+            }
+            setActiveAccountId(id);
+        } catch { /* ignore */ }
+    };
 
     useEffect(() => {
         if (account && !account.portfolioGreeks && !account.isLoadingPortfolioGreeks) {
@@ -257,8 +326,29 @@ export const AccountInfoComponent: React.FC = observer(() => {
     const thetaPct   = (theta !== null && netLiq > 0) ? Math.abs(theta) / netLiq * 100 : null;
     const thetaState = thetaPct !== null ? getThetaState(thetaPct) : null;
 
+    const activeBrokerAccount = brokerAccounts.find(a => a.id === activeAccountId);
+
     return (
         <AccountInfoContainer>
+
+            {/* ── Broker switcher ────────────────────── */}
+            {brokerAccounts.length > 0 && (
+                <BrokerSwitcherRow>
+                    {activeBrokerAccount && (
+                        <BrokerBadge $broker={activeBrokerAccount.brokerType}>
+                            {activeBrokerAccount.brokerType === BrokerType.TastyTrade ? 'TT' : 'IB'}
+                        </BrokerBadge>
+                    )}
+                    <BrokerSelect
+                        value={activeAccountId ?? ''}
+                        onChange={e => void handleSwitchBroker(e.target.value)}
+                    >
+                        {brokerAccounts.map(a => (
+                            <option key={a.id} value={a.id}>{a.label}</option>
+                        ))}
+                    </BrokerSelect>
+                </BrokerSwitcherRow>
+            )}
 
             {/* ── Balances ───────────────────────────── */}
             <NetLiqLabel>Net Liquidity</NetLiqLabel>

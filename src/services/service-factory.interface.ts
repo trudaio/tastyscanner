@@ -12,7 +12,9 @@ import {ITradingDashboardService} from "./trading-dashboard/trading-dashboard.in
 import {IIronCondorSaviorService} from "./iron-condor-savior/iron-condor-savior.interface";
 import {ITradeLogService} from "./trade-log/trade-log.interface";
 import type { ICredentialsService } from './credentials/credentials.service.interface';
+import type { IBrokerCredentialsService } from './credentials/broker-credentials.service.interface';
 import type { IBacktestService } from './backtest/backtest-engine.interface';
+import type { BrokerType } from './broker-provider/broker-provider.interface';
 
 export interface IServiceFactory {
     readonly tickers: ITickersService;
@@ -28,8 +30,14 @@ export interface IServiceFactory {
     readonly tradingDashboard: ITradingDashboardService;
     readonly ironCondorSavior: IIronCondorSaviorService;
     readonly tradeLog: ITradeLogService;
+    /** @deprecated Use `brokerCredentials` for multi-broker support. */
     readonly credentials: ICredentialsService;
+    readonly brokerCredentials: IBrokerCredentialsService;
     readonly backtest: IBacktestService;
     readonly isInitialized: boolean;
-    initialize(clientSecret: string, refreshToken: string): void;
+    /**
+     * Initialize the factory with TastyTrade credentials.
+     * @param brokerType Defaults to BrokerType.TastyTrade for backward compatibility.
+     */
+    initialize(clientSecret: string, refreshToken: string, brokerType?: BrokerType): void;
 }

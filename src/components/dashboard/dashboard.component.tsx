@@ -4,6 +4,9 @@ import styled from 'styled-components';
 import { IonSpinner } from '@ionic/react';
 import { useServices } from '../../hooks/use-services.hook';
 import { IIronCondorTrade } from '../../services/iron-condor-analytics/iron-condor-analytics.interface';
+import { BrokerBadgeInline } from '../broker-manager/broker-badge-inline.component';
+import { BrokerType } from '../../services/broker-provider/broker-provider.interface';
+import type { IBrokerAccount } from '../../services/credentials/broker-credentials.service.interface';
 
 /* ─── Types ──────────────────────────────────────────────── */
 
@@ -207,6 +210,13 @@ export const DashboardComponent: React.FC = observer(() => {
     const [tickerFilter, setTickerFilter] = useState<string | null>(null);
     const [sortKey, setSortKey] = useState<SortKey | null>(null);
     const [sortDir, setSortDir] = useState<SortDir>('asc');
+    const [activeBroker, setActiveBroker] = useState<IBrokerAccount | null>(null);
+
+    useEffect(() => {
+        services.brokerCredentials.getActiveBrokerAccount()
+            .then(a => setActiveBroker(a))
+            .catch(() => { /* ignore */ });
+    }, [services.brokerCredentials]);
 
     /* fetch open ICs from positions API */
     const fetchPositions = async () => {
@@ -274,6 +284,11 @@ export const DashboardComponent: React.FC = observer(() => {
                 <Title>
                     Open Iron Condors
                     <SectionCount>{sortedTrades.length}{tickerFilter ? ` / ${openTrades.length}` : ''}</SectionCount>
+                    {activeBroker && (
+                        <span style={{ marginLeft: 8 }}>
+                            <BrokerBadgeInline brokerType={activeBroker.brokerType} />
+                        </span>
+                    )}
                 </Title>
                 <RefreshBtn onClick={fetchPositions} disabled={loading}>
                     {loading ? 'Loading…' : '↻ Refresh'}

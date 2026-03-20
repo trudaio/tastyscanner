@@ -11,13 +11,7 @@ import {
     IMonthSummary,
 } from "./iron-condor-analytics.interface";
 import { IOrderRawData, ITransactionRawData, IPositionRawData } from "../market-data-provider/market-data-provider.service.interface";
-
-interface ParsedOptionSymbol {
-    underlying: string;
-    expirationDate: string;
-    optionType: 'C' | 'P';
-    strikePrice: number;
-}
+import { parseTastyTradeSymbol, normalizeUnderlying, IParsedOptionSymbol } from "../../utils/symbol-normalizer";
 
 export class IronCondorAnalyticsService extends ServiceBase implements IIronCondorAnalyticsService {
     constructor(services: IServiceFactory) {
@@ -33,34 +27,12 @@ export class IronCondorAnalyticsService extends ServiceBase implements IIronCond
     lastFetchDate: Date | null = null;
     trades: IIronCondorTrade[] = [];
 
-    // Map weekly/variant symbols to main underlying (SPXW → SPX, etc.)
-    private static readonly SYMBOL_MAP: Record<string, string> = {
-        'SPXW': 'SPX',
-    };
-
-    private parseOptionSymbol(symbol: string): ParsedOptionSymbol | null {
-        // TastyTrade option symbol format: UNDERLYING  YYMMDDCP00STRIKE
-        // Example: SPY   260212P00580000 -> SPY, 2026-02-12, P, 580
-        const match = symbol.match(/^(\w+)\s*(\d{6})([CP])(\d+)$/);
-        if (!match) {
+    private parseOptionSymbol(symbol: string): IParsedOptionSymbol | null {
+        const result = parseTastyTradeSymbol(symbol);
+        if (!result) {
             console.log(`[IC Analytics] Could not parse symbol: ${symbol}`);
-            return null;
         }
-
-        const [, underlying, dateStr, optionType, strikeStr] = match;
-        const year = '20' + dateStr.substring(0, 2);
-        const month = dateStr.substring(2, 4);
-        const day = dateStr.substring(4, 6);
-
-        const trimmed = underlying.trim();
-        const mapped = IronCondorAnalyticsService.SYMBOL_MAP[trimmed] || trimmed;
-
-        return {
-            underlying: mapped,
-            expirationDate: `${year}-${month}-${day}`,
-            optionType: optionType as 'C' | 'P',
-            strikePrice: parseFloat(strikeStr) / 1000
-        };
+        return result;
     }
 
     /**
@@ -464,7 +436,7 @@ export class IronCondorAnalyticsService extends ServiceBase implements IIronCond
 
                     // Check duplicate against ALL existing trades (open, closed, expired)
                     // to avoid re-adding trades already detected from transactions
-                    const mappedUnderlying = IronCondorAnalyticsService.SYMBOL_MAP[ps.longPut.underlyingSymbol] || ps.longPut.underlyingSymbol;
+                    const mappedUnderlying = normalizeUnderlying(ps.longPut.underlyingSymbol);
                     const isDuplicate = existingOpenTrades.some(t =>
                         t.ticker === mappedUnderlying &&
                         t.expirationDate === ps.longPut.expirationDate &&
@@ -740,7 +712,7 @@ export class IronCondorAnalyticsService extends ServiceBase implements IIronCond
                         - lp.closePrice - lc.closePrice
                     ) * multiplier * qty;
 
-                    const tickerMapped = IronCondorAnalyticsService.SYMBOL_MAP[lp.underlyingSymbol] || lp.underlyingSymbol;
+                    const tickerMapped = normalizeUnderlying(lp.underlyingSymbol);
 
                     trades.push({
                         id: `IC-${tradeId++}`,

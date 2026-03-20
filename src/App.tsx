@@ -8,6 +8,7 @@ import { IronCondorSaviorPage } from './pages/IronCondorSaviorPage';
 import { AccountPage } from './pages/AccountPage';
 import { GreeksGuidePage } from './pages/GreeksGuidePage';
 import { GuvidHistoryPage } from './pages/GuvidHistoryPage';
+import { TransactionHistoryPage } from './pages/TransactionHistoryPage';
 import { SuperAdminPage } from './pages/SuperAdminPage';
 import BacktestPage from './pages/BacktestPage';
 import { DeltaAlertPage } from './pages/DeltaAlertPage';
@@ -114,6 +115,9 @@ const App: React.FC = () => {
                                 </Route>
                                 <Route path="/guvid-history" exact={true}>
                                     <GuvidHistoryPage />
+                                </Route>
+                                <Route path="/transaction-history" exact={true}>
+                                    <TransactionHistoryPage />
                                 </Route>
                                 <Route path="/guide" exact={true}>
                                     <GreeksGuidePage />

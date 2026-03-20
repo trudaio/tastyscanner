@@ -7,7 +7,7 @@ import { ITransactionRawData } from '../../services/market-data-provider/market-
 
 /* ─── Types ──────────────────────────────────────────────── */
 
-type SortKey = 'date' | 'action' | 'symbol' | 'quantity' | 'price' | 'value' | 'fees';
+type SortKey = 'openDate' | 'ticker' | 'netPnl' | 'status';
 type SortDir = 'asc' | 'desc';
 
 interface IRoundTrip {
@@ -23,7 +23,7 @@ interface IRoundTrip {
     status: 'closed' | 'open';
 }
 
-/* ─── Styled Components ──────────────────────────────────── */
+/* ─── Layout ──────────────────────────────────────────────── */
 
 const Container = styled.div`
     padding: 20px;
@@ -62,41 +62,9 @@ const RefreshBtn = styled.button`
     &:disabled { background: #333; cursor: not-allowed; }
 `;
 
-const MetricsRow = styled.div`
-    display: flex;
-    gap: 12px;
-    margin-bottom: 24px;
-    flex-wrap: wrap;
-`;
+/* ─── Date filter ─────────────────────────────────────────── */
 
-const MetricCard = styled.div<{ $color?: string }>`
-    background: #1a1a2e;
-    border-radius: 8px;
-    padding: 14px 18px;
-    min-width: 120px;
-    flex: 1;
-    border-left: 4px solid ${p => p.$color || '#4a9eff'};
-    @media (max-width: 480px) {
-        padding: 10px 14px;
-        min-width: 100px;
-    }
-`;
-
-const MetricLabel = styled.div`
-    color: #888;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 4px;
-`;
-
-const MetricValue = styled.div<{ $color?: string }>`
-    color: ${p => p.$color || '#fff'};
-    font-size: 18px;
-    font-weight: 700;
-`;
-
-const FiltersRow = styled.div`
+const DateFilterRow = styled.div`
     display: flex;
     gap: 10px;
     flex-wrap: wrap;
@@ -128,132 +96,234 @@ const FilterInput = styled.input`
     &:focus { border-color: #4a9eff; }
 `;
 
-const FilterSelect = styled.select`
-    background: #1a1a2e;
-    border: 1px solid #2a2a4e;
-    border-radius: 6px;
-    color: #fff;
-    padding: 7px 12px;
-    font-size: 13px;
-    outline: none;
-    cursor: pointer;
-    &:focus { border-color: #4a9eff; }
-    option { background: #1a1a2e; }
+/* ─── Stat Cards ─────────────────────────────────────────── */
+
+const MetricsRow = styled.div`
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
 `;
 
-const TableWrapper = styled.div`
-    overflow-x: auto;
+const MetricCard = styled.div<{ $color?: string }>`
+    background: #1a1a2e;
     border-radius: 8px;
-    border: 1px solid #1a1a2e;
+    padding: 14px 18px;
+    min-width: 120px;
+    flex: 1;
+    border-left: 4px solid ${p => p.$color || '#4a9eff'};
+    @media (max-width: 480px) {
+        padding: 10px 14px;
+        min-width: 100px;
+    }
+`;
+
+const MetricLabel = styled.div`
+    color: #888;
+    font-size: 10px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    letter-spacing: 0.5px;
+`;
+
+const MetricValue = styled.div<{ $color?: string }>`
+    color: ${p => p.$color || '#fff'};
+    font-size: 18px;
+    font-weight: 700;
+`;
+
+/* ─── Section titles ─────────────────────────────────────── */
+
+const SectionTitle = styled.h2`
+    color: #fff;
+    font-size: 16px;
+    margin: 28px 0 12px 0;
+    font-weight: 600;
+`;
+
+/* ─── Ticker filter buttons ──────────────────────────────── */
+
+const TickerFilterRow = styled.div`
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+    align-items: center;
+`;
+
+const TickerFilterBtn = styled.button<{ $active?: boolean }>`
+    padding: 5px 12px;
+    background: ${p => p.$active ? '#4a9eff' : '#1a1a2e'};
+    border: 1px solid ${p => p.$active ? '#4a9eff' : '#333'};
+    border-radius: 6px;
+    color: #fff;
+    font-size: 12px;
+    font-weight: ${p => p.$active ? 600 : 400};
+    cursor: pointer;
+    &:hover { background: ${p => p.$active ? '#4a9eff' : '#2a2a3e'}; }
+`;
+
+/* ─── Table ───────────────────────────────────────────────── */
+
+const TableWrap = styled.div`
+    background: #1a1a2e;
+    border-radius: 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-bottom: 24px;
 `;
 
 const Table = styled.table`
     width: 100%;
     border-collapse: collapse;
-    font-size: 13px;
 `;
 
-const Th = styled.th<{ $sortable?: boolean; $active?: boolean }>`
-    background: #13132a;
-    color: ${p => p.$active ? '#4a9eff' : '#aaa'};
+const Th = styled.th<{ $align?: string }>`
     padding: 10px 14px;
-    text-align: left;
+    background: #2a2a3e;
+    color: #888;
     font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    font-weight: 500;
+    text-align: ${p => p.$align ?? 'left'};
     white-space: nowrap;
-    cursor: ${p => p.$sortable ? 'pointer' : 'default'};
+`;
+
+const SortableTh = styled(Th)<{ $active?: boolean }>`
+    cursor: pointer;
     user-select: none;
-    border-bottom: 1px solid #1a1a2e;
-    &:hover { color: ${p => p.$sortable ? '#4a9eff' : 'inherit'}; }
+    color: ${p => p.$active ? '#4a9eff' : '#888'};
+    &:hover { color: #fff; }
 `;
 
-const Td = styled.td`
-    padding: 9px 14px;
-    border-bottom: 1px solid #131326;
-    color: #ccc;
-    white-space: nowrap;
+const Td = styled.td<{ $align?: string }>`
+    padding: 10px 14px;
+    border-bottom: 1px solid #1e1e32;
+    color: #fff;
+    font-size: 13px;
+    text-align: ${p => p.$align ?? 'left'};
 `;
 
-const Tr = styled.tr`
-    &:hover td { background: #111128; }
-`;
-
-const PnlText = styled.span<{ $value: number }>`
-    color: ${p => p.$value > 0 ? '#4caf50' : p.$value < 0 ? '#f44336' : '#888'};
+const PLValue = styled.span<{ $value: number }>`
+    color: ${p => p.$value > 0 ? '#4dff91' : p.$value < 0 ? '#ff4d6d' : '#888'};
     font-weight: 600;
 `;
 
-const Badge = styled.span<{ $status: string }>`
+const WinRateValue = styled.span<{ $pct: number }>`
+    color: ${p => p.$pct >= 60 ? '#4dff91' : p.$pct >= 40 ? '#ffaa00' : '#ff4d6d'};
+    font-weight: 600;
+`;
+
+/* ─── Status badge ───────────────────────────────────────── */
+
+const StatusBadge = styled.span<{ $status: string }>`
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
     padding: 2px 8px;
     border-radius: 4px;
-    font-size: 11px;
-    font-weight: 600;
-    background: ${p => p.$status === 'closed' ? '#1a3a1a' : '#1a2a3a'};
-    color: ${p => p.$status === 'closed' ? '#4caf50' : '#4a9eff'};
+    ${p => {
+        switch (p.$status) {
+            case 'open': return 'background: rgba(74,158,255,0.15); border: 1px solid #4a9eff; color: #4a9eff;';
+            case 'closed': return 'background: rgba(77,255,145,0.15); border: 1px solid #4dff91; color: #4dff91;';
+            default: return 'background: #2a2a3e; color: #888;';
+        }
+    }}
 `;
 
-const EmptyState = styled.div`
-    text-align: center;
-    padding: 60px 20px;
-    color: #555;
-    font-size: 15px;
+/* ─── Calendar ───────────────────────────────────────────── */
+
+const CalendarContainer = styled.div`
+    background: #1a1a2e;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 24px;
+    overflow-x: auto;
 `;
 
-const TabsRow = styled.div`
-    display: flex;
-    gap: 0;
+const CalendarMonthRow = styled.div`
     margin-bottom: 20px;
-    border-bottom: 1px solid #1a1a2e;
 `;
 
-const Tab = styled.button<{ $active: boolean }>`
-    padding: 10px 20px;
-    background: transparent;
-    border: none;
-    border-bottom: 2px solid ${p => p.$active ? '#4a9eff' : 'transparent'};
-    color: ${p => p.$active ? '#4a9eff' : '#888'};
-    font-size: 13px;
+const CalendarMonthLabel = styled.div`
+    color: #fff;
+    font-size: 14px;
     font-weight: 600;
-    cursor: pointer;
-    transition: color 0.15s;
-    &:hover { color: #4a9eff; }
+    margin-bottom: 8px;
 `;
 
-const SpinnerBox = styled.div`
+const CalendarDaysGrid = styled.div`
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 3px;
+`;
+
+const CalendarDayHeader = styled.div`
+    text-align: center;
+    color: #666;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 4px;
+    text-transform: uppercase;
+`;
+
+const CalendarDay = styled.div<{ $hasData: boolean; $isProfit: boolean; $isEmpty?: boolean }>`
+    min-height: 48px;
+    padding: 4px;
+    border-radius: 4px;
     display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 60px;
+    flex-direction: column;
+    background: ${p => {
+        if (p.$isEmpty) return 'transparent';
+        if (!p.$hasData) return '#1f1f35';
+        return p.$isProfit ? 'rgba(77, 255, 145, 0.18)' : 'rgba(255, 77, 109, 0.18)';
+    }};
+    border: 1px solid ${p => {
+        if (p.$isEmpty) return 'transparent';
+        if (!p.$hasData) return '#2a2a3e';
+        return p.$isProfit ? 'rgba(77, 255, 145, 0.3)' : 'rgba(255, 77, 109, 0.3)';
+    }};
+    @media (max-width: 480px) { min-height: 36px; }
 `;
 
-const SortIcon = styled.span`
-    margin-left: 4px;
-    opacity: 0.7;
+const CalendarDayNum = styled.div<{ $isToday?: boolean }>`
+    font-size: 11px;
+    color: ${p => p.$isToday ? '#4a9eff' : '#666'};
+    font-weight: ${p => p.$isToday ? 700 : 400};
 `;
 
-/* ─── Helpers ────────────────────────────────────────────── */
+const CalendarDayPL = styled.div<{ $value: number }>`
+    font-size: 10px;
+    font-weight: 600;
+    color: ${p => p.$value > 0 ? '#4dff91' : '#ff4d6d'};
+    margin-top: auto;
+`;
 
-function fmtDate(iso: string): string {
-    if (!iso) return '—';
-    const d = new Date(iso);
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
+const CalendarDayTrades = styled.div`
+    font-size: 9px;
+    color: #666;
+`;
 
-function fmtCurrency(val: number): string {
-    return val.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
-}
+const DaySummaryRow = styled.div`
+    display: flex;
+    gap: 16px;
+    margin-bottom: 12px;
+    font-size: 13px;
+`;
+
+/* ─── Helpers ─────────────────────────────────────────────── */
+
+const fmtCur = (v: number): string => {
+    const abs = Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return v >= 0 ? `$${abs}` : `-$${abs}`;
+};
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function parseMoney(s: string | undefined): number {
     if (!s) return 0;
     return parseFloat(s.replace(/[^0-9.-]/g, '')) || 0;
-}
-
-function totalFees(tx: ITransactionRawData): number {
-    return parseMoney(tx['clearing-fees'])
-        + parseMoney(tx['regulatory-fees'])
-        + parseMoney(tx['proprietary-index-option-fees'])
-        + parseMoney(tx.commission);
 }
 
 function diffDays(a: string, b: string): number {
@@ -265,7 +335,6 @@ function diffDays(a: string, b: string): number {
 export const TransactionHistoryComponent: React.FC = observer(() => {
     const services = useServices();
 
-    // Date range — default YTD
     const now = new Date();
     const ytdStart = `${now.getFullYear()}-01-01`;
     const todayStr = now.toISOString().slice(0, 10);
@@ -275,11 +344,8 @@ export const TransactionHistoryComponent: React.FC = observer(() => {
     const [loading, setLoading] = useState(false);
     const [transactions, setTransactions] = useState<ITransactionRawData[]>([]);
     const [error, setError] = useState<string | null>(null);
-
-    const [tab, setTab] = useState<'all' | 'roundtrips'>('all');
-    const [filterTicker, setFilterTicker] = useState('');
-    const [filterType, setFilterType] = useState('');
-    const [sortKey, setSortKey] = useState<SortKey>('date');
+    const [tickerFilter, setTickerFilter] = useState<string | null>(null);
+    const [sortKey, setSortKey] = useState<SortKey>('openDate');
     const [sortDir, setSortDir] = useState<SortDir>('desc');
 
     const accountNumber = services.brokerAccount.accounts[0]?.accountNumber ?? '';
@@ -321,45 +387,9 @@ export const TransactionHistoryComponent: React.FC = observer(() => {
         fetchTransactions();
     }, [fetchTransactions]);
 
-    /* ─── Filter + Sort ────────────────────────────────────── */
-
-    const filtered = useMemo(() => {
-        let list = transactions;
-        if (filterTicker) {
-            const t = filterTicker.toUpperCase();
-            list = list.filter(tx => tx['underlying-symbol']?.toUpperCase().includes(t));
-        }
-        if (filterType) {
-            list = list.filter(tx => tx['transaction-type'] === filterType);
-        }
-        return list;
-    }, [transactions, filterTicker, filterType]);
-
-    const sorted = useMemo(() => {
-        const list = [...filtered];
-        list.sort((a, b) => {
-            let va: string | number = 0;
-            let vb: string | number = 0;
-            switch (sortKey) {
-                case 'date':   va = a['executed-at']; vb = b['executed-at']; break;
-                case 'action': va = a.action ?? ''; vb = b.action ?? ''; break;
-                case 'symbol': va = a['underlying-symbol'] ?? ''; vb = b['underlying-symbol'] ?? ''; break;
-                case 'quantity': va = parseFloat(a.quantity) || 0; vb = parseFloat(b.quantity) || 0; break;
-                case 'price':  va = parseMoney(a.price); vb = parseMoney(b.price); break;
-                case 'value':  va = parseMoney(a['net-value']); vb = parseMoney(b['net-value']); break;
-                case 'fees':   va = totalFees(a); vb = totalFees(b); break;
-            }
-            if (va < vb) return sortDir === 'asc' ? -1 : 1;
-            if (va > vb) return sortDir === 'asc' ? 1 : -1;
-            return 0;
-        });
-        return list;
-    }, [filtered, sortKey, sortDir]);
-
     /* ─── Round-trip matching ──────────────────────────────── */
 
     const roundTrips = useMemo((): IRoundTrip[] => {
-        // Only option trades (have underlying-symbol different from symbol)
         const optionTrades = transactions.filter(tx =>
             tx.symbol && tx['underlying-symbol'] && tx.symbol !== tx['underlying-symbol']
         );
@@ -410,77 +440,189 @@ export const TransactionHistoryComponent: React.FC = observer(() => {
         return trips;
     }, [transactions]);
 
-    /* ─── Summary stats ────────────────────────────────────── */
+    /* ─── 6 Summary Stats ──────────────────────────────────── */
 
-    const summary = useMemo(() => {
-        const totalPnl = roundTrips
-            .filter(r => r.netPnl !== null)
-            .reduce((acc, r) => acc + (r.netPnl ?? 0), 0);
-        const totalFeesPaid = filtered.reduce((acc, tx) => acc + totalFees(tx), 0);
-        const tradeCount = filtered.length;
-        const winners = roundTrips.filter(r => (r.netPnl ?? 0) > 0).length;
-        const winRate = roundTrips.filter(r => r.netPnl !== null).length > 0
-            ? (winners / roundTrips.filter(r => r.netPnl !== null).length) * 100
+    const closedTrips = useMemo(() => roundTrips.filter(r => r.status === 'closed' && r.netPnl !== null), [roundTrips]);
+
+    const stats = useMemo(() => {
+        const closedCount = closedTrips.length;
+        const winners = closedTrips.filter(r => (r.netPnl ?? 0) > 0).length;
+        const winRate = closedCount > 0 ? (winners / closedCount) * 100 : 0;
+        const totalPnl = closedTrips.reduce((acc, r) => acc + (r.netPnl ?? 0), 0);
+        const avgProfitPerTrade = closedCount > 0 ? totalPnl / closedCount : 0;
+
+        // P&L per unique close day
+        const uniqueCloseDays = new Set(closedTrips.map(r => r.closeDate?.slice(0, 10)).filter(Boolean));
+        const plPerDay = uniqueCloseDays.size > 0 ? totalPnl / uniqueCloseDays.size : 0;
+
+        // Avg hold duration
+        const tripsWithDays = closedTrips.filter(r => r.holdDays !== null);
+        const avgDuration = tripsWithDays.length > 0
+            ? tripsWithDays.reduce((acc, r) => acc + (r.holdDays ?? 0), 0) / tripsWithDays.length
             : 0;
-        return { totalPnl, totalFeesPaid, tradeCount, winRate };
-    }, [filtered, roundTrips]);
 
-    /* ─── Sort handler ─────────────────────────────────────── */
+        return { closedCount, winRate, totalPnl, avgProfitPerTrade, plPerDay, avgDuration };
+    }, [closedTrips]);
 
-    const handleSort = (key: SortKey) => {
-        if (sortKey === key) {
-            setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-        } else {
-            setSortKey(key);
-            setSortDir('desc');
+    /* ─── Trades by Ticker ─────────────────────────────────── */
+
+    const byTicker = useMemo(() => {
+        const map = new Map<string, { trades: number; profitable: number; unprofitable: number; winRate: number; totalPnl: number }>();
+        for (const r of closedTrips) {
+            const ticker = r.underlyingSymbol;
+            const existing = map.get(ticker) ?? { trades: 0, profitable: 0, unprofitable: 0, winRate: 0, totalPnl: 0 };
+            existing.trades++;
+            existing.totalPnl += r.netPnl ?? 0;
+            if ((r.netPnl ?? 0) > 0) existing.profitable++;
+            else existing.unprofitable++;
+            existing.winRate = existing.trades > 0 ? (existing.profitable / existing.trades) * 100 : 0;
+            map.set(ticker, existing);
         }
-    };
+        return Array.from(map.entries())
+            .map(([ticker, data]) => ({ ticker, ...data }))
+            .sort((a, b) => b.totalPnl - a.totalPnl);
+    }, [closedTrips]);
 
-    const sortIcon = (key: SortKey) => {
-        if (sortKey !== key) return <SortIcon>↕</SortIcon>;
-        return <SortIcon>{sortDir === 'asc' ? '↑' : '↓'}</SortIcon>;
-    };
+    /* ─── Monthly P&L ──────────────────────────────────────── */
 
-    const txTypes = useMemo(() => {
-        const types = new Set(transactions.map(t => t['transaction-type']).filter(Boolean));
-        return Array.from(types).sort();
-    }, [transactions]);
+    const byMonth = useMemo(() => {
+        const map = new Map<string, { trades: number; profitable: number; winRate: number; totalPnl: number }>();
+        for (const r of closedTrips) {
+            const month = r.closeDate?.slice(0, 7) ?? '';
+            if (!month) continue;
+            const existing = map.get(month) ?? { trades: 0, profitable: 0, winRate: 0, totalPnl: 0 };
+            existing.trades++;
+            existing.totalPnl += r.netPnl ?? 0;
+            if ((r.netPnl ?? 0) > 0) existing.profitable++;
+            existing.winRate = existing.trades > 0 ? (existing.profitable / existing.trades) * 100 : 0;
+            map.set(month, existing);
+        }
+        return Array.from(map.entries())
+            .map(([month, data]) => ({ month, ...data }))
+            .sort((a, b) => a.month.localeCompare(b.month));
+    }, [closedTrips]);
+
+    /* ─── Daily P&L for calendar ───────────────────────────── */
+
+    const dailyPLMap = useMemo(() => {
+        const map = new Map<string, { pl: number; trades: number }>();
+        for (const r of closedTrips) {
+            const date = r.closeDate?.slice(0, 10);
+            if (!date) continue;
+            const existing = map.get(date) ?? { pl: 0, trades: 0 };
+            existing.pl += r.netPnl ?? 0;
+            existing.trades++;
+            map.set(date, existing);
+        }
+        return map;
+    }, [closedTrips]);
+
+    const profitableDays = useMemo(() => Array.from(dailyPLMap.values()).filter(d => d.pl > 0).length, [dailyPLMap]);
+    const unprofitableDays = useMemo(() => Array.from(dailyPLMap.values()).filter(d => d.pl <= 0).length, [dailyPLMap]);
+
+    /* ─── Calendar months ──────────────────────────────────── */
+
+    const calendarMonths = useMemo(() => {
+        const year = now.getFullYear();
+        const currentMonth = now.getMonth();
+        const todayDateStr = now.toISOString().split('T')[0];
+
+        const months: Array<{
+            label: string;
+            days: Array<{ date: string; dayNum: number; pl: number; trades: number; hasData: boolean; isEmpty: boolean; isToday: boolean }>;
+        }> = [];
+
+        for (let m = 0; m <= currentMonth; m++) {
+            const firstDay = new Date(year, m, 1);
+            const daysInMonth = new Date(year, m + 1, 0).getDate();
+            const startDow = firstDay.getDay();
+
+            const days: typeof months[0]['days'] = [];
+
+            for (let i = 0; i < startDow; i++) {
+                days.push({ date: '', dayNum: 0, pl: 0, trades: 0, hasData: false, isEmpty: true, isToday: false });
+            }
+
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dateStr = `${year}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                const data = dailyPLMap.get(dateStr);
+                days.push({
+                    date: dateStr,
+                    dayNum: d,
+                    pl: data?.pl ?? 0,
+                    trades: data?.trades ?? 0,
+                    hasData: !!data,
+                    isEmpty: false,
+                    isToday: dateStr === todayDateStr,
+                });
+            }
+
+            while (days.length % 7 !== 0) {
+                days.push({ date: '', dayNum: 0, pl: 0, trades: 0, hasData: false, isEmpty: true, isToday: false });
+            }
+
+            months.push({ label: `${MONTH_NAMES[m]} ${year}`, days });
+        }
+
+        return months;
+    }, [dailyPLMap]);
+
+    /* ─── Ticker list for filter ───────────────────────────── */
+
+    const tickerList = useMemo(() => {
+        return [...new Set(roundTrips.map(r => r.underlyingSymbol))].sort();
+    }, [roundTrips]);
+
+    /* ─── Filtered + sorted detailed trades ────────────────── */
+
+    const sortedTrades = useMemo(() => {
+        let list = tickerFilter
+            ? roundTrips.filter(r => r.underlyingSymbol === tickerFilter)
+            : [...roundTrips];
+
+        const mul = sortDir === 'asc' ? 1 : -1;
+        list.sort((a, b) => {
+            switch (sortKey) {
+                case 'openDate': return a.openDate.localeCompare(b.openDate) * mul;
+                case 'ticker': return a.underlyingSymbol.localeCompare(b.underlyingSymbol) * mul;
+                case 'netPnl': return ((a.netPnl ?? 0) - (b.netPnl ?? 0)) * mul;
+                case 'status': return a.status.localeCompare(b.status) * mul;
+                default: return 0;
+            }
+        });
+        return list;
+    }, [roundTrips, tickerFilter, sortKey, sortDir]);
+
+    const toggleSort = useCallback((key: SortKey) => {
+        setSortKey(prev => {
+            if (prev === key) {
+                setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+                return key;
+            }
+            setSortDir(key === 'openDate' ? 'desc' : 'asc');
+            return key;
+        });
+    }, []);
+
+    const sortArrow = (key: SortKey) => {
+        if (sortKey !== key) return ' \u21C5';
+        return sortDir === 'asc' ? ' \u25B2' : ' \u25BC';
+    };
 
     /* ─── Render ─────────────────────────────────────────────── */
 
     return (
         <Container>
+            {/* ─── Header ───────────────────────────────────────── */}
             <TopBar>
                 <Title>Istoric Tranzactii</Title>
                 <RefreshBtn onClick={fetchTransactions} disabled={loading}>
-                    {loading ? 'Loading...' : 'Refresh'}
+                    {loading ? 'Loading...' : '\u21BB Refresh'}
                 </RefreshBtn>
             </TopBar>
 
-            {/* Summary metrics */}
-            <MetricsRow>
-                <MetricCard $color={summary.totalPnl >= 0 ? '#4caf50' : '#f44336'}>
-                    <MetricLabel>Total P&L</MetricLabel>
-                    <MetricValue $color={summary.totalPnl >= 0 ? '#4caf50' : '#f44336'}>
-                        {fmtCurrency(summary.totalPnl)}
-                    </MetricValue>
-                </MetricCard>
-                <MetricCard $color="#ff9800">
-                    <MetricLabel>Total Fees</MetricLabel>
-                    <MetricValue $color="#ff9800">{fmtCurrency(summary.totalFeesPaid)}</MetricValue>
-                </MetricCard>
-                <MetricCard $color="#4a9eff">
-                    <MetricLabel>Transactions</MetricLabel>
-                    <MetricValue>{summary.tradeCount}</MetricValue>
-                </MetricCard>
-                <MetricCard $color="#9c27b0">
-                    <MetricLabel>Win Rate</MetricLabel>
-                    <MetricValue>{summary.winRate.toFixed(1)}%</MetricValue>
-                </MetricCard>
-            </MetricsRow>
-
-            {/* Filters */}
-            <FiltersRow>
+            {/* ─── Date Range Filter ────────────────────────────── */}
+            <DateFilterRow>
                 <FilterGroup>
                     <FilterLabel>Start Date</FilterLabel>
                     <FilterInput
@@ -497,175 +639,254 @@ export const TransactionHistoryComponent: React.FC = observer(() => {
                         onChange={e => setEndDate(e.target.value)}
                     />
                 </FilterGroup>
-                <FilterGroup>
-                    <FilterLabel>Ticker</FilterLabel>
-                    <FilterInput
-                        type="text"
-                        placeholder="e.g. SPY"
-                        value={filterTicker}
-                        onChange={e => setFilterTicker(e.target.value)}
-                        style={{ width: '100px' }}
-                    />
-                </FilterGroup>
-                <FilterGroup>
-                    <FilterLabel>Type</FilterLabel>
-                    <FilterSelect value={filterType} onChange={e => setFilterType(e.target.value)}>
-                        <option value="">All Types</option>
-                        {txTypes.map(t => (
-                            <option key={t} value={t}>{t}</option>
-                        ))}
-                    </FilterSelect>
-                </FilterGroup>
-            </FiltersRow>
+            </DateFilterRow>
 
-            {/* Tabs */}
-            <TabsRow>
-                <Tab $active={tab === 'all'} onClick={() => setTab('all')}>All Transactions</Tab>
-                <Tab $active={tab === 'roundtrips'} onClick={() => setTab('roundtrips')}>Round Trips</Tab>
-            </TabsRow>
-
-            {/* Error */}
+            {/* ─── Error ────────────────────────────────────────── */}
             {error && (
-                <div style={{ color: '#f44336', marginBottom: 16, padding: '12px', background: '#1a1010', borderRadius: 8 }}>
+                <div style={{ color: '#ff4d6d', marginBottom: 16, padding: '12px', background: '#1a1010', borderRadius: 8 }}>
                     {error}
                 </div>
             )}
 
-            {/* Loading */}
-            {loading && (
-                <SpinnerBox>
-                    <IonSpinner name="crescent" style={{ color: '#4a9eff' }} />
-                </SpinnerBox>
+            {/* ─── Loading ──────────────────────────────────────── */}
+            {loading && !roundTrips.length && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '40px 0', color: '#666' }}>
+                    <IonSpinner name="crescent" />
+                    <span>Loading transaction history...</span>
+                </div>
             )}
 
-            {/* All Transactions Table */}
-            {!loading && tab === 'all' && (
-                <TableWrapper>
-                    <Table>
-                        <thead>
-                            <tr>
-                                <Th $sortable $active={sortKey === 'date'} onClick={() => handleSort('date')}>
-                                    Date {sortIcon('date')}
-                                </Th>
-                                <Th $sortable $active={sortKey === 'action'} onClick={() => handleSort('action')}>
-                                    Action {sortIcon('action')}
-                                </Th>
-                                <Th $sortable $active={sortKey === 'symbol'} onClick={() => handleSort('symbol')}>
-                                    Ticker {sortIcon('symbol')}
-                                </Th>
-                                <Th>Instrument</Th>
-                                <Th $sortable $active={sortKey === 'quantity'} onClick={() => handleSort('quantity')}>
-                                    Qty {sortIcon('quantity')}
-                                </Th>
-                                <Th $sortable $active={sortKey === 'price'} onClick={() => handleSort('price')}>
-                                    Price {sortIcon('price')}
-                                </Th>
-                                <Th $sortable $active={sortKey === 'value'} onClick={() => handleSort('value')}>
-                                    Net Value {sortIcon('value')}
-                                </Th>
-                                <Th $sortable $active={sortKey === 'fees'} onClick={() => handleSort('fees')}>
-                                    Fees {sortIcon('fees')}
-                                </Th>
-                                <Th>Order ID</Th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {sorted.length === 0 ? (
-                                <tr>
-                                    <td colSpan={9}>
-                                        <EmptyState>No transactions found</EmptyState>
-                                    </td>
-                                </tr>
-                            ) : sorted.map((tx, i) => {
-                                const netVal = parseMoney(tx['net-value']);
-                                const effect = tx['value-effect'];
-                                const signedVal = effect === 'Credit' ? netVal : -netVal;
-                                const fees = totalFees(tx);
-                                return (
-                                    <Tr key={`${tx.id}-${i}`}>
-                                        <Td>{fmtDate(tx['executed-at'])}</Td>
-                                        <Td>{tx.action || tx['transaction-sub-type'] || '—'}</Td>
-                                        <Td style={{ color: '#fff', fontWeight: 600 }}>{tx['underlying-symbol'] || '—'}</Td>
-                                        <Td style={{ fontSize: 11, color: '#aaa', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                            {tx.symbol !== tx['underlying-symbol'] ? tx.symbol : '—'}
-                                        </Td>
-                                        <Td>{tx.quantity || '—'}</Td>
-                                        <Td>{tx.price ? fmtCurrency(parseMoney(tx.price)) : '—'}</Td>
-                                        <Td>
-                                            <PnlText $value={signedVal}>
-                                                {fmtCurrency(Math.abs(netVal))}
-                                                {' '}
-                                                <span style={{ fontSize: 10, opacity: 0.7 }}>{effect}</span>
-                                            </PnlText>
-                                        </Td>
-                                        <Td style={{ color: fees > 0 ? '#ff9800' : '#555' }}>
-                                            {fees > 0 ? fmtCurrency(fees) : '—'}
-                                        </Td>
-                                        <Td style={{ color: '#555', fontSize: 11 }}>{tx['order-id'] ?? '—'}</Td>
-                                    </Tr>
-                                );
-                            })}
-                        </tbody>
-                    </Table>
-                </TableWrapper>
-            )}
+            {/* ─── Section 1: Stat Cards ────────────────────────── */}
+            <MetricsRow>
+                <MetricCard $color="#4a9eff">
+                    <MetricLabel>Closed Round Trips</MetricLabel>
+                    <MetricValue>{stats.closedCount}</MetricValue>
+                </MetricCard>
+                <MetricCard $color={stats.winRate >= 60 ? '#4dff91' : stats.winRate >= 40 ? '#ffaa00' : '#ff4d6d'}>
+                    <MetricLabel>Win Rate</MetricLabel>
+                    <MetricValue $color={stats.winRate >= 60 ? '#4dff91' : stats.winRate >= 40 ? '#ffaa00' : '#ff4d6d'}>
+                        {stats.winRate.toFixed(1)}%
+                    </MetricValue>
+                </MetricCard>
+                <MetricCard $color={stats.totalPnl >= 0 ? '#4dff91' : '#ff4d6d'}>
+                    <MetricLabel>Total P&L</MetricLabel>
+                    <MetricValue $color={stats.totalPnl >= 0 ? '#4dff91' : '#ff4d6d'}>
+                        {fmtCur(stats.totalPnl)}
+                    </MetricValue>
+                </MetricCard>
+                <MetricCard $color={stats.avgProfitPerTrade >= 0 ? '#4dff91' : '#ff4d6d'}>
+                    <MetricLabel>Avg Profit / Trade</MetricLabel>
+                    <MetricValue $color={stats.avgProfitPerTrade >= 0 ? '#4dff91' : '#ff4d6d'}>
+                        {fmtCur(stats.avgProfitPerTrade)}
+                    </MetricValue>
+                </MetricCard>
+                <MetricCard $color={stats.plPerDay >= 0 ? '#4dff91' : '#ff4d6d'}>
+                    <MetricLabel>P&L / Day</MetricLabel>
+                    <MetricValue $color={stats.plPerDay >= 0 ? '#4dff91' : '#ff4d6d'}>
+                        {fmtCur(stats.plPerDay)}
+                    </MetricValue>
+                </MetricCard>
+                <MetricCard $color="#4a9eff">
+                    <MetricLabel>Avg Duration</MetricLabel>
+                    <MetricValue>{stats.avgDuration.toFixed(1)}d</MetricValue>
+                </MetricCard>
+            </MetricsRow>
 
-            {/* Round Trips Table */}
-            {!loading && tab === 'roundtrips' && (
-                <TableWrapper>
-                    <Table>
-                        <thead>
+            {/* ─── Section 2: Trades by Ticker ──────────────────── */}
+            <SectionTitle>Trades by Ticker</SectionTitle>
+            <TableWrap>
+                <Table style={{ minWidth: 500 }}>
+                    <thead>
+                        <tr>
+                            <Th>Ticker</Th>
+                            <Th $align="center">Trades</Th>
+                            <Th $align="center">Profitable</Th>
+                            <Th $align="center">Unprofitable</Th>
+                            <Th $align="right">Win Rate</Th>
+                            <Th $align="right">Total P&L</Th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {byTicker.length === 0 ? (
                             <tr>
-                                <Th>Ticker</Th>
-                                <Th>Instrument</Th>
-                                <Th>Open Date</Th>
-                                <Th>Close Date</Th>
-                                <Th>Open Credit</Th>
-                                <Th>Close Debit</Th>
-                                <Th>Net P&L</Th>
-                                <Th>Hold Days</Th>
-                                <Th>Status</Th>
+                                <Td colSpan={6} $align="center" style={{ color: '#444', padding: '24px' }}>
+                                    No closed round trips found
+                                </Td>
                             </tr>
-                        </thead>
-                        <tbody>
-                            {roundTrips.length === 0 ? (
-                                <tr>
-                                    <td colSpan={9}>
-                                        <EmptyState>No round trips found</EmptyState>
-                                    </td>
-                                </tr>
-                            ) : roundTrips.map((rt, i) => (
-                                <Tr key={`${rt.symbol}-${i}`}>
-                                    <Td style={{ color: '#fff', fontWeight: 600 }}>{rt.underlyingSymbol}</Td>
-                                    <Td style={{ fontSize: 11, color: '#aaa', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                        {rt.symbol}
-                                    </Td>
-                                    <Td>{fmtDate(rt.openDate)}</Td>
-                                    <Td>{rt.closeDate ? fmtDate(rt.closeDate) : '—'}</Td>
-                                    <Td>
-                                        <PnlText $value={rt.openCredit}>
-                                            {fmtCurrency(Math.abs(rt.openCredit))}
-                                        </PnlText>
-                                    </Td>
-                                    <Td>
-                                        {rt.closeDebit !== null
-                                            ? <PnlText $value={rt.closeDebit}>{fmtCurrency(Math.abs(rt.closeDebit))}</PnlText>
-                                            : '—'
-                                        }
-                                    </Td>
-                                    <Td>
-                                        {rt.netPnl !== null
-                                            ? <PnlText $value={rt.netPnl}>{fmtCurrency(rt.netPnl)}</PnlText>
-                                            : '—'
-                                        }
-                                    </Td>
-                                    <Td>{rt.holdDays !== null ? `${rt.holdDays}d` : '—'}</Td>
-                                    <Td><Badge $status={rt.status}>{rt.status}</Badge></Td>
-                                </Tr>
+                        ) : byTicker.map(row => (
+                            <tr key={row.ticker}>
+                                <Td><strong>{row.ticker}</strong></Td>
+                                <Td $align="center">{row.trades}</Td>
+                                <Td $align="center" style={{ color: '#4dff91' }}>{row.profitable}</Td>
+                                <Td $align="center" style={{ color: '#ff4d6d' }}>{row.unprofitable}</Td>
+                                <Td $align="right"><WinRateValue $pct={row.winRate}>{row.winRate.toFixed(1)}%</WinRateValue></Td>
+                                <Td $align="right"><PLValue $value={row.totalPnl}>{fmtCur(row.totalPnl)}</PLValue></Td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </Table>
+            </TableWrap>
+
+            {/* ─── Section 3: Monthly P&L ───────────────────────── */}
+            <SectionTitle>Monthly P&L</SectionTitle>
+            <TableWrap>
+                <Table style={{ minWidth: 400 }}>
+                    <thead>
+                        <tr>
+                            <Th>Month</Th>
+                            <Th $align="center">Trades</Th>
+                            <Th $align="center">Profitable</Th>
+                            <Th $align="right">Win Rate</Th>
+                            <Th $align="right">Total P&L</Th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {byMonth.length === 0 ? (
+                            <tr>
+                                <Td colSpan={5} $align="center" style={{ color: '#444', padding: '24px' }}>
+                                    No monthly data available
+                                </Td>
+                            </tr>
+                        ) : byMonth.map(row => (
+                            <tr key={row.month}>
+                                <Td><strong>{row.month}</strong></Td>
+                                <Td $align="center">{row.trades}</Td>
+                                <Td $align="center" style={{ color: '#4dff91' }}>{row.profitable}</Td>
+                                <Td $align="right"><WinRateValue $pct={row.winRate}>{row.winRate.toFixed(1)}%</WinRateValue></Td>
+                                <Td $align="right"><PLValue $value={row.totalPnl}>{fmtCur(row.totalPnl)}</PLValue></Td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </Table>
+            </TableWrap>
+
+            {/* ─── Section 4: Daily P&L Calendar ────────────────── */}
+            <SectionTitle>Daily P&L Calendar</SectionTitle>
+            <DaySummaryRow>
+                <span style={{ color: '#4dff91' }}>{profitableDays} profitable days</span>
+                <span style={{ color: '#888' }}>|</span>
+                <span style={{ color: '#ff4d6d' }}>{unprofitableDays} unprofitable days</span>
+            </DaySummaryRow>
+            <CalendarContainer>
+                {calendarMonths.map(month => (
+                    <CalendarMonthRow key={month.label}>
+                        <CalendarMonthLabel>{month.label}</CalendarMonthLabel>
+                        <CalendarDaysGrid>
+                            {DAY_NAMES.map(d => <CalendarDayHeader key={d}>{d}</CalendarDayHeader>)}
+                            {month.days.map((day, idx) => (
+                                <CalendarDay
+                                    key={`${month.label}-${idx}`}
+                                    $hasData={day.hasData}
+                                    $isProfit={day.pl > 0}
+                                    $isEmpty={day.isEmpty}
+                                >
+                                    {!day.isEmpty && (
+                                        <>
+                                            <CalendarDayNum $isToday={day.isToday}>{day.dayNum}</CalendarDayNum>
+                                            {day.hasData && (
+                                                <>
+                                                    <CalendarDayPL $value={day.pl}>{fmtCur(day.pl)}</CalendarDayPL>
+                                                    <CalendarDayTrades>{day.trades} trade{day.trades !== 1 ? 's' : ''}</CalendarDayTrades>
+                                                </>
+                                            )}
+                                        </>
+                                    )}
+                                </CalendarDay>
                             ))}
-                        </tbody>
-                    </Table>
-                </TableWrapper>
+                        </CalendarDaysGrid>
+                    </CalendarMonthRow>
+                ))}
+            </CalendarContainer>
+
+            {/* ─── Section 5: Detailed Trade History ────────────── */}
+            <SectionTitle>Trade History</SectionTitle>
+
+            {tickerList.length > 1 && (
+                <TickerFilterRow>
+                    <TickerFilterBtn $active={tickerFilter === null} onClick={() => setTickerFilter(null)}>
+                        ALL ({roundTrips.length})
+                    </TickerFilterBtn>
+                    {tickerList.map(ticker => (
+                        <TickerFilterBtn
+                            key={ticker}
+                            $active={tickerFilter === ticker}
+                            onClick={() => setTickerFilter(ticker)}
+                        >
+                            {ticker}
+                        </TickerFilterBtn>
+                    ))}
+                </TickerFilterRow>
+            )}
+
+            <TableWrap>
+                <Table style={{ minWidth: 800 }}>
+                    <thead>
+                        <tr>
+                            <Th>Order ID</Th>
+                            <SortableTh $active={sortKey === 'ticker'} onClick={() => toggleSort('ticker')}>
+                                Ticker{sortArrow('ticker')}
+                            </SortableTh>
+                            <SortableTh $active={sortKey === 'openDate'} onClick={() => toggleSort('openDate')}>
+                                Open Date{sortArrow('openDate')}
+                            </SortableTh>
+                            <Th>Close Date</Th>
+                            <Th $align="right">Open Credit</Th>
+                            <Th $align="right">Close Debit</Th>
+                            <SortableTh $align="right" $active={sortKey === 'netPnl'} onClick={() => toggleSort('netPnl')}>
+                                P&L{sortArrow('netPnl')}
+                            </SortableTh>
+                            <Th $align="center">Hold Days</Th>
+                            <SortableTh $align="center" $active={sortKey === 'status'} onClick={() => toggleSort('status')}>
+                                Status{sortArrow('status')}
+                            </SortableTh>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {sortedTrades.length === 0 ? (
+                            <tr>
+                                <Td colSpan={9} $align="center" style={{ color: '#444', padding: '24px' }}>
+                                    {tickerFilter ? `No trades for ${tickerFilter}` : 'No round trips found'}
+                                </Td>
+                            </tr>
+                        ) : sortedTrades.map((rt, i) => (
+                            <tr key={`${rt.symbol}-${i}`}>
+                                <Td style={{ fontSize: 11, color: '#666' }}>{rt.orderId ?? '—'}</Td>
+                                <Td><strong>{rt.underlyingSymbol}</strong></Td>
+                                <Td>{rt.openDate.slice(0, 10)}</Td>
+                                <Td>
+                                    {rt.closeDate
+                                        ? rt.closeDate.slice(0, 10)
+                                        : <StatusBadge $status="open">OPEN</StatusBadge>
+                                    }
+                                </Td>
+                                <Td $align="right"><PLValue $value={rt.openCredit}>{fmtCur(rt.openCredit)}</PLValue></Td>
+                                <Td $align="right">
+                                    {rt.closeDebit !== null
+                                        ? <PLValue $value={rt.closeDebit}>{fmtCur(rt.closeDebit)}</PLValue>
+                                        : '—'
+                                    }
+                                </Td>
+                                <Td $align="right">
+                                    {rt.netPnl !== null
+                                        ? <PLValue $value={rt.netPnl}>{fmtCur(rt.netPnl)}</PLValue>
+                                        : '—'
+                                    }
+                                </Td>
+                                <Td $align="center">{rt.holdDays !== null ? `${rt.holdDays}d` : '—'}</Td>
+                                <Td $align="center">
+                                    <StatusBadge $status={rt.status}>{rt.status.toUpperCase()}</StatusBadge>
+                                </Td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </Table>
+            </TableWrap>
+
+            {loading && roundTrips.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '20px 0', color: '#666' }}>
+                    <IonSpinner name="crescent" />
+                    <span>Refreshing data...</span>
+                </div>
             )}
         </Container>
     );

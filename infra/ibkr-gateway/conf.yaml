@@ -1,0 +1,3 @@
+listenPort: 5000
+sslCert: false
+logLevel: error

@@ -491,3 +491,6 @@ app.post('/api/polygon/option-bars-batch', async (req: express.Request, res: exp
 });
 
 export const api = onRequest({ invoker: 'public', secrets: [polygonApiKey] }, app);
+
+// IBKR CP Gateway proxy and keep-alive scheduler
+export { ibkrProxy, ibkrKeepAlive } from './ibkr-proxy';

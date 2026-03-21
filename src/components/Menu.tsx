@@ -21,7 +21,7 @@ import {WatchListsComponent} from "./watch-lists.component";
 import {TickerMenuItemComponent} from "./ticker-menu-item.component";
 import {BrokerAccountsComponent} from "./broker-accounts.component";
 import {AccountInfoComponent} from "./account-info.component";
-import {alertCircleOutline, bookOutline, filterOutline, gridOutline, personCircleOutline, shieldOutline, statsChartOutline, keyOutline, flaskOutline} from "ionicons/icons";
+import {alertCircleOutline, bookOutline, filterOutline, gridOutline, personCircleOutline, shieldOutline, statsChartOutline, keyOutline, flaskOutline, receiptOutline} from "ionicons/icons";
 import {useHistory} from "react-router-dom";
 import { auth } from '../firebase';
 
@@ -150,6 +150,11 @@ const Menu: React.FC = observer(() => {
         <IonItem button routerLink="/guvid-history" routerDirection="forward" lines="none">
           <IonIcon slot="start" icon={statsChartOutline} />
           <IonLabel>Guvid History</IonLabel>
+        </IonItem>
+
+        <IonItem button routerLink="/transaction-history" routerDirection="forward" lines="none">
+          <IonIcon slot="start" icon={receiptOutline} />
+          <IonLabel>Istoric Tranzactii</IonLabel>
         </IonItem>
 
         <IonItem button routerLink="/backtest" routerDirection="forward" lines="none">

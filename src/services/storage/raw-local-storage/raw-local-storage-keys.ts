@@ -8,5 +8,7 @@ export enum RawLocalStorageKeys {
     recentTickers = "recentTickers",
     tradeLog = "tradeLog",
     discordWebhookUrl = "discordWebhookUrl",
+    tradeProposals = "tradeProposals",
+    scannerAutoScanEnabled = "scannerAutoScanEnabled",
 }
 

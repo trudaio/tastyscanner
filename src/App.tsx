@@ -12,6 +12,7 @@ import { TransactionHistoryPage } from './pages/TransactionHistoryPage';
 import { SuperAdminPage } from './pages/SuperAdminPage';
 import BacktestPage from './pages/BacktestPage';
 import { DeltaAlertPage } from './pages/DeltaAlertPage';
+import { PositionMonitorPage } from './pages/PositionMonitorPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { OnboardingPage } from './pages/OnboardingPage';
@@ -127,6 +128,9 @@ const App: React.FC = () => {
                                 </Route>
                                 <Route path="/delta-alert" exact={true}>
                                     <DeltaAlertPage />
+                                </Route>
+                                <Route path="/position-monitor" exact={true}>
+                                    <PositionMonitorPage />
                                 </Route>
                                 <Route path="/superadmin" exact={true}>
                                     <SuperAdminPage />

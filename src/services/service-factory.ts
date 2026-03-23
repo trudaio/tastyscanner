@@ -38,6 +38,8 @@ import { BacktestService } from './backtest/backtest.service';
 import { BrokerType } from './broker-provider/broker-provider.interface';
 import type { IDeltaAlertService } from './delta-alert/delta-alert.interface';
 import { DeltaAlertService } from './delta-alert/delta-alert.service';
+import type { IPositionMonitorService } from './position-monitor/position-monitor.interface';
+import { PositionMonitorService } from './position-monitor/position-monitor.service';
 
 export class ServiceFactory implements IServiceFactory {
 
@@ -181,6 +183,11 @@ export class ServiceFactory implements IServiceFactory {
     private _deltaAlert: Lazy<IDeltaAlertService> = new Lazy<IDeltaAlertService>(() => new DeltaAlertService(this));
     get deltaAlert(): IDeltaAlertService {
         return this._deltaAlert.value;
+    }
+
+    private _positionMonitor: Lazy<IPositionMonitorService> = new Lazy<IPositionMonitorService>(() => new PositionMonitorService(this));
+    get positionMonitor(): IPositionMonitorService {
+        return this._positionMonitor.value;
     }
 
 }

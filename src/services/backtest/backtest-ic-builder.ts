@@ -238,8 +238,10 @@ export function buildBacktestIronCondors(
             if (alpha < filters.minAlpha) continue;
 
             // Net delta and theta
+            // IC position delta: sold puts contribute -stoPut.delta (reverse sign),
+            // bought puts contribute +btoPut.delta, sold calls -stoCall.delta, bought calls +btoCall.delta.
             const delta = Math.round(
-                (stoPut.delta + btoCall.delta - btoPut.delta - stoCall.delta) * 10000
+                (-stoPut.delta + btoPut.delta - stoCall.delta + btoCall.delta) * 10000
             ) / 100;
 
             const theta = Math.round(

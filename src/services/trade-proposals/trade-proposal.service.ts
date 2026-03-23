@@ -43,16 +43,38 @@ export class TradeProposalService extends ServiceBase implements ITradeProposalS
 
     addProposals(newProposals: INewProposal[]): void {
         const now = new Date();
-        const added: ITradeProposal[] = newProposals.map(p => ({
-            id: `${p.ticker}-${now.getTime()}-${Math.random().toString(36).slice(2, 8)}`,
-            ticker: p.ticker,
-            ironCondor: p.ironCondor,
-            scannedAt: now,
-            expiresAt: p.expiresAt ?? new Date(now.getTime() + DEFAULT_EXPIRY_MS),
-            status: 'pending' as TradeProposalStatus,
-            scores: { ...p.scores },
-        }));
-        this.proposals = [...this.proposals, ...added];
+        const updated = [...this.proposals];
+
+        for (const p of newProposals) {
+            const expDate = p.ironCondor.stoPut.expirationDate;
+            const existingIdx = updated.findIndex(
+                x => x.ticker === p.ticker &&
+                     x.ironCondor?.stoPut.expirationDate === expDate &&
+                     x.status === 'pending'
+            );
+            if (existingIdx !== -1) {
+                // Upsert: refresh scores, timestamp, and live IC reference in place
+                updated[existingIdx] = {
+                    ...updated[existingIdx],
+                    ironCondor: p.ironCondor,
+                    scannedAt: now,
+                    expiresAt: p.expiresAt ?? new Date(now.getTime() + DEFAULT_EXPIRY_MS),
+                    scores: { ...p.scores },
+                };
+            } else {
+                updated.push({
+                    id: `${p.ticker}-${now.getTime()}-${Math.random().toString(36).slice(2, 8)}`,
+                    ticker: p.ticker,
+                    ironCondor: p.ironCondor,
+                    scannedAt: now,
+                    expiresAt: p.expiresAt ?? new Date(now.getTime() + DEFAULT_EXPIRY_MS),
+                    status: 'pending' as TradeProposalStatus,
+                    scores: { ...p.scores },
+                });
+            }
+        }
+
+        this.proposals = updated;
         this._saveToStorage();
     }
 

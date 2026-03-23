@@ -6,7 +6,7 @@ const Badge = styled.span<{ $broker: BrokerType; $size?: 'xs' | 'sm' }>`
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: ${p => p.$broker === BrokerType.TastyTrade ? '#ff6b35' : '#dc3545'};
+    background: ${p => p.$broker === BrokerType.TastyTrade ? '#ff6b35' : '#4d9fff'};
     color: #fff;
     font-size: ${p => p.$size === 'xs' ? '0.52rem' : '0.58rem'};
     font-weight: 800;

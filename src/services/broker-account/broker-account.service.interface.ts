@@ -15,12 +15,17 @@ export interface IPortfolioGreeks {
     vega: number;
 }
 
+/** Portfolio delta alert threshold. Notify when |portfolio delta| exceeds this value. */
+export const PORTFOLIO_DELTA_ALERT_THRESHOLD = 50;
+
 export interface IBrokerAccountViewModel {
     accountNumber: string;
     balances: IAccountBalances | null;
     isLoadingBalances: boolean;
     portfolioGreeks: IPortfolioGreeks | null;
     isLoadingPortfolioGreeks: boolean;
+    /** True when |portfolio delta| > PORTFOLIO_DELTA_ALERT_THRESHOLD (default 50). */
+    isDeltaAlertActive: boolean;
     sendOrder(order: IBrokerOrder): Promise<void>;
     loadBalances(): Promise<void>;
     loadPortfolioGreeks(): Promise<void>;

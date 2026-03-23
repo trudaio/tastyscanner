@@ -179,12 +179,12 @@ export function buildBacktestIronCondors(
             let callWing: number;
 
             if (filters.icType === 'bullish') {
-                // Wider put wing (more downside protection)
+                // Wider put wing (more downside protection), narrower call wing (half-width, min $2.50)
                 putWing = wing;
-                callWing = Math.max(wing - 5, 5);
+                callWing = Math.max(wing / 2, 2.5);
             } else if (filters.icType === 'bearish') {
-                // Wider call wing (more upside protection)
-                putWing = Math.max(wing - 5, 5);
+                // Wider call wing (more upside protection), narrower put wing (half-width, min $2.50)
+                putWing = Math.max(wing / 2, 2.5);
                 callWing = wing;
             } else {
                 putWing = wing;

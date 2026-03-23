@@ -490,4 +490,174 @@ app.post('/api/polygon/option-bars-batch', async (req: express.Request, res: exp
   }
 });
 
+// ─── IBKR Client Portal Gateway Proxy ───────────────────────────────────────
+// Proxies requests from Firebase app → CT101 CP Gateway (100.71.13.81:5000).
+// All endpoints require a valid Firebase ID token.
+
+const IBKR_GATEWAY_BASE = 'http://100.71.13.81:5000/v1/api';
+
+function ibkrGatewayFetch<T>(path: string, options?: { method?: string; body?: string }): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const url = new URL(`${IBKR_GATEWAY_BASE}${path}`);
+    const reqOptions: import('http').RequestOptions = {
+      hostname: url.hostname,
+      port: Number(url.port) || 5000,
+      path: url.pathname + url.search,
+      method: options?.method ?? 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    };
+
+    const http = require('http') as typeof import('http');
+    const req = http.request(reqOptions, (res) => {
+      let data = '';
+      res.on('data', (chunk: string) => { data += chunk; });
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(data) as T);
+        } catch (e) {
+          reject(new Error(`IBKR gateway parse error: ${data.substring(0, 200)}`));
+        }
+      });
+    });
+    req.on('error', reject);
+    if (options?.body) req.write(options.body);
+    req.end();
+  });
+}
+
+// GET /api/ibkr/auth-status — check if CP Gateway session is authenticated
+app.get('/api/ibkr/auth-status', async (req: express.Request, res: express.Response) => {
+  try {
+    await getAuthContext(req);
+    const data = await ibkrGatewayFetch<{ authenticated: boolean }>('/iserver/auth/status');
+    res.json(data);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    if (message === 'UNAUTHENTICATED') {
+      res.status(401).json({ error: 'Unauthorized' });
+    } else {
+      console.error('[ibkr/auth-status]', message);
+      res.status(502).json({ error: message });
+    }
+  }
+});
+
+// GET /api/ibkr/accounts — list IBKR portfolio accounts
+app.get('/api/ibkr/accounts', async (req: express.Request, res: express.Response) => {
+  try {
+    await getAuthContext(req);
+    const data = await ibkrGatewayFetch<Array<{ accountId: string }>>('/portfolio/accounts');
+    res.json(data);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    if (message === 'UNAUTHENTICATED') {
+      res.status(401).json({ error: 'Unauthorized' });
+    } else {
+      console.error('[ibkr/accounts]', message);
+      res.status(502).json({ error: message });
+    }
+  }
+});
+
+// GET /api/ibkr/positions/:accountId — positions for an account
+app.get('/api/ibkr/positions/:accountId', async (req: express.Request, res: express.Response) => {
+  try {
+    await getAuthContext(req);
+    const { accountId } = req.params;
+    const data = await ibkrGatewayFetch<unknown[]>(`/portfolio/${accountId}/positions`);
+    res.json(data);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    if (message === 'UNAUTHENTICATED') {
+      res.status(401).json({ error: 'Unauthorized' });
+    } else {
+      console.error('[ibkr/positions]', message);
+      res.status(502).json({ error: message });
+    }
+  }
+});
+
+// GET /api/ibkr/balances/:accountId — account balance summary
+app.get('/api/ibkr/balances/:accountId', async (req: express.Request, res: express.Response) => {
+  try {
+    await getAuthContext(req);
+    const { accountId } = req.params;
+    const data = await ibkrGatewayFetch<unknown>(`/portfolio/${accountId}/summary`);
+    res.json(data);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    if (message === 'UNAUTHENTICATED') {
+      res.status(401).json({ error: 'Unauthorized' });
+    } else {
+      console.error('[ibkr/balances]', message);
+      res.status(502).json({ error: message });
+    }
+  }
+});
+
+// GET /api/ibkr/pnl — partitioned P&L
+app.get('/api/ibkr/pnl', async (req: express.Request, res: express.Response) => {
+  try {
+    await getAuthContext(req);
+    const data = await ibkrGatewayFetch<unknown>('/iserver/account/pnl/partitioned');
+    res.json(data);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    if (message === 'UNAUTHENTICATED') {
+      res.status(401).json({ error: 'Unauthorized' });
+    } else {
+      console.error('[ibkr/pnl]', message);
+      res.status(502).json({ error: message });
+    }
+  }
+});
+
+// POST /api/ibkr/orders/:accountId — place an order
+app.post('/api/ibkr/orders/:accountId', async (req: express.Request, res: express.Response) => {
+  try {
+    await getAuthContext(req);
+    const { accountId } = req.params;
+    const data = await ibkrGatewayFetch<unknown>(`/iserver/account/${accountId}/orders`, {
+      method: 'POST',
+      body: JSON.stringify(req.body),
+    });
+    res.json(data);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    if (message === 'UNAUTHENTICATED') {
+      res.status(401).json({ error: 'Unauthorized' });
+    } else {
+      console.error('[ibkr/orders/post]', message);
+      res.status(502).json({ error: message });
+    }
+  }
+});
+
+// DELETE /api/ibkr/orders/:orderId — cancel an order
+app.delete('/api/ibkr/orders/:orderId', async (req: express.Request, res: express.Response) => {
+  try {
+    await getAuthContext(req);
+    const { orderId } = req.params;
+    const accountId = req.query['accountId'] as string | undefined;
+    if (!accountId) {
+      res.status(400).json({ error: 'accountId query param required' });
+      return;
+    }
+    const data = await ibkrGatewayFetch<unknown>(`/iserver/account/${accountId}/order/${orderId}`, {
+      method: 'DELETE',
+    });
+    res.json(data);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    if (message === 'UNAUTHENTICATED') {
+      res.status(401).json({ error: 'Unauthorized' });
+    } else {
+      console.error('[ibkr/orders/delete]', message);
+      res.status(502).json({ error: message });
+    }
+  }
+});
+
 export const api = onRequest({ invoker: 'public', secrets: [polygonApiKey] }, app);

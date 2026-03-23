@@ -118,7 +118,7 @@ export class ScannerService implements IScannerService {
 
         // Use the first qualifying expiration (closest DTE within settings range)
         const expiration = expirations[0];
-        const ironCondors: IIronCondorViewModel[] = expiration.ironCondors;
+        const ironCondors = expiration.ironCondors;
         if (ironCondors.length === 0) return null;
 
         // ironCondors already sorted by alpha descending by StrategiesBuilder

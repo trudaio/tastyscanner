@@ -16,6 +16,7 @@ import type { IBrokerCredentialsService } from './credentials/broker-credentials
 import type { IBacktestService } from './backtest/backtest-engine.interface';
 import type { BrokerType } from './broker-provider/broker-provider.interface';
 import type { IDeltaAlertService } from './delta-alert/delta-alert.interface';
+import type { IPositionMonitorService } from './position-monitor/position-monitor.interface';
 
 export interface IServiceFactory {
     readonly tickers: ITickersService;
@@ -36,6 +37,7 @@ export interface IServiceFactory {
     readonly brokerCredentials: IBrokerCredentialsService;
     readonly backtest: IBacktestService;
     readonly deltaAlert: IDeltaAlertService;
+    readonly positionMonitor: IPositionMonitorService;
     readonly isInitialized: boolean;
     /**
      * Initialize the factory with TastyTrade credentials.

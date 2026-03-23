@@ -21,7 +21,7 @@ import {WatchListsComponent} from "./watch-lists.component";
 import {TickerMenuItemComponent} from "./ticker-menu-item.component";
 import {BrokerAccountsComponent} from "./broker-accounts.component";
 import {AccountInfoComponent} from "./account-info.component";
-import {alertCircleOutline, bookOutline, filterOutline, gridOutline, personCircleOutline, shieldOutline, statsChartOutline, keyOutline, flaskOutline, receiptOutline} from "ionicons/icons";
+import {alertCircleOutline, bookOutline, filterOutline, gridOutline, personCircleOutline, shieldOutline, statsChartOutline, keyOutline, flaskOutline, receiptOutline, pulseOutline} from "ionicons/icons";
 import {useHistory} from "react-router-dom";
 import { auth } from '../firebase';
 
@@ -165,6 +165,11 @@ const Menu: React.FC = observer(() => {
         <IonItem button routerLink="/delta-alert" routerDirection="forward" lines="none">
           <IonIcon slot="start" icon={alertCircleOutline} />
           <IonLabel>Delta Alert</IonLabel>
+        </IonItem>
+
+        <IonItem button routerLink="/position-monitor" routerDirection="forward" lines="none">
+          <IonIcon slot="start" icon={pulseOutline} />
+          <IonLabel>Position Monitor</IonLabel>
         </IonItem>
 
         {/* IC Savior — temporarily hidden, will revisit later

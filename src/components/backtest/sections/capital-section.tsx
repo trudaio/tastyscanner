@@ -17,10 +17,13 @@ interface CapitalSectionProps {
     maxPositionPct: number;
     maxOpenPositions: number;
     contractsPerPosition: number;
+    ladderingMode: 'single' | 'fill-all';
+    maxTotalRiskPct: number;
     onCapitalChange: (v: number) => void;
     onMaxPositionPctChange: (v: number) => void;
     onMaxOpenPositionsChange: (v: number) => void;
     onContractsPerPositionChange: (v: number) => void;
+    onMaxTotalRiskPctChange: (v: number) => void;
 }
 
 export const CapitalSection: React.FC<CapitalSectionProps> = ({
@@ -28,10 +31,13 @@ export const CapitalSection: React.FC<CapitalSectionProps> = ({
     maxPositionPct,
     maxOpenPositions,
     contractsPerPosition,
+    ladderingMode,
+    maxTotalRiskPct,
     onCapitalChange,
     onMaxPositionPctChange,
     onMaxOpenPositionsChange,
     onContractsPerPositionChange,
+    onMaxTotalRiskPctChange,
 }) => {
     const handleNumber = (cb: (v: number) => void) =>
         (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -77,6 +83,19 @@ export const CapitalSection: React.FC<CapitalSectionProps> = ({
                     onChange={handleNumber(onContractsPerPositionChange)}
                 />
             </ParamGroup>
+
+            {ladderingMode === 'fill-all' && (
+                <ParamGroup>
+                    <ParamLabel>Max Total Risk (%) <span style={{ color: '#8888aa', fontSize: '0.75em' }}>fill-all cap</span></ParamLabel>
+                    <ParamInputOnCard
+                        type="number"
+                        value={maxTotalRiskPct}
+                        min={1}
+                        max={100}
+                        onChange={handleNumber(onMaxTotalRiskPctChange)}
+                    />
+                </ParamGroup>
+            )}
         </ParamsGrid>
     );
 };

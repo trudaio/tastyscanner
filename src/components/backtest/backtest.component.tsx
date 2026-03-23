@@ -93,6 +93,7 @@ export const BacktestComponent: React.FC = observer(() => {
     const [maxPositionPct, setMaxPositionPct] = useState(5);
     const [maxOpenPositions, setMaxOpenPositions] = useState(10);
     const [contractsPerPosition, setContractsPerPosition] = useState(1);
+    const [maxTotalRiskPct, setMaxTotalRiskPct] = useState(50);
 
     // ─── Position Entry State ─────────────────────────────────────────────
     const [slippage, setSlippage] = useState(DEFAULT_BACKTEST_PARAMS.slippage);
@@ -161,6 +162,7 @@ export const BacktestComponent: React.FC = observer(() => {
             } : {}),
             ladderingMode,
             contractsPerPosition,
+            ...(ladderingMode === 'fill-all' ? { maxTotalRiskPct } : {}),
             ...(batchMode ? { batchProfitTargets: [...batchTargets].sort((a, b) => b - a) } : {}),
             description: description || undefined,
             excludedDates: parsedExcluded,
@@ -171,7 +173,7 @@ export const BacktestComponent: React.FC = observer(() => {
         profitTargetEnabled, stopLossEnabled, closeDTEEnabled,
         riskFreeRate, slippage, commissionPerContract, description, excludedDates,
         asymmetricDelta, putTargetDelta, callTargetDelta, ladderingMode, contractsPerPosition,
-        batchMode, batchTargets,
+        maxTotalRiskPct, batchMode, batchTargets,
     ]);
 
     // ─── Run ──────────────────────────────────────────────────────────────
@@ -206,6 +208,7 @@ export const BacktestComponent: React.FC = observer(() => {
         setExcludedDates(params.excludedDates?.join(' ') || '');
         setLadderingMode(params.ladderingMode ?? 'single');
         setContractsPerPosition(params.contractsPerPosition ?? 1);
+        setMaxTotalRiskPct(params.maxTotalRiskPct ?? 50);
 
         if (params.putTargetDelta != null && params.callTargetDelta != null) {
             setAsymmetricDelta(true);
@@ -292,10 +295,13 @@ export const BacktestComponent: React.FC = observer(() => {
                     maxPositionPct={maxPositionPct}
                     maxOpenPositions={maxOpenPositions}
                     contractsPerPosition={contractsPerPosition}
+                    ladderingMode={ladderingMode}
+                    maxTotalRiskPct={maxTotalRiskPct}
                     onCapitalChange={setCapital}
                     onMaxPositionPctChange={setMaxPositionPct}
                     onMaxOpenPositionsChange={setMaxOpenPositions}
                     onContractsPerPositionChange={setContractsPerPosition}
+                    onMaxTotalRiskPctChange={setMaxTotalRiskPct}
                 />
             </CollapsibleCard>
 

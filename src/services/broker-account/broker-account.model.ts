@@ -1,6 +1,6 @@
-import {IBrokerAccountViewModel, IBrokerOrder, IAccountBalances, IPortfolioGreeks} from "./broker-account.service.interface";
+import {IBrokerAccountViewModel, IBrokerOrder, IAccountBalances, IPortfolioGreeks, PORTFOLIO_DELTA_ALERT_THRESHOLD} from "./broker-account.service.interface";
 import {IServiceFactory} from "../service-factory.interface";
-import {autorun, makeObservable, observable, runInAction} from "mobx";
+import {autorun, computed, makeObservable, observable, runInAction} from "mobx";
 
 export class BrokerAccountModel implements IBrokerAccountViewModel {
     constructor(public readonly accountNumber: string, private readonly services: IServiceFactory) {
@@ -9,6 +9,7 @@ export class BrokerAccountModel implements IBrokerAccountViewModel {
             isLoadingBalances: observable.ref,
             portfolioGreeks: observable.ref,
             isLoadingPortfolioGreeks: observable.ref,
+            isDeltaAlertActive: computed,
         });
     }
 
@@ -18,6 +19,10 @@ export class BrokerAccountModel implements IBrokerAccountViewModel {
     isLoadingPortfolioGreeks: boolean = false;
 
     private _greeksDisposer: (() => void) | null = null;
+
+    get isDeltaAlertActive(): boolean {
+        return Math.abs(this.portfolioGreeks?.delta ?? 0) > PORTFOLIO_DELTA_ALERT_THRESHOLD;
+    }
 
     async loadBalances(): Promise<void> {
         runInAction(() => {

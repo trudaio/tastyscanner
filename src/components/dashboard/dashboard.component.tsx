@@ -4,6 +4,7 @@ import styled from 'styled-components';
 import { IonSpinner } from '@ionic/react';
 import { useServices } from '../../hooks/use-services.hook';
 import { IIronCondorTrade } from '../../services/iron-condor-analytics/iron-condor-analytics.interface';
+import { PORTFOLIO_DELTA_ALERT_THRESHOLD } from '../../services/broker-account/broker-account.service.interface';
 import { BrokerBadgeInline } from '../broker-manager/broker-badge-inline.component';
 import { BrokerType } from '../../services/broker-provider/broker-provider.interface';
 import type { IBrokerAccount } from '../../services/credentials/broker-credentials.service.interface';
@@ -50,6 +51,29 @@ const RefreshBtn = styled.button`
     white-space: nowrap;
     &:hover { background: #3a8eef; }
     &:disabled { background: #333; cursor: not-allowed; }
+`;
+
+/* ─── Section ─────────────────────────────────────────────── */
+
+/* ─── Delta Alert Banner ──────────────────────────────────── */
+
+const DeltaAlertBanner = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(220, 53, 69, 0.12);
+    border: 1px solid rgba(220, 53, 69, 0.6);
+    border-radius: 8px;
+    padding: 10px 16px;
+    margin-bottom: 16px;
+    color: #ff6b7a;
+    font-size: 13px;
+    font-weight: 600;
+`;
+
+const AlertIcon = styled.span`
+    font-size: 18px;
+    flex-shrink: 0;
 `;
 
 /* ─── Section ─────────────────────────────────────────────── */
@@ -294,6 +318,15 @@ export const DashboardComponent: React.FC = observer(() => {
                     {loading ? 'Loading…' : '↻ Refresh'}
                 </RefreshBtn>
             </TopBar>
+
+            {account?.isDeltaAlertActive && (
+                <DeltaAlertBanner>
+                    <AlertIcon>⚠️</AlertIcon>
+                    <span>
+                        Portfolio delta imbalance: <strong>Δ {account.portfolioGreeks?.delta.toFixed(2)}</strong> exceeds ±{PORTFOLIO_DELTA_ALERT_THRESHOLD} — consider hedging or adjusting positions.
+                    </span>
+                </DeltaAlertBanner>
+            )}
 
             {tickerList.length > 1 && (
                 <TickerFilterRow>

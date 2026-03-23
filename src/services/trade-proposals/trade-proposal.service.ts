@@ -11,6 +11,7 @@ import { RawLocalStorageKeys } from '../storage/raw-local-storage/raw-local-stor
 
 const EXPIRE_INTERVAL_MS = 5 * 60 * 1000;   // 5 minutes
 const DEFAULT_EXPIRY_MS  = 2 * 60 * 60 * 1000; // 2 hours
+const MAX_POSITION_PCT   = 5; // max 5% of net liquidity per trade (CLAUDE.md)
 
 /** Serializable form stored in localStorage — no live ironCondor reference. */
 interface IStoredProposal {
@@ -77,8 +78,15 @@ export class TradeProposalService extends ServiceBase implements ITradeProposalS
             return;
         }
 
+        const netLiq = this.services.brokerAccount.currentAccount?.balances?.netLiquidity ?? 0;
+        const maxRisk = netLiq * (MAX_POSITION_PCT / 100);
+        const maxRiskPerContract = proposal.ironCondor.maxLoss;
+        const quantity = maxRisk > 0 && maxRiskPerContract > 0
+            ? Math.max(1, Math.floor(maxRisk / maxRiskPerContract))
+            : 1;
+
         await proposal.ironCondor.sendOrder({
-            quantity: 1,
+            quantity,
             timeInForce: 'Day',
             orderType: 'Limit',
         });

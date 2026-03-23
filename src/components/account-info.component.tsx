@@ -182,7 +182,7 @@ const BrokerSwitcherRow = styled.div`
 const BrokerBadge = styled.span<{ $broker: BrokerType }>`
     display: inline-flex;
     align-items: center;
-    background: ${p => p.$broker === BrokerType.TastyTrade ? '#ff6b35' : '#dc3545'};
+    background: ${p => p.$broker === BrokerType.TastyTrade ? '#ff6b35' : '#4d9fff'};
     color: #fff;
     font-size: 0.55rem;
     font-weight: 800;

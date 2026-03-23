@@ -16,6 +16,28 @@ import type {
 import type { IBrokerAccount } from '../../services/credentials/broker-credentials.service.interface';
 
 /* ── Styles ──────────────────────────────────────────────────── */
+
+const IbkrInfoBox = styled.div`
+    background: rgba(77, 159, 255, 0.08);
+    border: 1px solid rgba(77, 159, 255, 0.25);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-top: 8px;
+`;
+
+const IbkrInfoTitle = styled.div`
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #4d9fff;
+    margin-bottom: 6px;
+`;
+
+const IbkrInfoText = styled.div`
+    font-size: 0.8rem;
+    color: #aaa;
+    line-height: 1.5;
+`;
+
 const ModalContent = styled.div`
     padding: 16px;
     display: flex;
@@ -94,9 +116,7 @@ export const AddBrokerModal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
     const [showSecret, setShowSecret] = useState(false);
     const [showToken, setShowToken] = useState(false);
 
-    // IBKR fields
-    const [gatewayUrl, setGatewayUrl] = useState('https://localhost:5000');
-    const [accountId, setAccountId] = useState('');
+    // IBKR: gateway runs on CT101 via Firebase proxy — no browser credentials needed
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -107,8 +127,6 @@ export const AddBrokerModal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
         setLabel('');
         setClientSecret('');
         setRefreshToken('');
-        setGatewayUrl('https://localhost:5000');
-        setAccountId('');
         setError('');
         setLoading(false);
     };
@@ -131,14 +149,11 @@ export const AddBrokerModal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
                 refreshToken: refreshToken.trim(),
             } satisfies ITastyTradeCredentials;
         } else {
-            if (!gatewayUrl.trim() || !accountId.trim()) {
-                setError('Gateway URL and Account ID are required.');
-                return;
-            }
+            // IBKR connects via CT101 proxy — no browser credentials required
             credentials = {
                 brokerType: BrokerType.IBKR,
-                gatewayUrl: gatewayUrl.trim(),
-                accountId: accountId.trim(),
+                gatewayUrl: '',
+                accountId: '',
             } satisfies IIBKRCredentials;
         }
 
@@ -191,12 +206,12 @@ export const AddBrokerModal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
 
                                 <BrokerCard
                                     $selected={broker === BrokerType.IBKR}
-                                    $rgb="220, 53, 69"
+                                    $rgb="77, 159, 255"
                                     onClick={() => setBroker(BrokerType.IBKR)}
                                 >
-                                    <BrokerBadge $bg="#dc3545">IBKR</BrokerBadge>
+                                    <BrokerBadge $bg="#4d9fff">IBKR</BrokerBadge>
                                     <BrokerTitle>Interactive Brokers</BrokerTitle>
-                                    <BrokerSub>Client Portal Gateway. Gateway URL + Account ID.</BrokerSub>
+                                    <BrokerSub>Connects via CT101 proxy. No credentials stored in browser.</BrokerSub>
                                 </BrokerCard>
                             </BrokerRow>
 
@@ -250,27 +265,12 @@ export const AddBrokerModal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
                                     </IonItem>
                                 </>
                             ) : (
-                                <>
-                                    <Label style={{ marginTop: 12 }}>IBKR Client Portal Gateway</Label>
-                                    <IonItem>
-                                        <IonInput
-                                            label="Gateway URL"
-                                            labelPlacement="stacked"
-                                            placeholder="https://localhost:5000"
-                                            value={gatewayUrl}
-                                            onIonInput={e => setGatewayUrl(e.detail.value ?? '')}
-                                        />
-                                    </IonItem>
-                                    <IonItem>
-                                        <IonInput
-                                            label="Account ID"
-                                            labelPlacement="stacked"
-                                            placeholder="e.g. U1234567"
-                                            value={accountId}
-                                            onIonInput={e => setAccountId(e.detail.value ?? '')}
-                                        />
-                                    </IonItem>
-                                </>
+                                <IbkrInfoBox>
+                                    <IbkrInfoTitle>Interactive Brokers via CT101 Proxy</IbkrInfoTitle>
+                                    <IbkrInfoText>
+                                        Connections route through the secure CT101 gateway proxy. No credentials are stored in the browser — just give this account a name.
+                                    </IbkrInfoText>
+                                </IbkrInfoBox>
                             )}
 
                             {error && (

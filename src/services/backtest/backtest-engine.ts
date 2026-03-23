@@ -344,7 +344,15 @@ export function runBacktestEngine(
                     const best = candidates[0];
 
                     // Check risk limit (scaled by contracts)
-                    if (best.maxLoss * contracts > maxRiskPerTrade && !isFillAll) continue;
+                    if (!isFillAll && best.maxLoss * contracts > maxRiskPerTrade) continue;
+
+                    // In fill-all mode: enforce aggregate capital-at-risk cap
+                    if (isFillAll) {
+                        const maxTotalRiskPct = params.maxTotalRiskPct ?? (params.maxPositionPct * params.maxOpenPositions);
+                        const maxTotalRisk = capital * (maxTotalRiskPct / 100);
+                        const totalExistingRisk = openPositions.reduce((sum, p) => sum + p.maxLoss * contracts, 0);
+                        if (totalExistingRisk + best.maxLoss * contracts > maxTotalRisk) continue;
+                    }
 
                     // Open position
                     openPositions.push({

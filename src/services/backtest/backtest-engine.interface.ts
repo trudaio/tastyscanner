@@ -158,6 +158,7 @@ export interface IBacktestParams {
     // Laddering mode
     ladderingMode?: 'single' | 'fill-all';  // default: 'single' (current behavior)
     contractsPerPosition?: number;           // default: 1
+    maxTotalRiskPct?: number;               // fill-all: max % of capital across ALL open positions combined (e.g., 40)
 
     // Batch mode — run multiple profit target scenarios
     batchProfitTargets?: number[];  // e.g., [9999, 70, 85, 90]

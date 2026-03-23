@@ -3,6 +3,7 @@ import { observer } from 'mobx-react-lite';
 import styled from 'styled-components';
 import { useServices } from '../../hooks/use-services.hook';
 import { ITickerPL, INetLiquidityPoint } from '../../services/trading-dashboard/trading-dashboard.interface';
+import { CombinedOverview } from './combined-overview.component';
 
 const DashboardContainer = styled.div`
     padding: 20px;
@@ -524,6 +525,8 @@ export const TradingDashboardComponent: React.FC = observer(() => {
     return (
         <DashboardContainer>
             <Title>Trading Dashboard</Title>
+
+            <CombinedOverview />
 
             <DateRangeContainer>
                 <QuickSelectButton $active={dateRange === 'ytd'} onClick={() => setDateRange('ytd')}>

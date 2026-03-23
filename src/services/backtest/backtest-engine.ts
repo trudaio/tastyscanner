@@ -248,10 +248,11 @@ export function runBacktestEngine(
                 continue;
             }
 
-            // Stop loss: IC value increased too much
-            const maxLossPerShare = pos.maxLoss / 100;
+            // Stop loss: close when unrealized loss exceeds stopLossPct% of initial credit.
+            // e.g. stopLossPct=200 → close when loss ≥ 2× credit received (common TastyTrade rule).
+            // stopLossPct=9999 effectively disables the stop (threshold unreachable).
             const unrealizedLossPerShare = currentDebit - pos.entryCredit;
-            const stopLossThreshold = maxLossPerShare * (params.stopLossPct / 100);
+            const stopLossThreshold = pos.entryCredit * (params.stopLossPct / 100);
             if (unrealizedLossPerShare >= stopLossThreshold) {
                 positionsToClose.push({ idx: i, exitDebit: currentDebit, reason: 'stop_loss' });
                 continue;
@@ -343,8 +344,8 @@ export function runBacktestEngine(
                     // Take the best candidate (highest alpha)
                     const best = candidates[0];
 
-                    // Check risk limit (scaled by contracts)
-                    if (best.maxLoss * contracts > maxRiskPerTrade && !isFillAll) continue;
+                    // Check risk limit (scaled by contracts) — enforced in all modes including fill-all
+                    if (best.maxLoss * contracts > maxRiskPerTrade) continue;
 
                     // Open position
                     openPositions.push({

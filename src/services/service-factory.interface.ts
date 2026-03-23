@@ -16,6 +16,8 @@ import type { IBrokerCredentialsService } from './credentials/broker-credentials
 import type { IBacktestService } from './backtest/backtest-engine.interface';
 import type { BrokerType } from './broker-provider/broker-provider.interface';
 import type { IDeltaAlertService } from './delta-alert/delta-alert.interface';
+import type { IScannerService } from './scanner/scanner.interface';
+import type { ISchedulerService } from './scanner/scheduler.interface';
 
 export interface IServiceFactory {
     readonly tickers: ITickersService;
@@ -36,6 +38,8 @@ export interface IServiceFactory {
     readonly brokerCredentials: IBrokerCredentialsService;
     readonly backtest: IBacktestService;
     readonly deltaAlert: IDeltaAlertService;
+    readonly scanner: IScannerService;
+    readonly scheduler: ISchedulerService;
     readonly isInitialized: boolean;
     /**
      * Initialize the factory with TastyTrade credentials.

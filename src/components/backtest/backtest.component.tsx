@@ -109,6 +109,9 @@ export const BacktestComponent: React.FC = observer(() => {
     const [batchMode, setBatchMode] = useState(false);
     const [batchTargets, setBatchTargets] = useState<number[]>([9999, 70, 85, 90]);
 
+    // ─── IV Rank Filter State ─────────────────────────────────────────────
+    const [minIVRank, setMinIVRank] = useState(0);
+
     // ─── Backtest Options State ───────────────────────────────────────────
     const [startDate, setStartDate] = useState(defaults.startDate);
     const [endDate, setEndDate] = useState(defaults.endDate);
@@ -159,6 +162,7 @@ export const BacktestComponent: React.FC = observer(() => {
                 putTargetDelta,
                 callTargetDelta,
             } : {}),
+            ...(minIVRank > 0 ? { minIVRank } : {}),
             ladderingMode,
             contractsPerPosition,
             ...(batchMode ? { batchProfitTargets: [...batchTargets].sort((a, b) => b - a) } : {}),
@@ -171,7 +175,7 @@ export const BacktestComponent: React.FC = observer(() => {
         profitTargetEnabled, stopLossEnabled, closeDTEEnabled,
         riskFreeRate, slippage, commissionPerContract, description, excludedDates,
         asymmetricDelta, putTargetDelta, callTargetDelta, ladderingMode, contractsPerPosition,
-        batchMode, batchTargets,
+        batchMode, batchTargets, minIVRank,
     ]);
 
     // ─── Run ──────────────────────────────────────────────────────────────
@@ -206,6 +210,8 @@ export const BacktestComponent: React.FC = observer(() => {
         setExcludedDates(params.excludedDates?.join(' ') || '');
         setLadderingMode(params.ladderingMode ?? 'single');
         setContractsPerPosition(params.contractsPerPosition ?? 1);
+
+        setMinIVRank(params.minIVRank ?? 0);
 
         if (params.putTargetDelta != null && params.callTargetDelta != null) {
             setAsymmetricDelta(true);
@@ -256,11 +262,13 @@ export const BacktestComponent: React.FC = observer(() => {
                 minDTE={minDTE}
                 maxDTE={maxDTE}
                 ladderingMode={ladderingMode}
+                minIVRank={minIVRank}
                 onTickerToggle={toggleTicker}
                 onIcTypeChange={setIcType}
                 onMinDTEChange={setMinDTE}
                 onMaxDTEChange={setMaxDTE}
                 onLadderingModeChange={setLadderingMode}
+                onMinIVRankChange={setMinIVRank}
             />
 
             {/* ─── Leg Selection (always visible) ─────────────────────── */}

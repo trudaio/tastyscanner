@@ -33,11 +33,13 @@ interface StrategySetupSectionProps {
     minDTE: number;
     maxDTE: number;
     ladderingMode: 'single' | 'fill-all';
+    minIVRank: number;
     onTickerToggle: (t: string) => void;
     onIcTypeChange: (v: 'symmetric' | 'bullish' | 'bearish') => void;
     onMinDTEChange: (v: number) => void;
     onMaxDTEChange: (v: number) => void;
     onLadderingModeChange: (v: 'single' | 'fill-all') => void;
+    onMinIVRankChange: (v: number) => void;
 }
 
 export const StrategySetupSection: React.FC<StrategySetupSectionProps> = ({
@@ -46,11 +48,13 @@ export const StrategySetupSection: React.FC<StrategySetupSectionProps> = ({
     minDTE,
     maxDTE,
     ladderingMode,
+    minIVRank,
     onTickerToggle,
     onIcTypeChange,
     onMinDTEChange,
     onMaxDTEChange,
     onLadderingModeChange,
+    onMinIVRankChange,
 }) => {
     return (
         <div>
@@ -84,6 +88,17 @@ export const StrategySetupSection: React.FC<StrategySetupSectionProps> = ({
                         value={maxDTE}
                         min={0}
                         onChange={e => onMaxDTEChange(Number(e.target.value))}
+                    />
+                </ParamGroup>
+                <ParamGroup>
+                    <ParamLabel>Min IV Rank</ParamLabel>
+                    <ParamInput
+                        type="number"
+                        value={minIVRank}
+                        min={0}
+                        max={100}
+                        onChange={e => onMinIVRankChange(Number(e.target.value))}
+                        placeholder="0 = off"
                     />
                 </ParamGroup>
             </ParamsGrid>

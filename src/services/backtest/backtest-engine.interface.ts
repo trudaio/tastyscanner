@@ -75,6 +75,7 @@ export interface IHistoricalChain {
     date: string;
     spotPrice: number;
     expirations: IHistoricalExpiration[];
+    ivRank?: number;    // 0–100 rolling 252-day IV percentile rank
 }
 
 // ─── Backtest Iron Condor (candidate for entry) ─────────────────────────────
@@ -154,6 +155,9 @@ export interface IBacktestParams {
     // Asymmetric delta (when set, overrides minDelta/maxDelta per side)
     putTargetDelta?: number;        // e.g., 20 — target delta for put side
     callTargetDelta?: number;       // e.g., 15 — target delta for call side
+
+    // IV Rank filter
+    minIVRank?: number;             // 0–100; skip entry if IV Rank below this (0 = no filter)
 
     // Laddering mode
     ladderingMode?: 'single' | 'fill-all';  // default: 'single' (current behavior)

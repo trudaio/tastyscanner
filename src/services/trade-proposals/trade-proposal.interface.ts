@@ -1,6 +1,6 @@
 import type { IIronCondorViewModel } from '../../models/iron-condor.view-model.interface';
 
-export type TradeProposalStatus = 'pending' | 'approved' | 'rejected' | 'expired' | 'executed';
+export type TradeProposalStatus = 'pending' | 'approved' | 'rejected' | 'expired' | 'executed' | 'stale';
 
 export interface ITradeProposalScores {
     pop: number;

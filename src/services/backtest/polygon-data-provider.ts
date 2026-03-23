@@ -205,6 +205,7 @@ export function buildHistoricalChain(
     riskFreeRate: number,
     minDTE: number,
     maxDTE: number,
+    ivRank?: number,
 ): IHistoricalChain {
     // Group contracts by expiration
     const byExpiration = new Map<string, IPolygonOptionsContract[]>();
@@ -310,7 +311,7 @@ export function buildHistoricalChain(
     // Sort expirations by DTE
     expirations.sort((a, b) => a.daysToExpiration - b.daysToExpiration);
 
-    return { date, spotPrice, expirations };
+    return { date, spotPrice, expirations, ivRank };
 }
 
 // ─── Data Pre-Fetch (before backtest loop) ───────────────────────────────────
@@ -392,4 +393,110 @@ export async function preFetchBacktestData(
     const tradingDays = Array.from(daySet).sort();
 
     return { stockBars, contracts, optionBarLookup, tradingDays };
+}
+
+// ─── IV Rank Computation ──────────────────────────────────────────────────────
+
+/**
+ * Compute rolling 252-day IV Rank for a single ticker.
+ *
+ * For each trading day, finds the ATM option closest to 30 DTE
+ * and extracts its implied volatility via the BS solver.
+ * IV Rank = (currentIV − 52wkLow) / (52wkHigh − 52wkLow) × 100
+ *
+ * Uses a ±3 strike / 15–45 DTE search window for fast O(D×6×N_exp) lookup.
+ * Returns a Map<date, ivRank (0–100)>.
+ */
+export function computeIVRankSeries(
+    stockBars: IPolygonStockBar[],
+    contracts: IPolygonOptionsContract[],
+    optionBarLookup: Map<string, Map<string, IPolygonOptionBar>>,
+    riskFreeRate: number,
+): Map<string, number> {
+    const TARGET_DTE = 30;
+    const MIN_DTE = 15;
+    const MAX_DTE = 45;
+
+    // Index contracts by strike for fast nearest-ATM search
+    const contractsByStrike = new Map<number, IPolygonOptionsContract[]>();
+    for (const c of contracts) {
+        if (!contractsByStrike.has(c.strikePrice)) {
+            contractsByStrike.set(c.strikePrice, []);
+        }
+        contractsByStrike.get(c.strikePrice)!.push(c);
+    }
+    const sortedStrikes = Array.from(contractsByStrike.keys()).sort((a, b) => a - b);
+
+    if (sortedStrikes.length === 0) return new Map();
+
+    // Step 1: compute ATM IV for each trading day
+    const dailyIV: Array<{ date: string; iv: number }> = [];
+
+    for (const bar of stockBars) {
+        const date = bar.date;
+        const spot = bar.close;
+
+        // Binary search: index of the first strike >= spot
+        let lo = 0, hi = sortedStrikes.length - 1;
+        while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if (sortedStrikes[mid] < spot) lo = mid + 1;
+            else hi = mid;
+        }
+        // Pick closer of lo and lo-1
+        const closestIdx = (lo > 0 &&
+            Math.abs(sortedStrikes[lo - 1] - spot) < Math.abs(sortedStrikes[lo] - spot))
+            ? lo - 1 : lo;
+
+        let bestIV: number | null = null;
+        let bestScore = Infinity; // lower = better (closer to ATM + closer to TARGET_DTE)
+
+        for (let di = -3; di <= 3; di++) {
+            const idx = closestIdx + di;
+            if (idx < 0 || idx >= sortedStrikes.length) continue;
+            const strike = sortedStrikes[idx];
+
+            for (const c of contractsByStrike.get(strike)!) {
+                const dte = daysBetween(date, c.expirationDate);
+                if (dte < MIN_DTE || dte > MAX_DTE) continue;
+
+                const optBar = optionBarLookup.get(c.ticker)?.get(date);
+                if (!optBar || optBar.close <= 0) continue;
+
+                const T = dte / 365;
+                const greeks = computeGreeksFromMarketPrice(
+                    optBar.close, spot, strike, T, riskFreeRate, c.contractType,
+                );
+                if (!greeks || isNaN(greeks.impliedVolatility) || greeks.impliedVolatility <= 0) continue;
+
+                const score = Math.abs(strike - spot) / spot
+                    + Math.abs(dte - TARGET_DTE) / TARGET_DTE;
+                if (score < bestScore) {
+                    bestIV = greeks.impliedVolatility;
+                    bestScore = score;
+                }
+            }
+        }
+
+        if (bestIV !== null) {
+            dailyIV.push({ date, iv: bestIV });
+        }
+    }
+
+    // Step 2: rolling 252-day IV Rank
+    const result = new Map<string, number>();
+    const WINDOW = 252;
+
+    for (let i = 0; i < dailyIV.length; i++) {
+        const { date, iv } = dailyIV[i];
+        const windowStart = Math.max(0, i - WINDOW + 1);
+        const windowIVs = dailyIV.slice(windowStart, i + 1).map(d => d.iv);
+
+        const min = Math.min(...windowIVs);
+        const max = Math.max(...windowIVs);
+
+        result.set(date, max <= min ? 50 : Math.round(((iv - min) / (max - min)) * 100));
+    }
+
+    return result;
 }

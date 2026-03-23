@@ -29,7 +29,7 @@ import type {
     ProgressCallback,
 } from './backtest-engine.interface';
 import type { IPreFetchedData } from './polygon-data-provider';
-import { buildHistoricalChain } from './polygon-data-provider';
+import { buildHistoricalChain, computeIVRankSeries } from './polygon-data-provider';
 import { buildBacktestIronCondors, type IBacktestFilters } from './backtest-ic-builder';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -168,6 +168,19 @@ export function runBacktestEngine(
 
     const isFillAll = params.ladderingMode === 'fill-all';
     const contracts = params.contractsPerPosition ?? 1;
+
+    // Pre-compute IV Rank series (only when filter is active — avoids overhead)
+    const ivRankByTicker = new Map<string, Map<string, number>>();
+    if ((params.minIVRank ?? 0) > 0) {
+        for (const ticker of params.tickers) {
+            const bars = data.stockBars.get(ticker) ?? [];
+            const tickerContracts = data.contracts.get(ticker) ?? [];
+            ivRankByTicker.set(
+                ticker,
+                computeIVRankSeries(bars, tickerContracts, data.optionBarLookup, params.riskFreeRate),
+            );
+        }
+    }
 
     // Simulation state
     let capital = params.initialCapital;
@@ -312,10 +325,17 @@ export function runBacktestEngine(
                 const spotPrice = spotPrices.get(ticker);
                 if (!spotPrice) continue;
 
+                // IV Rank filter: skip entry if IVR below threshold
+                const minIVRank = params.minIVRank ?? 0;
+                if (minIVRank > 0) {
+                    const ivRank = ivRankByTicker.get(ticker)?.get(today);
+                    if (ivRank !== undefined && ivRank < minIVRank) continue;
+                }
+
                 // Check position limit per capital
                 const maxRiskPerTrade = capital * (params.maxPositionPct / 100);
 
-                // Build chain for today
+                // Build chain for today (pass IVR for informational storage on chain)
                 const tickerContracts = data.contracts.get(ticker) || [];
                 const chain = buildHistoricalChain(
                     today,
@@ -325,6 +345,7 @@ export function runBacktestEngine(
                     params.riskFreeRate,
                     params.minDTE,
                     params.maxDTE,
+                    ivRankByTicker.get(ticker)?.get(today),
                 );
 
                 // Try each expiration

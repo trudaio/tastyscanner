@@ -61,8 +61,19 @@ export class TradeProposalService extends ServiceBase implements ITradeProposalS
 
         if (!proposal.ironCondor) {
             this.services.logger.warning(
-                'TradeProposalService: cannot approve stale proposal — live IC model unavailable after page refresh'
+                'TradeProposalService: live IC model unavailable after page refresh — marking proposal stale'
             );
+            runInAction(() => {
+                const idx = this.proposals.findIndex(p => p.id === id);
+                if (idx !== -1) {
+                    this.proposals = [
+                        ...this.proposals.slice(0, idx),
+                        { ...this.proposals[idx], status: 'stale' as TradeProposalStatus },
+                        ...this.proposals.slice(idx + 1),
+                    ];
+                }
+            });
+            this._saveToStorage();
             return;
         }
 

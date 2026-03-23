@@ -25,6 +25,7 @@ import {
     checkmarkDoneCircleOutline,
     banOutline,
     hourglassOutline,
+    refreshOutline,
 } from 'ionicons/icons';
 import { useServices } from '../../hooks/use-services.hook';
 import type { ITradeProposal, TradeProposalStatus } from '../../services/trade-proposals/trade-proposal.interface';
@@ -85,6 +86,13 @@ const STATUS_CONFIG: Record<TradeProposalStatus, IStatusConfig> = {
         border: 'rgba(136,136,170,0.25)',
         icon: banOutline,
         label: 'Expired',
+    },
+    stale: {
+        color: '#ffa726',
+        bg: 'rgba(255,167,38,0.10)',
+        border: 'rgba(255,167,38,0.3)',
+        icon: refreshOutline,
+        label: 'Re-scan Required',
     },
 };
 
@@ -213,6 +221,7 @@ const ProposalCard = styled(IonCard)<{ $status: TradeProposalStatus }>`
     border: 1px solid ${({ $status }) =>
         $status === 'approved' || $status === 'executed' ? 'rgba(102,187,106,0.4)' :
         $status === 'rejected' || $status === 'expired' ? 'rgba(136,136,170,0.18)' :
+        $status === 'stale' ? 'rgba(255,167,38,0.3)' :
         '#2a2a3e'};
     border-radius: 12px;
     margin: 0 0 14px 0;
@@ -326,6 +335,15 @@ const ActionButtons = styled.div`
     gap: 8px;
 `;
 
+const StaleNotice = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: #ffa726;
+    font-weight: 600;
+`;
+
 const ApproveBtn = styled(IonButton)`
     --background: rgba(102,187,106,0.15);
     --color: #66bb6a;
@@ -379,7 +397,7 @@ function useCountdown(expiresAt: Date): { label: string; urgent: boolean } {
 
 function filterProposals(proposals: ITradeProposal[], tab: FilterTab): ITradeProposal[] {
     switch (tab) {
-        case 'pending':  return proposals.filter(p => p.status === 'pending');
+        case 'pending':  return proposals.filter(p => p.status === 'pending' || p.status === 'stale');
         case 'approved': return proposals.filter(p => p.status === 'approved' || p.status === 'executed');
         case 'rejected': return proposals.filter(p => p.status === 'rejected' || p.status === 'expired');
         default:         return proposals;
@@ -492,6 +510,12 @@ const ProposalCardItem: React.FC<ProposalCardProps> = observer(({ proposal, onAp
                                 Reject
                             </RejectBtn>
                         </ActionButtons>
+                    )}
+                    {proposal.status === 'stale' && (
+                        <StaleNotice>
+                            <IonIcon icon={refreshOutline} style={{ fontSize: '0.85rem' }} />
+                            Re-scan required to trade
+                        </StaleNotice>
                     )}
                 </CardFooter>
             </IonCardContent>

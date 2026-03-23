@@ -30,27 +30,38 @@ const PageTitleBox = styled.div`
     overflow: hidden;
     white-space: nowrap;
 `
-const computeIvrColor = (ivr: number) => {
-    if(ivr <= 30) {
-        return css`
-            color: var(--ion-color-danger);
-        `
-    } else if (ivr > 40) {
-        return css`
-            color: var(--ion-color-success);
-        `
-    }
+const computeIvrBadgeColor = (ivr: number) => {
+    if (ivr >= 50) return css`
+        background: #1a4a2a;
+        color: #66bb6a;
+        border: 1px solid #66bb6a44;
+    `;
+    if (ivr >= 30) return css`
+        background: #3a3010;
+        color: #ffd54f;
+        border: 1px solid #ffd54f44;
+    `;
     return css`
-            color: var(--ion-color-dark);
-        `;
+        background: #3a1010;
+        color: #ef5350;
+        border: 1px solid #ef535044;
+    `;
 }
 
-const IVRankBox = styled.div<{$ivr: number}>`
+const IVRankBadge = styled.span<{$ivr: number}>`
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 10px;
+    white-space: nowrap;
+    ${props => computeIvrBadgeColor(props.$ivr)}
+`
+
+const IVRankBox = styled.div`
     display: flex;
     flex-direction: row;
     align-items: center;
-    gap: 8px;
-    ${props => computeIvrColor(props.$ivr)}
+    gap: 4px;
 `
 
 
@@ -161,9 +172,10 @@ const Page: React.FC = observer(() => {
                             <SymbolSearchDropDownComponent/>
                             <span>{ticker?.currentPrice?.toFixed(2)}</span>
                             <HeaderSeparator>|</HeaderSeparator>
-                            <IVRankBox $ivr={ticker?.ivRank ?? 0}>
-                                <span>IVR:</span>
-                                <span>{ticker?.ivRank}</span>
+                            <IVRankBox>
+                                <IVRankBadge $ivr={ticker?.ivRank ?? 0}>
+                                    IVR {ticker?.ivRank}
+                                </IVRankBadge>
                             </IVRankBox>
                             <HeaderBetaGroup>
                                 <span>|</span>

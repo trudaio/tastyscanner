@@ -37,13 +37,15 @@ const IVRankBox = styled.span<{ $ivRank: number | null }>`
   text-align: center;
   background: ${props => {
     if (props.$ivRank === null) return '#333';
-    if (props.$ivRank >= 50) return '#2d5a3d'; // High IV - green (good for selling)
-    if (props.$ivRank >= 25) return '#4a4a1a'; // Medium IV - yellow
-    return '#4a1a1a'; // Low IV - red
+    if (props.$ivRank >= 50) return '#1a4a2a'; // High IV - green (ideal for selling)
+    if (props.$ivRank >= 30) return '#3a3010'; // Medium IV - yellow (acceptable)
+    return '#3a1010'; // Low IV - red (avoid)
   }};
   color: ${props => {
     if (props.$ivRank === null) return '#666';
-    return '#fff';
+    if (props.$ivRank >= 50) return '#66bb6a';
+    if (props.$ivRank >= 30) return '#ffd54f';
+    return '#ef5350';
   }};
 `
 

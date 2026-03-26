@@ -1,6 +1,11 @@
 
+export interface IDeltaAlertSettings {
+    deltaThreshold: number;
+}
+
 export interface ISettingsService {
     readonly strategyFilters: IStrategyFiltersViewModel;
+    readonly deltaAlertSettings: IDeltaAlertSettings;
 }
 
 

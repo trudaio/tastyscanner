@@ -1,8 +1,16 @@
 import React from 'react';
-import {IonButtons, IonContent, IonHeader, IonMenuButton, IonPage, IonTitle, IonToolbar} from '@ionic/react';
-import { BacktestComponent } from '../components/backtest/backtest.component';
+import {
+    IonButtons,
+    IonContent,
+    IonHeader,
+    IonMenuButton,
+    IonPage,
+    IonTitle,
+    IonToolbar
+} from '@ionic/react';
+import {DteAnalyzerComponent} from '../components/dte-analyzer/dte-analyzer.component';
 
-const BacktestPage: React.FC = () => {
+export const DteAnalyzerPage: React.FC = () => {
     return (
         <IonPage>
             <IonHeader>
@@ -10,14 +18,12 @@ const BacktestPage: React.FC = () => {
                     <IonButtons slot="start">
                         <IonMenuButton />
                     </IonButtons>
-                    <IonTitle>Backtest</IonTitle>
+                    <IonTitle>DTE Analyzer</IonTitle>
                 </IonToolbar>
             </IonHeader>
             <IonContent fullscreen>
-                <BacktestComponent />
+                <DteAnalyzerComponent />
             </IonContent>
         </IonPage>
     );
 };
-
-export default BacktestPage;

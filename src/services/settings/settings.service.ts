@@ -1,4 +1,4 @@
-import {ByEarningsDate, IcType, ISettingsService, IStrategyFiltersViewModel} from "./settings.service.interface";
+import {ByEarningsDate, IcType, IDeltaAlertSettings, ISettingsService, IStrategyFiltersViewModel} from "./settings.service.interface";
 import {makeObservable, observable, runInAction} from "mobx";
 import {ServiceBase} from "../service-base";
 import {IServiceFactory} from "../service-factory.interface";
@@ -7,9 +7,33 @@ import {RawLocalStorageKeys} from "../storage/raw-local-storage/raw-local-storag
 export class SettingsService extends ServiceBase implements ISettingsService {
     constructor(services: IServiceFactory) {
         super(services);
-        this.strategyFilters = new StrategyFiltersModel(services)
+        this.strategyFilters = new StrategyFiltersModel(services);
+        this.deltaAlertSettings = new DeltaAlertSettingsModel(services);
     }
-    readonly strategyFilters:StrategyFiltersModel ;
+    readonly strategyFilters: StrategyFiltersModel;
+    readonly deltaAlertSettings: DeltaAlertSettingsModel;
+}
+
+export class DeltaAlertSettingsModel implements IDeltaAlertSettings {
+    constructor(private readonly services: IServiceFactory) {
+        const stored = services.rawLocalStorage.getJson<{ deltaThreshold?: number }>(RawLocalStorageKeys.deltaAlertThreshold);
+        if (stored?.deltaThreshold != null) {
+            this._deltaThreshold = stored.deltaThreshold;
+        }
+        makeObservable<this, '_deltaThreshold'>(this, {
+            _deltaThreshold: observable.ref,
+        });
+    }
+
+    private _deltaThreshold: number = 1.5;
+
+    get deltaThreshold(): number {
+        return this._deltaThreshold;
+    }
+    set deltaThreshold(value: number) {
+        runInAction(() => { this._deltaThreshold = value; });
+        this.services.rawLocalStorage.setJson(RawLocalStorageKeys.deltaAlertThreshold, { deltaThreshold: value });
+    }
 }
 
 export class StrategyFiltersModel implements IStrategyFiltersViewModel {

@@ -44,34 +44,30 @@ export const  TradingViewWidgetComponent: React.FC<{symbol: string; listedMarket
             script.src = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
             script.type = "text/javascript";
             script.async = true;
-            script.innerHTML = `
-        {
-          "allow_symbol_change": false,
-          "calendar": false,
-          "details": false,
-          "hide_side_toolbar": true,
-          "hide_top_toolbar": false,
-          "hide_legend": false,
-          "hide_volume": false,
-          "hotlist": false,
-          "interval": "D",
-          "locale": "en",
-          "save_image": true,
-          "style": "1",
-          "symbol": "${symbol}",
-          "theme": "light",
-          "timezone": "Etc/UTC",
-          "backgroundColor": "#ffffff",
-          "gridColor": "rgba(46, 46, 46, 0.06)",
-          "watchlist": [],
-          "withdateranges": true,
-          "compareSymbols": [],
-          "studies": [
-            "STD;Bollinger_Bands",
-            "STD;Stochastic_RSI"
-          ],
-          "autosize": true
-        }`;
+            script.innerHTML = JSON.stringify({
+              allow_symbol_change: false,
+              calendar: false,
+              details: false,
+              hide_side_toolbar: true,
+              hide_top_toolbar: false,
+              hide_legend: false,
+              hide_volume: false,
+              hotlist: false,
+              interval: "D",
+              locale: "en",
+              save_image: true,
+              style: "1",
+              symbol: symbol,
+              theme: "light",
+              timezone: "Etc/UTC",
+              backgroundColor: "#ffffff",
+              gridColor: "rgba(46, 46, 46, 0.06)",
+              watchlist: [],
+              withdateranges: true,
+              compareSymbols: [],
+              studies: ["STD;Bollinger_Bands", "STD;Stochastic_RSI"],
+              autosize: true,
+            });
             container.current?.appendChild(script);
         },
         [symbol, market]

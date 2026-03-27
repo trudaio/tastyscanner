@@ -1,214 +1,161 @@
-# Operatiunea Guvidul — Iron Condor Builder
+# Operatiunea Guvidul — TastyScanner
 
-A systematic options premium-selling tool built for TastyTrade, focused on Iron Condor strategies with real-time Greeks streaming, EV/Alpha filtering, and trade logging.
+Iron Condor options trading platform connected to TastyTrade API + DxLink WebSocket. Live streaming of Greeks/quotes, IC combo filtering by delta/DTE/wings/EV/Alpha/POP, expiration accordions, order execution.
 
-**Goal**: Identify and execute high-probability Iron Condors targeting $1,000/day in premium collected with defined risk.
+**Live:** https://operatiunea-guvidul.web.app
 
----
+## Goal
 
-## Features
-
-- **Iron Condor Builder** — Scans expirations and builds IC combos filtered by delta, DTE, wing width, bid/ask spread, POP, Expected Value, and Alpha
-- **IC Type (Bias)** — Symmetric (delta-neutral), Bullish (net Δ ≥ +5), or Bearish (net Δ ≤ −5)
-- **No-Edge Signal** — Red banner when filters are active but no ICs pass them
-- **Real-time Streaming** — Live quotes + Greeks via DxLink WebSocket
-- **Dashboard** — P&L summary, net liquidity chart, open IC trades table, profit by ticker
-- **Portfolio Greeks** — Account-level Δ, Θ, Γ, V aggregated in real time
-- **Position Conflict Detection** — Warns when a new trade conflicts with existing positions
-- **Iron Condor Savior** — Finds rescue spreads to offset underwater trades
-- **Trade Log** — Logs every placed trade to Discord webhook + local storage
-- **Multi-user Auth** — Firebase email/password auth with per-user encrypted credentials (AES-256 via Firebase Functions)
-
----
+Systematic premium selling targeting **$1,000/day** with defined risk iron condor strategies.
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
 | Frontend | React 19 + Ionic 8 + TypeScript (strict) |
-| State | MobX 6 (observables, autorun, computed) |
+| State | MobX 6 (observables, autorun, runInAction) |
 | Build | Vite |
 | Broker API | `@tastytrade/api` v6.0.1 (REST + DxLink WebSocket) |
-| Auth / Backend | Firebase Auth + Firebase Functions (Node 20) |
+| Charts | Recharts |
+| Backend | Firebase Functions (Node.js) + Express |
+| Auth | Firebase Authentication |
+| Database | Cloud Firestore |
 | Hosting | Firebase Hosting |
-| Testing | Cypress E2E |
+| Testing | Cypress (E2E) |
 
----
+## Features
 
-## Getting Started
-
-### 1. Prerequisites
-
-- Node.js 20+
-- A [TastyTrade](https://tastytrade.com) account (live or sandbox)
-- Firebase project (for auth + credential storage) — *optional for local dev*
-
-### 2. Install dependencies
-
-```bash
-npm install
-cd functions && npm install && cd ..
-```
-
-### 3. TastyTrade API credentials
-
-You need two tokens from TastyTrade:
-
-| Token | Where to find |
-|-------|-------------|
-| **Client Secret** | TastyTrade → Settings → API Tokens → *Client Secret* (40 hex chars) |
-| **Refresh Token** | TastyTrade → Settings → API Tokens → *Remember Token* (long JWT) |
-
-### 4. Local dev setup
-
-Create `.env.local` in the project root (this file is git-ignored):
-
-```bash
-# TastyTrade credentials — local dev fallback (used when Firebase Functions are unreachable)
-VITE_CLIENT_SECRET=your_40_char_hex_client_secret
-VITE_REFRESH_TOKEN=eyJhbGci...your_long_refresh_token_jwt
-```
-
-> **Note**: In production, credentials are stored encrypted on the server via Firebase Functions. Locally, the app falls back to these env vars automatically when Functions are not reachable (CORS).
-
-### 5. Run the dev server
-
-```bash
-npm run dev
-```
-
-Open `http://localhost:5173` in your browser.
-
-### 6. First login
-
-1. Click **Register** to create an account (Firebase Auth)
-2. After login, go to the **Account** page (profile icon in the menu)
-3. Enter your TastyTrade **Client Secret** and **Refresh Token**
-4. Click **Save & Reconnect** — the app will authenticate with TastyTrade and start streaming
-
----
-
-## Usage Guide
-
-### Iron Condor Builder
-
-1. **Search for a ticker** using the search bar (e.g. SPY, QQQ, AAPL)
-2. The app loads the options chain and computes ICs across all expirations
-3. **Filters** (tap the filter icon):
-   - **Delta range**: short strike delta (default 15–30)
-   - **DTE range**: days to expiration window
-   - **Wing width**: spread width in points (e.g. 5, 10, 15)
-   - **Bid/Ask spread**: max acceptable spread per leg
-   - **POP %**: minimum probability of profit
-   - **EV $**: minimum expected value per contract
-   - **Alpha %**: minimum alpha (edge above random)
-   - **IC Type**: Symmetric / Bullish / Bearish
-   - **Earnings**: filter before/after earnings date
-4. **Expiration accordion** — tap an expiration to expand and see all valid ICs
-5. Each IC card shows: strikes, credit, POP, EV, Alpha, delta, theta, risk/reward
-6. Highlighted cards: **yellow** = best POP, **blue** = best risk/reward, **gradient** = both
-7. Delta bias color: **green** = bullish bias, **red** = bearish bias, **transparent** = neutral
-8. Tap **Trade** to open the order dialog and send the order to TastyTrade
-
-### IC Type Bias
-
-| Type | Logic |
-|------|-------|
-| Symmetric | Short put Δ ≈ short call Δ (matched by index) |
-| Bullish | Short put Δ − short call Δ ≥ 5 (net positive delta, more room downside) |
-| Bearish | Short call Δ − short put Δ ≥ 5 (net negative delta, more room upside) |
+### IC Builder (Iron Condor)
+- Scan the entire options chain for iron condor opportunities
+- Filter by delta, DTE, spread width, EV, Alpha, POP
+- Symmetric / Bullish / Bearish IC types
+- Single or Fill-All laddering modes
+- Real-time Greeks streaming via DxLink WebSocket
+- Conflict detection with existing positions
+- One-click order execution to TastyTrade
 
 ### Dashboard
+- P&L summary (realized + unrealized)
+- Net liquidity chart (reconstructed from transaction history)
+- Open IC trades table with live Greeks
+- Profit-by-ticker breakdown
 
-- **P&L Today / YTD** — aggregated from transaction history
-- **Net Liquidity Chart** — reconstructed from transaction P&L history
-- **Open Trades** — current IC positions with unrealized P&L
-- **Profit by Ticker** — breakdown of closed P&L per symbol
+### Delta Alert
+- Monitors ALL short option positions from your TastyTrade account
+- Alerts when current delta reaches threshold vs initial delta (ratio-based)
+- Absolute delta threshold (40+) for positions without trade log entry
+- Shows DTE, underlying price, strike distance %
+- Background monitoring every 4 hours
+
+### DTE Analyzer
+- Compare same-delta option across all available expirations (3-90 DTE)
+- $/Day = premium / DTE (premium efficiency)
+- Theta/Gamma ratio (risk-adjusted decay)
+- Strike Decay: click any row to see how a fixed strike evolves across DTEs
+- Interactive charts + interpretation guide
+
+### Guvid Management
+- IC Savior: find rescue positions for underwater trades
+- Position sizing: max 5% of net liquidity per trade
+- Kelly criterion (fractional) position sizing guidance
+
+### Guvid History
+- YTD performance tracking
+- Win/loss analysis
+- P&L by ticker and month
+
+### Multi-Broker Foundation
+- TastyTrade fully integrated
+- IBKR stub prepared for future integration
+- Broker-agnostic credential storage (Firestore subcollections)
+
+## Architecture
+
+### Service Layer (ServiceFactory pattern with lazy initialization)
+
+| Service | Purpose |
+|---------|---------|
+| MarketDataProvider | WebSocket streaming, options chains, Greeks, quotes, orders |
+| BrokerAccount | Account management, balances, portfolio Greeks aggregation |
+| IronCondorAnalytics | YTD performance, win/loss, P&L by ticker/month |
+| IronCondorSavior | Rescue position finder for underwater trades |
+| TradingDashboard | P&L aggregation, net liquidity history |
+| Positions | Current holdings with conflict detection |
+| DeltaAlert | Live position monitoring with delta ratio alerts |
+| TradeLog | Trade execution logging with Discord webhook |
+| WatchlistData | Real-time watchlist with auto-refresh |
+| Settings | Strategy filter preferences |
+| Tickers | Symbol search and recent tracking |
+| Credentials | Encrypted broker credential storage |
+
+### Models
+- **IronCondorModel** — 4-leg strategy with credit, risk/reward, POP, delta, theta
+- **CreditSpreadModel** — 2-leg spread building blocks
+- **OptionModel / OptionStrikeModel / OptionsExpirationModel** — Options chain hierarchy
+- **TickerModel** — Underlying with IV Rank, beta, earnings date
+
+## Quick Start
+
+```bash
+# Install dependencies
+npm install
+
+# Start dev server
+npm run dev
+
+# Production build
+npm run build
+
+# Type check
+npx tsc --noEmit
+
+# E2E tests
+npx cypress open
+
+# Deploy
+firebase deploy
+```
+
+## Environment Variables
+
+Create `.env.local` in the project root:
+
+```env
+VITE_FIREBASE_API_KEY=...
+VITE_FIREBASE_AUTH_DOMAIN=operatiunea-guvidul.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=operatiunea-guvidul
+VITE_FIREBASE_STORAGE_BUCKET=operatiunea-guvidul.firebasestorage.app
+VITE_FIREBASE_MESSAGING_SENDER_ID=...
+VITE_FIREBASE_APP_ID=...
+VITE_FUNCTIONS_BASE_URL=https://us-central1-operatiunea-guvidul.cloudfunctions.net
+```
+
+## Critical Knowledge
+
+### Symbol Format Mismatch
+TastyTrade API: `QQQ   260227C00665000` — DxLink streamer: `.QQQ260227C665`
+
+**Always use `pos['streamer-symbol']`** for WebSocket subscriptions. TastyTrade format silently fails.
+
+### quantityDirection
+Returns strings `"Long"` or `"Short"`, NOT numbers. Use string comparison.
 
 ### Portfolio Greeks
+Uses MobX `autorun` to reactively aggregate from streamer data. Must call `waitForConnection()` before subscribing.
 
-Shown in the sidebar/menu: account-level Δ, Θ, Γ, V aggregated in real time from all open positions via DxLink WebSocket.
+## Trading Rules (enforced in code)
 
-### Iron Condor Savior
+- **Position sizing**: Max 5% of net liquidity per trade
+- **Profit target**: Close at 75% of max profit
+- **DTE management**: Close or roll at 21 DTE
+- **IV preference**: IV Rank > 30 preferred, > 50 ideal
+- **Portfolio balance**: Target delta-neutral, positive theta
 
-Find rescue spreads when an existing IC is underwater. The Savior suggests offsetting spreads to reduce net delta and theta damage.
+## Security
 
----
-
-## Trading Rules (enforced in the app)
-
-| Rule | Value |
-|------|-------|
-| Position sizing | Max 5% of net liquidity per trade |
-| Profit target | Close at 75% of max profit |
-| DTE management | Close or roll at 21 DTE |
-| IV preference | IV Rank > 30 preferred, > 50 ideal |
-| Portfolio target | Delta-neutral, positive theta |
-
----
-
-## Deployment
-
-### Firebase Hosting (frontend)
-
-```bash
-npm run build
-firebase deploy --only hosting
-```
-
-### Firebase Functions (credential storage backend)
-
-```bash
-cd functions
-npm run build
-firebase deploy --only functions
-```
-
-> **Important**: Functions must be deployed for credential storage to work in production. Without deployed Functions, the app falls back to env vars (local dev only).
-
----
-
-## Commands
-
-```bash
-npm run dev          # Start Vite dev server on :5173
-npm run build        # Production build → dist/
-npx tsc --noEmit     # TypeScript type check (zero errors required)
-npx cypress open     # Open Cypress E2E test runner
-firebase deploy      # Deploy hosting + functions
-```
-
----
-
-## Architecture Notes
-
-### Credential flow
-```
-Login → Firebase Auth → onAuthStateChanged → loadCredentials() from Functions
-  → success: initialize(clientSecret, refreshToken)
-  → CORS/fail: fallback to VITE_CLIENT_SECRET + VITE_REFRESH_TOKEN env vars
-```
-
-### Symbol formats
-- TastyTrade REST API: `QQQ   260227C00665000`
-- DxLink WebSocket: `.QQQ260227C665`
-
-Always use `streamer-symbol` from positions for WebSocket subscriptions. Using TastyTrade format with the streamer silently fails (no errors, just empty data).
-
-### Service initialization (race condition fix)
-`BrokerAccountService` is created via Lazy initialization before credentials are ready. The `ServiceFactory.initialize()` method explicitly calls `brokerAccount.reload()` and `marketDataProvider.start()` after credentials are set, ensuring accounts load and WebSocket connects on every credential update.
-
----
-
-## Contributing
-
-- Never commit directly to `master` — use feature branches
-- Run `npx tsc --noEmit` before every PR — zero TypeScript errors required
-- Follow existing patterns: MobX observables for state, `.interface.ts` for interfaces, `.model.ts` for domain models
-- All monetary values: 2 decimal places. Greeks: Δ/Θ/V = 2 decimals, Γ = 4 decimals
-
----
-
-## License
-
-Private — for personal use only.
+- AES-256-GCM encrypted credential storage (Firebase Functions)
+- Firebase custom claims for RBAC (superadmin role)
+- CORS restricted to production domain + localhost
+- CSP, HSTS, X-Frame-Options, X-Content-Type-Options headers
+- API fails closed when API_KEY unset in production
+- No plaintext secrets in Firestore or client bundle

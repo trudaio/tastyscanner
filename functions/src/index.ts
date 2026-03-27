@@ -78,12 +78,26 @@ async function getAuthContext(req: express.Request): Promise<IAuthContext> {
   const decoded = await admin.auth().verifyIdToken(idToken);
   return {
     uid: decoded.uid,
-    isSuperadmin: decoded['role'] === 'superadmin' || decoded.uid === '7OcSxAkz8eahmOJD2ddu4ElBPsf2',
+    isSuperadmin: decoded['role'] === 'superadmin',
   };
 }
 
 const app = express();
-app.use(cors({ origin: true }));
+const ALLOWED_ORIGINS = [
+  'https://operatiunea-guvidul.web.app',
+  'https://operatiunea-guvidul.firebaseapp.com',
+  'http://localhost:5173',
+  'http://localhost:5174',
+];
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+}));
 app.use(express.json());
 
 // POST /api/credentials — save (or update) TastyTrade credentials for the caller
@@ -115,7 +129,8 @@ app.post('/api/credentials', async (req: express.Request, res: express.Response)
     if (message === 'UNAUTHENTICATED') {
       res.status(401).json({ error: 'Unauthorized' });
     } else {
-      res.status(500).json({ error: message });
+      console.error('[API Error]', message);
+      res.status(500).json({ error: 'Internal server error' });
     }
   }
 });
@@ -140,22 +155,15 @@ app.get('/api/credentials', async (req: express.Request, res: express.Response) 
       res.json({ clientSecret, refreshToken } as ICredentialsResponse);
       return;
     }
-    // Fallback: plaintext credentials in 'users' collection
-    const userDoc = await db.collection('users').doc(targetUid).get();
-    if (userDoc.exists) {
-      const data = userDoc.data() as Record<string, unknown>;
-      if (data.clientSecret && data.refreshToken) {
-        res.json({ clientSecret: data.clientSecret, refreshToken: data.refreshToken } as ICredentialsResponse);
-        return;
-      }
-    }
+    // Plaintext fallback removed for security — credentials must be encrypted
     res.status(404).json({ error: 'No credentials found' });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     if (message === 'UNAUTHENTICATED') {
       res.status(401).json({ error: 'Unauthorized' });
     } else {
-      res.status(500).json({ error: message });
+      console.error('[API Error]', message);
+      res.status(500).json({ error: 'Internal server error' });
     }
   }
 });
@@ -168,25 +176,17 @@ app.get('/api/admin/users', async (req: express.Request, res: express.Response) 
       res.status(403).json({ error: 'Forbidden — superadmin only' });
       return;
     }
-    // Check both collections: 'credentials' (encrypted) and 'users' (plaintext legacy)
-    const [credsSnap, usersSnap] = await Promise.all([
-      db.collection('credentials').get(),
-      db.collection('users').get(),
-    ]);
-    const uidSet = new Set<string>();
-    credsSnap.docs.forEach((d: admin.firestore.QueryDocumentSnapshot) => uidSet.add(d.id));
-    usersSnap.docs.forEach((d: admin.firestore.QueryDocumentSnapshot) => {
-      const data = d.data();
-      if (data.clientSecret && data.refreshToken) uidSet.add(d.id);
-    });
-    const uids = Array.from(uidSet);
+    // Only check encrypted credentials collection
+    const credsSnap = await db.collection('credentials').get();
+    const uids = credsSnap.docs.map((d: admin.firestore.QueryDocumentSnapshot) => d.id);
     res.json({ uids });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     if (message === 'UNAUTHENTICATED') {
       res.status(401).json({ error: 'Unauthorized' });
     } else {
-      res.status(500).json({ error: message });
+      console.error('[API Error]', message);
+      res.status(500).json({ error: 'Internal server error' });
     }
   }
 });
@@ -208,7 +208,8 @@ app.post('/api/validate-credentials', async (req: express.Request, res: express.
     if (message === 'UNAUTHENTICATED') {
       res.status(401).json({ error: 'Unauthorized' });
     } else {
-      res.status(500).json({ error: message });
+      console.error('[API Error]', message);
+      res.status(500).json({ error: 'Internal server error' });
     }
   }
 });

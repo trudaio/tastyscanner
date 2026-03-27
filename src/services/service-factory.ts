@@ -33,9 +33,7 @@ import type { ICredentialsService } from './credentials/credentials.service.inte
 import { CredentialsService } from './credentials/credentials.service';
 import type { IBrokerCredentialsService } from './credentials/broker-credentials.service.interface';
 import { BrokerCredentialsService } from './credentials/broker-credentials.service';
-import type { IBacktestService } from './backtest/backtest-engine.interface';
-import { BacktestService } from './backtest/backtest.service';
-import { BrokerType } from './broker-provider/broker-provider.interface';
+import { BrokerType, type IBrokerCredentials } from './broker-provider/broker-provider.interface';
 import type { IDeltaAlertService } from './delta-alert/delta-alert.interface';
 import { DeltaAlertService } from './delta-alert/delta-alert.service';
 
@@ -75,12 +73,26 @@ export class ServiceFactory implements IServiceFactory {
         });
     }
 
-    initialize(clientSecret: string, refreshToken: string, brokerType: BrokerType = BrokerType.TastyTrade): void {
-        this._clientSecret = clientSecret;
-        this._refreshToken = refreshToken;
-        this._brokerType = brokerType;
+    initialize(credentials: IBrokerCredentials): void;
+    initialize(clientSecret: string, refreshToken: string, brokerType?: BrokerType): void;
+    initialize(credentialsOrSecret: IBrokerCredentials | string, refreshToken?: string, brokerType: BrokerType = BrokerType.TastyTrade): void {
+        let credentials: IBrokerCredentials;
+        if (typeof credentialsOrSecret === 'string') {
+            // Legacy path: raw TastyTrade credentials
+            this._clientSecret = credentialsOrSecret;
+            this._refreshToken = refreshToken!;
+            this._brokerType = brokerType;
+            credentials = { brokerType: BrokerType.TastyTrade, clientSecret: credentialsOrSecret, refreshToken: refreshToken! };
+        } else {
+            credentials = credentialsOrSecret;
+            this._brokerType = credentials.brokerType;
+            if (credentials.brokerType === BrokerType.TastyTrade) {
+                this._clientSecret = credentials.clientSecret;
+                this._refreshToken = credentials.refreshToken;
+            }
+        }
         this._marketDataProvider = new Lazy<IMarketDataProviderService>(
-            () => new MarketDataProviderService(this._clientSecret, this._refreshToken)
+            () => new MarketDataProviderService(credentials)
         );
         this.isInitialized = true;
         // Reload accounts using the new credentials (handles race condition where
@@ -93,6 +105,8 @@ export class ServiceFactory implements IServiceFactory {
             if (symbol) {
                 void this.tickers.setCurrentTicker(symbol);
             }
+            // Start background delta monitoring after WebSocket is ready
+            this.deltaAlert.startBackgroundMonitoring();
         });
     }
 
@@ -171,11 +185,6 @@ export class ServiceFactory implements IServiceFactory {
     private _tradeLog: Lazy<ITradeLogService> = new Lazy<ITradeLogService>(() => new TradeLogService(this));
     get tradeLog(): ITradeLogService {
         return this._tradeLog.value;
-    }
-
-    private _backtest: Lazy<IBacktestService> = new Lazy<IBacktestService>(() => new BacktestService());
-    get backtest(): IBacktestService {
-        return this._backtest.value;
     }
 
     private _deltaAlert: Lazy<IDeltaAlertService> = new Lazy<IDeltaAlertService>(() => new DeltaAlertService(this));

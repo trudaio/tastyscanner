@@ -13,10 +13,12 @@
 
 # misc
 .DS_Store
+*.local
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+.env-*.local
 /.nx
 /.nx/cache
 /.vscode/*

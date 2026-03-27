@@ -13,6 +13,7 @@ import {
 } from '@ionic/react';
 import { useHistory } from 'react-router-dom';
 import { FirebaseAuthService } from '../services/auth/firebase-auth.service';
+import { getAuth, sendPasswordResetEmail } from 'firebase/auth';
 import styled from 'styled-components';
 
 const CenteredContainer = styled.div`
@@ -34,8 +35,24 @@ export const LoginPage: React.FC = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [successMsg, setSuccessMsg] = useState('');
     const [loading, setLoading] = useState(false);
     const history = useHistory();
+
+    const handleForgotPassword = async () => {
+        setError('');
+        setSuccessMsg('');
+        if (!email) {
+            setError('Introdu email-ul mai intai, apoi apasa "Am uitat parola".');
+            return;
+        }
+        try {
+            await sendPasswordResetEmail(getAuth(), email);
+            setSuccessMsg('Email de resetare trimis! Verifica inbox-ul (si spam).');
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Nu s-a putut trimite email-ul de resetare.');
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -96,6 +113,14 @@ export const LoginPage: React.FC = () => {
                                         <p>{error}</p>
                                     </IonText>
                                 )}
+                                {successMsg && (
+                                    <IonText color="success">
+                                        <p>{successMsg}</p>
+                                    </IonText>
+                                )}
+                                <IonButton fill="clear" size="small" expand="block" onClick={handleForgotPassword}>
+                                    Am uitat parola
+                                </IonButton>
                                 <IonButton fill="clear" expand="block" routerLink="/register">
                                     Don't have an account? Register
                                 </IonButton>

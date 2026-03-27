@@ -8,10 +8,9 @@ import { IronCondorSaviorPage } from './pages/IronCondorSaviorPage';
 import { AccountPage } from './pages/AccountPage';
 import { GreeksGuidePage } from './pages/GreeksGuidePage';
 import { GuvidHistoryPage } from './pages/GuvidHistoryPage';
-import { TransactionHistoryPage } from './pages/TransactionHistoryPage';
 import { SuperAdminPage } from './pages/SuperAdminPage';
-import BacktestPage from './pages/BacktestPage';
 import { DeltaAlertPage } from './pages/DeltaAlertPage';
+import { DteAnalyzerPage } from './pages/DteAnalyzerPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { OnboardingPage } from './pages/OnboardingPage';
@@ -116,17 +115,14 @@ const App: React.FC = () => {
                                 <Route path="/guvid-history" exact={true}>
                                     <GuvidHistoryPage />
                                 </Route>
-                                <Route path="/transaction-history" exact={true}>
-                                    <TransactionHistoryPage />
-                                </Route>
                                 <Route path="/guide" exact={true}>
                                     <GreeksGuidePage />
                                 </Route>
-                                <Route path="/backtest" exact={true}>
-                                    <BacktestPage />
-                                </Route>
                                 <Route path="/delta-alert" exact={true}>
                                     <DeltaAlertPage />
+                                </Route>
+                                <Route path="/dte-analyzer" exact={true}>
+                                    <DteAnalyzerPage />
                                 </Route>
                                 <Route path="/superadmin" exact={true}>
                                     <SuperAdminPage />

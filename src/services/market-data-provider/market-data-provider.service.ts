@@ -8,11 +8,25 @@ import {
     ITradeRawData, ITransactionRawData, IWatchListRawData
 } from "./market-data-provider.service.interface";
 import {TastyMarketDataProvider} from "./tasty-market-data-provider";
+import {IBKRMarketDataProvider} from "./ibkr-market-data-provider";
+import {BrokerType, type IBrokerCredentials, type IIBKRCredentials, type ITastyTradeCredentials} from "../broker-provider/broker-provider.interface";
 
 export class MarketDataProviderService implements IMarketDataProviderService {
 
-    constructor(clientSecret: string, refreshToken: string) {
-        this._currentProvider = new TastyMarketDataProvider(clientSecret, refreshToken);
+    constructor(credentials: IBrokerCredentials);
+    /** @deprecated Use credentials object instead. Kept for backward compatibility. */
+    constructor(clientSecret: string, refreshToken: string);
+    constructor(credentialsOrSecret: IBrokerCredentials | string, refreshToken?: string) {
+        if (typeof credentialsOrSecret === 'string') {
+            // Legacy path: raw TastyTrade credentials
+            this._currentProvider = new TastyMarketDataProvider(credentialsOrSecret, refreshToken!);
+        } else if (credentialsOrSecret.brokerType === BrokerType.IBKR) {
+            const creds = credentialsOrSecret as IIBKRCredentials;
+            this._currentProvider = new IBKRMarketDataProvider(creds.gatewayUrl, creds.accountId);
+        } else {
+            const creds = credentialsOrSecret as ITastyTradeCredentials;
+            this._currentProvider = new TastyMarketDataProvider(creds.clientSecret, creds.refreshToken);
+        }
     }
 
     private _currentProvider: IMarketDataProviderService;

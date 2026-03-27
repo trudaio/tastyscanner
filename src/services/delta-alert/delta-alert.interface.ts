@@ -1,11 +1,15 @@
-import {ITradeLogEntry, ITradeLogLeg} from "../trade-log/trade-log.interface";
-
 export interface IDeltaAlertLeg {
-    readonly trade: ITradeLogEntry;
-    readonly leg: ITradeLogLeg;
-    readonly initialDelta: number;
+    readonly symbol: string;          // underlying symbol (e.g. "SPY")
+    readonly streamerSymbol: string;   // dxFeed symbol for the option leg
+    readonly optionType: 'C' | 'P';
+    readonly strikePrice: number;
+    readonly expirationDate: string;
+    readonly dte: number;              // days to expiration
+    readonly underlyingPrice: number | null;  // current underlying price
+    readonly strikeDistance: number | null;    // % distance from underlying (negative = ITM)
+    readonly initialDelta: number | null;  // from trade log, null if unknown
     readonly currentDelta: number;
-    readonly deltaRatio: number;  // currentDelta / initialDelta
+    readonly deltaRatio: number | null;    // currentDelta / initialDelta, null if no initial
 }
 
 export interface IDeltaAlertService {
@@ -13,4 +17,6 @@ export interface IDeltaAlertService {
     readonly isLoading: boolean;
     refresh(): void;
     dispose(): void;
+    startBackgroundMonitoring(): void;
+    stopBackgroundMonitoring(): void;
 }

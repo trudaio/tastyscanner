@@ -6,7 +6,8 @@ import TastyTradeClient, { MarketDataSubscriptionType } from '@tastytrade/api';
 
 /* ─── Constants ─────────────────────────────────────────── */
 
-const SUPERADMIN_UID = '7OcSxAkz8eahmOJD2ddu4ElBPsf2';
+// Superadmin is now determined by Firebase custom claims (role: 'superadmin')
+// No hardcoded UID
 const FUNCTIONS_BASE = import.meta.env.VITE_FUNCTIONS_BASE_URL;
 
 /* ─── Types ──────────────────────────────────────────────── */
@@ -205,7 +206,12 @@ export const SuperAdminComponent: React.FC = () => {
         };
     }, []);
 
-    const isSuperadmin = auth.currentUser?.uid === SUPERADMIN_UID;
+    const [isSuperadmin, setIsSuperadmin] = useState(false);
+    useEffect(() => {
+        auth.currentUser?.getIdTokenResult().then(result => {
+            setIsSuperadmin(result.claims['role'] === 'superadmin');
+        });
+    }, []);
 
     const loadAllUsers = useCallback(async () => {
         if (!isSuperadmin) return;

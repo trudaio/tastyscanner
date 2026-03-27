@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   IonAccordion,
   IonAccordionGroup,
@@ -92,6 +92,13 @@ const WatchListsLabelBox = styled.div`
 
 const Menu: React.FC = observer(() => {
   const services = useServices();
+  const [isSuperadmin, setIsSuperadmin] = useState(false);
+
+  useEffect(() => {
+    auth.currentUser?.getIdTokenResult().then(result => {
+      setIsSuperadmin(result.claims['role'] === 'superadmin');
+    });
+  }, []);
 
   const tickers = services.tickers.recentTickers;
 
@@ -180,7 +187,7 @@ const Menu: React.FC = observer(() => {
           <IonLabel>My Account</IonLabel>
         </IonItem>
 
-        {auth.currentUser?.uid === '7OcSxAkz8eahmOJD2ddu4ElBPsf2' && (
+        {isSuperadmin && (
           <IonItem button routerLink="/superadmin" routerDirection="forward" lines="none">
             <IonIcon slot="start" icon={keyOutline} />
             <IonLabel>SuperAdmin</IonLabel>

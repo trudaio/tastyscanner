@@ -16,7 +16,8 @@ export class CredentialsService implements ICredentialsService {
 
     async saveCredentials(clientSecret: string, refreshToken: string): Promise<void> {
         const ref = this.getUserDocRef();
-        await setDoc(ref, { clientSecret, refreshToken }, { merge: true });
+        // Only save a flag that credentials exist — actual secrets go to brokerAccounts subcollection
+        await setDoc(ref, { hasCredentials: true, updatedAt: new Date().toISOString() }, { merge: true });
     }
 
     async loadCredentials(): Promise<ITastyCredentials | null> {

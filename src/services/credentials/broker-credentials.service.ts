@@ -42,10 +42,10 @@ export class BrokerCredentialsService implements IBrokerCredentialsService {
 
     async saveCredentials(clientSecret: string, refreshToken: string): Promise<void> {
         const userRef = this.getUserDocRef();
-        // Keep legacy flat fields so existing code reading users/{uid} still works
-        await setDoc(userRef, { clientSecret, refreshToken }, { merge: true });
+        // Only save metadata to the user doc — no plaintext secrets
+        await setDoc(userRef, { hasCredentials: true, updatedAt: new Date().toISOString() }, { merge: true });
 
-        // Also upsert into the new brokerAccounts subcollection
+        // Save actual credentials to brokerAccounts subcollection only
         const existing = await this.getActiveBrokerAccount();
         if (!existing || existing.brokerType !== BrokerType.TastyTrade) {
             await this.saveBrokerAccount({
@@ -83,16 +83,8 @@ export class BrokerCredentialsService implements IBrokerCredentialsService {
             }
         }
 
-        // 2. Fall back to legacy users/{uid} doc (backward compat)
-        const ref = this.getUserDocRef();
-        const snap = await getDoc(ref);
-        if (!snap.exists()) return null;
-        const data = snap.data();
-        if (!data['clientSecret'] || !data['refreshToken']) return null;
-        return {
-            clientSecret: data['clientSecret'] as string,
-            refreshToken: data['refreshToken'] as string,
-        };
+        // Legacy fallback removed — credentials should only be in brokerAccounts subcollection
+        return null;
     }
 
     async validateCredentials(_clientSecret: string, _refreshToken: string): Promise<boolean> {

@@ -366,11 +366,11 @@ function buildStrikeDecayRows(
 }
 
 const DECAY_COLORS = {
-    delta: '#ff6b6b',
-    premium: '#4a9eff',
-    grid: 'rgba(150, 150, 150, 0.08)',
-    axis: '#555e6e',
-    entry: '#00e676',
+    delta: '#e53935',
+    premium: '#1a73e8',
+    grid: '#f0f0f0',
+    axis: '#888',
+    entry: '#16a34a',
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -379,8 +379,8 @@ const StrikeDecayTooltip = ({active, payload}: any) => {
     const d = payload[0]?.payload as IStrikeDecayRow | undefined;
     if (!d) return null;
     return (
-        <div style={{background: '#1a1a2e', border: '1px solid #333', borderRadius: 8, padding: '10px 14px', fontSize: '0.8rem', color: '#ccc', lineHeight: 1.7}}>
-            <div style={{fontWeight: 700, color: '#fff', marginBottom: 4}}>DTE {d.dte}</div>
+        <div style={{background: '#fff', border: '1px solid #e0e0e0', borderRadius: 8, padding: '10px 14px', fontSize: '0.8rem', color: '#333', lineHeight: 1.7, boxShadow: '0 2px 8px rgba(0,0,0,0.1)'}}>
+            <div style={{fontWeight: 700, color: '#111', marginBottom: 4}}>DTE {d.dte}</div>
             <div style={{color: DECAY_COLORS.delta}}>Delta: <strong>{d.delta}</strong></div>
             <div style={{color: DECAY_COLORS.premium}}>Premium: <strong>${d.premium.toFixed(2)}</strong> ({d.premiumPctEntry.toFixed(0)}% of entry)</div>
             <div>$/Day: <strong>${d.premiumPerDay.toFixed(2)}</strong></div>
@@ -393,30 +393,30 @@ const StrikeDecayChartInline: React.FC<{rows: IStrikeDecayRow[]; entryDte: numbe
     const chartData = [...rows].sort((a, b) => a.dte - b.dte);
     return (
         <div style={{display: 'flex', flexDirection: 'column', gap: 8}}>
-            <div style={{width: '100%', height: 280, background: 'rgba(13, 13, 26, 0.6)', borderRadius: 12, padding: '16px 8px 4px 0'}}>
+            <div style={{width: '100%', height: 280, background: '#ffffff', border: '1px solid #e8ecf1', borderRadius: 10, padding: '16px 8px 4px 0'}}>
                 <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={chartData} margin={{top: 5, right: 15, left: 5, bottom: 5}}>
                         <CartesianGrid strokeDasharray="3 3" stroke={DECAY_COLORS.grid}/>
                         <XAxis
                             dataKey="dte"
                             tick={{fontSize: 11, fill: DECAY_COLORS.axis}}
-                            tickLine={{stroke: DECAY_COLORS.grid}}
-                            axisLine={{stroke: DECAY_COLORS.grid}}
+                            tickLine={false}
+                            axisLine={{stroke: '#ddd'}}
                             label={{value: 'DTE', position: 'insideBottomRight', offset: -5, fontSize: 11, fill: DECAY_COLORS.axis}}
                         />
                         <YAxis
                             yAxisId="premium"
                             tick={{fontSize: 11, fill: DECAY_COLORS.premium}}
-                            tickLine={{stroke: DECAY_COLORS.grid}}
-                            axisLine={{stroke: DECAY_COLORS.grid}}
+                            tickLine={false}
+                            axisLine={false}
                             tickFormatter={v => `$${v}`}
                         />
                         <YAxis
                             yAxisId="delta"
                             orientation="right"
                             tick={{fontSize: 11, fill: DECAY_COLORS.delta}}
-                            tickLine={{stroke: DECAY_COLORS.grid}}
-                            axisLine={{stroke: DECAY_COLORS.grid}}
+                            tickLine={false}
+                            axisLine={false}
                             tickFormatter={v => `Δ${v}`}
                         />
                         <Tooltip content={<StrikeDecayTooltip/>}/>
@@ -426,7 +426,7 @@ const StrikeDecayChartInline: React.FC<{rows: IStrikeDecayRow[]; entryDte: numbe
                             yAxisId="premium"
                             type="monotone"
                             dataKey="premium"
-                            fill="rgba(74, 158, 255, 0.12)"
+                            fill="rgba(26, 115, 232, 0.08)"
                             stroke="none"
                         />
                         <Line
@@ -434,9 +434,9 @@ const StrikeDecayChartInline: React.FC<{rows: IStrikeDecayRow[]; entryDte: numbe
                             type="monotone"
                             dataKey="premium"
                             stroke={DECAY_COLORS.premium}
-                            strokeWidth={2.5}
+                            strokeWidth={2}
                             dot={{r: 3, fill: DECAY_COLORS.premium, strokeWidth: 0}}
-                            activeDot={{r: 5, fill: '#fff', stroke: DECAY_COLORS.premium, strokeWidth: 2}}
+                            activeDot={{r: 5, fill: DECAY_COLORS.premium, stroke: '#fff', strokeWidth: 2}}
                         />
 
                         {/* Delta line */}
@@ -448,7 +448,7 @@ const StrikeDecayChartInline: React.FC<{rows: IStrikeDecayRow[]; entryDte: numbe
                             strokeWidth={2}
                             strokeDasharray="6 3"
                             dot={{r: 3, fill: DECAY_COLORS.delta, strokeWidth: 0}}
-                            activeDot={{r: 5, fill: '#fff', stroke: DECAY_COLORS.delta, strokeWidth: 2}}
+                            activeDot={{r: 5, fill: DECAY_COLORS.delta, stroke: '#fff', strokeWidth: 2}}
                         />
 
                         {/* Entry DTE marker */}

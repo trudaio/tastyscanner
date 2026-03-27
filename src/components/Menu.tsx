@@ -169,6 +169,11 @@ const Menu: React.FC = observer(() => {
           <IonLabel>DTE Analyzer</IonLabel>
         </IonItem>
 
+        <IonItem button routerLink="/strategy-simulator" routerDirection="forward" lines="none">
+          <IonIcon slot="start" icon={analyticsOutline} />
+          <IonLabel>Strategy Simulator</IonLabel>
+        </IonItem>
+
         {/* IC Savior — temporarily hidden, will revisit later
         <IonItem button routerLink="/iron-condor-savior" routerDirection="forward" lines="none">
           <IonIcon slot="start" icon={shieldOutline} />

@@ -11,6 +11,7 @@ import { GuvidHistoryPage } from './pages/GuvidHistoryPage';
 import { SuperAdminPage } from './pages/SuperAdminPage';
 import { DeltaAlertPage } from './pages/DeltaAlertPage';
 import { DteAnalyzerPage } from './pages/DteAnalyzerPage';
+import { StrategySimulatorPage } from './pages/StrategySimulatorPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { OnboardingPage } from './pages/OnboardingPage';
@@ -123,6 +124,9 @@ const App: React.FC = () => {
                                 </Route>
                                 <Route path="/dte-analyzer" exact={true}>
                                     <DteAnalyzerPage />
+                                </Route>
+                                <Route path="/strategy-simulator" exact={true}>
+                                    <StrategySimulatorPage />
                                 </Route>
                                 <Route path="/superadmin" exact={true}>
                                     <SuperAdminPage />

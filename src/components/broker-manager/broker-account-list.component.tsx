@@ -12,7 +12,7 @@ import { observer } from 'mobx-react-lite';
 import { useServices } from '../../hooks/use-services.hook';
 import { BrokerType } from '../../services/broker-provider/broker-provider.interface';
 import type { IBrokerAccount } from '../../services/credentials/broker-credentials.service.interface';
-import type { ITastyTradeCredentials } from '../../services/broker-provider/broker-provider.interface';
+import type { ITastyTradeCredentials, IBrokerCredentials } from '../../services/broker-provider/broker-provider.interface';
 import { AddBrokerModal } from './add-broker-modal.component';
 
 /* ── Styles ──────────────────────────────────────────────────── */
@@ -128,10 +128,9 @@ export const BrokerAccountListComponent: React.FC = observer(() => {
             ...config,
             isActive: shouldActivate,
         });
-        // If this TastyTrade account is now active, reinitialize app services
-        if (shouldActivate && config.brokerType === BrokerType.TastyTrade) {
-            const creds = config.credentials as ITastyTradeCredentials;
-            services.initialize(creds.clientSecret, creds.refreshToken);
+        // If this is the first account, auto-activate and initialize provider
+        if (shouldActivate) {
+            services.initialize(config.credentials as IBrokerCredentials);
         }
         await reload();
         return id;
@@ -142,10 +141,7 @@ export const BrokerAccountListComponent: React.FC = observer(() => {
         try {
             await services.brokerCredentials.setActiveBrokerAccount(account.id);
             // Reinitialize app with the newly active account's credentials
-            if (account.brokerType === BrokerType.TastyTrade) {
-                const creds = account.credentials as ITastyTradeCredentials;
-                services.initialize(creds.clientSecret, creds.refreshToken);
-            }
+            services.initialize(account.credentials as IBrokerCredentials);
             await reload();
         } catch {
             setError('Failed to switch active account.');

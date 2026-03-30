@@ -54,16 +54,16 @@ export class ServiceFactory implements IServiceFactory {
         // Auto-initialize when Firebase auth confirms user
         onAuthStateChanged(auth, (user) => {
             if (user) {
-                this.brokerCredentials.loadCredentials()
-                    .then((creds) => {
-                        if (creds) {
-                            this.initialize(creds.clientSecret, creds.refreshToken);
+                this.brokerCredentials.getActiveBrokerAccount()
+                    .then((active) => {
+                        if (active) {
+                            this.initialize(active.credentials);
                         } else {
-                            console.warn('No credentials found on server. Please add your TastyTrade API keys in My Account.');
+                            console.warn('No active broker account found. Please add a broker in the sidebar.');
                         }
                     })
                     .catch((err: unknown) => {
-                        console.warn('Failed to load credentials from server:', err);
+                        console.warn('Failed to load broker account:', err);
                     });
             } else {
                 runInAction(() => {

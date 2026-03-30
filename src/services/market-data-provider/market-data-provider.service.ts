@@ -22,7 +22,7 @@ export class MarketDataProviderService implements IMarketDataProviderService {
             this._currentProvider = new TastyMarketDataProvider(credentialsOrSecret, refreshToken!);
         } else if (credentialsOrSecret.brokerType === BrokerType.IBKR) {
             const creds = credentialsOrSecret as IIBKRCredentials;
-            this._currentProvider = new IBKRMarketDataProvider(creds.gatewayUrl, creds.accountId);
+            this._currentProvider = new IBKRMarketDataProvider(creds.mode, creds.gatewayUrl, creds.accountId);
         } else {
             const creds = credentialsOrSecret as ITastyTradeCredentials;
             this._currentProvider = new TastyMarketDataProvider(creds.clientSecret, creds.refreshToken);

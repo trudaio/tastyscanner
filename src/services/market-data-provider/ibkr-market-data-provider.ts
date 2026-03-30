@@ -88,11 +88,16 @@ interface IBKRMarketDataSnapshot {
 export class IBKRMarketDataProvider implements IMarketDataProviderService {
     private readonly _baseUrl: string;
     private readonly _accountId: string;
+    private readonly _mode: 'gateway' | 'cloud';
     private readonly _rateLimiter = new RateLimiter(10, 1000);
     private _heartbeatTimer: ReturnType<typeof setInterval> | null = null;
     private _connected = false;
     private _connectionPromise: Promise<void> | null = null;
     private _connectionResolve: (() => void) | null = null;
+
+    // OAuth tokens (cloud mode only)
+    private _accessToken: string | null = null;
+    private _onTokenRefresh: (() => Promise<string>) | null = null;
 
     // WebSocket
     private _ws: WebSocket | null = null;
@@ -105,11 +110,20 @@ export class IBKRMarketDataProvider implements IMarketDataProviderService {
     quotes: Record<string, IQuoteRawData> = {};
     trades: Record<string, ITradeRawData> = {};
 
-    constructor(mode: 'gateway' | 'cloud', gatewayUrl: string, accountId: string) {
+    constructor(
+        mode: 'gateway' | 'cloud',
+        gatewayUrl: string,
+        accountId: string,
+        accessToken?: string,
+        onTokenRefresh?: () => Promise<string>,
+    ) {
+        this._mode = mode;
         this._baseUrl = mode === 'cloud'
             ? 'https://api.ibkr.com'
             : gatewayUrl.replace(/\/+$/, '');
         this._accountId = accountId;
+        this._accessToken = accessToken ?? null;
+        this._onTokenRefresh = onTokenRefresh ?? null;
 
         makeObservable(this, {
             greeks: observable,
@@ -585,18 +599,66 @@ export class IBKRMarketDataProvider implements IMarketDataProviderService {
 
     private async _fetch<T>(path: string, init?: RequestInit): Promise<T> {
         return this._rateLimiter.execute(async () => {
-            const resp = await fetch(`${this._baseUrl}${path}`, {
-                ...init,
-                credentials: 'include',  // needed for CP Gateway cookie auth
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...init?.headers,
-                },
-            });
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+                ...(init?.headers as Record<string, string>),
+            };
+
+            const fetchInit: RequestInit = { ...init, headers };
+
+            if (this._mode === 'cloud' && this._accessToken) {
+                headers['Authorization'] = `Bearer ${this._accessToken}`;
+            } else {
+                fetchInit.credentials = 'include';  // CP Gateway cookie auth
+            }
+
+            let resp = await fetch(`${this._baseUrl}${path}`, fetchInit);
+
+            // Auto-refresh token on 401 (cloud mode only)
+            if (resp.status === 401 && this._mode === 'cloud' && this._onTokenRefresh) {
+                try {
+                    this._accessToken = await this._onTokenRefresh();
+                    headers['Authorization'] = `Bearer ${this._accessToken}`;
+                    resp = await fetch(`${this._baseUrl}${path}`, { ...init, headers });
+                } catch (refreshErr) {
+                    console.error('[IBKR] Token refresh failed:', refreshErr);
+                    throw new Error(`IBKR API ${path}: 401 Unauthorized (token refresh failed)`);
+                }
+            }
+
             if (!resp.ok) {
                 throw new Error(`IBKR API ${path}: ${resp.status} ${resp.statusText}`);
             }
             return resp.json() as Promise<T>;
         });
     }
+
+    /**
+     * Calls our Firebase Function to refresh the IBKR OAuth access token.
+     * Returns the new access token.
+     */
+    static async refreshToken(accountId: string): Promise<string> {
+        const { auth: firebaseAuth } = await import('../../firebase');
+        const user = firebaseAuth.currentUser;
+        if (!user) throw new Error('Not authenticated');
+        const idToken = await user.getIdToken();
+        const resp = await fetch(
+            `${IBKRMarketDataProvider.FUNCTIONS_BASE}/api/ibkr/oauth/refresh`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${idToken}`,
+                },
+                body: JSON.stringify({ accountId }),
+            },
+        );
+        if (!resp.ok) throw new Error(`Token refresh failed: ${resp.status}`);
+        const data = await resp.json() as { accessToken: string };
+        return data.accessToken;
+    }
+
+    /** Base URL for Firebase Functions — set at build time or default to production */
+    private static FUNCTIONS_BASE =
+        import.meta.env.VITE_FUNCTIONS_URL ?? 'https://api-4jy4u5mpaa-uc.a.run.app';
 }

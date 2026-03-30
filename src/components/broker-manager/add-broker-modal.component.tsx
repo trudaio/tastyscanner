@@ -370,11 +370,33 @@ bin\\run.bat root\\conf.yaml`}</CodeSnippet>
                                     )}
 
                                     {ibkrMode === 'cloud' && (
-                                        <HowToBox style={{ marginTop: 8 }}>
-                                            <strong>Cloud OAuth</strong> necesita configurare OAuth 2.0 in IBKR Developer Portal.<br />
-                                            <span style={{ color: '#fbbf24' }}>⚠ Functionalitate in curs de implementare.</span>{' '}
-                                            Foloseste <strong>CP Gateway (Local)</strong> pentru moment.
-                                        </HowToBox>
+                                        <>
+                                            <HowToBox style={{ marginTop: 8 }}>
+                                                <strong>Cloud OAuth</strong> — te conectezi direct cu contul IBKR, fara software local.<br />
+                                                Apasa butonul de mai jos pentru a te autentifica pe site-ul IBKR.
+                                            </HowToBox>
+                                            <IonButton
+                                                expand="block"
+                                                color="danger"
+                                                style={{ marginTop: 12 }}
+                                                onClick={() => {
+                                                    const consumerKey = import.meta.env.VITE_IBKR_CONSUMER_KEY;
+                                                    if (!consumerKey) {
+                                                        setError('IBKR Consumer Key nu e configurat. Contacteaza adminul.');
+                                                        return;
+                                                    }
+                                                    const redirectUri = `${window.location.origin}/ibkr-callback`;
+                                                    const authUrl = `https://www.interactivebrokers.com/authorize?` +
+                                                        `client_id=${encodeURIComponent(consumerKey)}` +
+                                                        `&response_type=code` +
+                                                        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+                                                        `&scope=trading`;
+                                                    window.location.href = authUrl;
+                                                }}
+                                            >
+                                                Connect with IBKR
+                                            </IonButton>
+                                        </>
                                     )}
 
                                     <IonItem style={{ marginTop: 8 }}>

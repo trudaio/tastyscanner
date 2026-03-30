@@ -214,6 +214,187 @@ app.post('/api/validate-credentials', async (req: express.Request, res: express.
   }
 });
 
+// ─── IBKR OAuth ─────────────────────────────────────────────────────────────
+// Handles OAuth 2.0 token exchange and refresh for IBKR Web API (cloud mode).
+// consumer_key is public (sent from frontend), consumer_secret is server-side only.
+
+const ibkrConsumerSecret = defineSecret('IBKR_CONSUMER_SECRET');
+
+function getIbkrConsumerSecret(): string {
+  const key = ibkrConsumerSecret.value();
+  if (!key) throw new Error('IBKR_CONSUMER_SECRET not configured');
+  return key;
+}
+
+// POST /api/ibkr/oauth/token — exchange authorization code for access + refresh tokens
+app.post('/api/ibkr/oauth/token', async (req: express.Request, res: express.Response) => {
+  try {
+    const { uid } = await getAuthContext(req);
+    const { code, redirectUri, consumerKey } = req.body as {
+      code: string;
+      redirectUri: string;
+      consumerKey: string;
+    };
+    if (!code || !redirectUri || !consumerKey) {
+      res.status(400).json({ error: 'code, redirectUri, and consumerKey are required' });
+      return;
+    }
+
+    const secret = getIbkrConsumerSecret();
+
+    // Exchange code for tokens at IBKR OAuth endpoint
+    const tokenUrl = 'https://api.ibkr.com/v1/api/oauth/token';
+    const tokenBody = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: redirectUri,
+      client_id: consumerKey,
+      client_secret: secret,
+    });
+
+    const tokenResp = await new Promise<{ access_token?: string; refresh_token?: string; error?: string }>((resolve, reject) => {
+      const postData = tokenBody.toString();
+      const reqOpt = new URL(tokenUrl);
+      const hreq = https.request({
+        hostname: reqOpt.hostname,
+        path: reqOpt.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Length': Buffer.byteLength(postData),
+        },
+      }, (hres) => {
+        let data = '';
+        hres.on('data', (chunk: string) => { data += chunk; });
+        hres.on('end', () => {
+          try { resolve(JSON.parse(data)); }
+          catch { reject(new Error(`Bad response: ${data.substring(0, 200)}`)); }
+        });
+      });
+      hreq.on('error', reject);
+      hreq.write(postData);
+      hreq.end();
+    });
+
+    if (tokenResp.error || !tokenResp.access_token) {
+      res.status(400).json({ error: tokenResp.error || 'No access_token received' });
+      return;
+    }
+
+    // Store tokens encrypted in Firestore
+    const encKey = getEncryptionKey();
+    const encAccess = encrypt(tokenResp.access_token, encKey);
+    const encRefresh = tokenResp.refresh_token ? encrypt(tokenResp.refresh_token, encKey) : null;
+
+    await db.collection('users').doc(uid).collection('ibkrTokens').doc('current').set({
+      encryptedAccessToken: encAccess.encrypted,
+      accessTokenIv: encAccess.iv,
+      encryptedRefreshToken: encRefresh?.encrypted ?? null,
+      refreshTokenIv: encRefresh?.iv ?? null,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res.json({
+      accessToken: tokenResp.access_token,
+      hasRefreshToken: !!tokenResp.refresh_token,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    if (message === 'UNAUTHENTICATED') {
+      res.status(401).json({ error: 'Unauthorized' });
+    } else {
+      console.error('[ibkr/oauth/token]', message);
+      res.status(500).json({ error: 'Token exchange failed' });
+    }
+  }
+});
+
+// POST /api/ibkr/oauth/refresh — use stored refresh token to get a new access token
+app.post('/api/ibkr/oauth/refresh', async (req: express.Request, res: express.Response) => {
+  try {
+    const { uid } = await getAuthContext(req);
+
+    // Load stored tokens
+    const tokenDoc = await db.collection('users').doc(uid).collection('ibkrTokens').doc('current').get();
+    if (!tokenDoc.exists) {
+      res.status(404).json({ error: 'No IBKR tokens found — please reconnect' });
+      return;
+    }
+
+    const data = tokenDoc.data()!;
+    if (!data['encryptedRefreshToken'] || !data['refreshTokenIv']) {
+      res.status(400).json({ error: 'No refresh token stored' });
+      return;
+    }
+
+    const encKey = getEncryptionKey();
+    const refreshTkn = decrypt(data['encryptedRefreshToken'], data['refreshTokenIv'], encKey);
+    const secret = getIbkrConsumerSecret();
+
+    // Use refresh token to get new access token
+    const tokenUrl = 'https://api.ibkr.com/v1/api/oauth/token';
+    const tokenBody = new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshTkn,
+      client_secret: secret,
+    });
+
+    const tokenResp = await new Promise<{ access_token?: string; refresh_token?: string; error?: string }>((resolve, reject) => {
+      const postData = tokenBody.toString();
+      const reqOpt = new URL(tokenUrl);
+      const hreq = https.request({
+        hostname: reqOpt.hostname,
+        path: reqOpt.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Length': Buffer.byteLength(postData),
+        },
+      }, (hres) => {
+        let data2 = '';
+        hres.on('data', (chunk: string) => { data2 += chunk; });
+        hres.on('end', () => {
+          try { resolve(JSON.parse(data2)); }
+          catch { reject(new Error(`Bad response: ${data2.substring(0, 200)}`)); }
+        });
+      });
+      hreq.on('error', reject);
+      hreq.write(postData);
+      hreq.end();
+    });
+
+    if (tokenResp.error || !tokenResp.access_token) {
+      res.status(400).json({ error: tokenResp.error || 'Refresh failed' });
+      return;
+    }
+
+    // Update stored tokens
+    const encAccess = encrypt(tokenResp.access_token, encKey);
+    const updateData: Record<string, unknown> = {
+      encryptedAccessToken: encAccess.encrypted,
+      accessTokenIv: encAccess.iv,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    // If a new refresh token was issued, update it too
+    if (tokenResp.refresh_token) {
+      const encRefresh = encrypt(tokenResp.refresh_token, encKey);
+      updateData['encryptedRefreshToken'] = encRefresh.encrypted;
+      updateData['refreshTokenIv'] = encRefresh.iv;
+    }
+    await db.collection('users').doc(uid).collection('ibkrTokens').doc('current').set(updateData, { merge: true });
+
+    res.json({ accessToken: tokenResp.access_token });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    if (message === 'UNAUTHENTICATED') {
+      res.status(401).json({ error: 'Unauthorized' });
+    } else {
+      console.error('[ibkr/oauth/refresh]', message);
+      res.status(500).json({ error: 'Token refresh failed' });
+    }
+  }
+});
+
 // ─── Polygon.io / Massive Proxy ──────────────────────────────────────────────
 // Proxies requests to Polygon API, keeping the API key server-side.
 // Used by the backtest engine to fetch historical stock + options data.
@@ -491,4 +672,4 @@ app.post('/api/polygon/option-bars-batch', async (req: express.Request, res: exp
   }
 });
 
-export const api = onRequest({ invoker: 'public', secrets: [polygonApiKey] }, app);
+export const api = onRequest({ invoker: 'public', secrets: [polygonApiKey, ibkrConsumerSecret] }, app);

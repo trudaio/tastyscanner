@@ -132,8 +132,10 @@ export const AddBrokerModal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
     const [showToken, setShowToken] = useState(false);
 
     // IBKR fields
+    const [ibkrMode, setIbkrMode] = useState<'gateway' | 'cloud'>('gateway');
     const [gatewayUrl, setGatewayUrl] = useState('https://localhost:5000');
     const [accountId, setAccountId] = useState('');
+    const [showIbkrHowTo, setShowIbkrHowTo] = useState(false);
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -145,8 +147,10 @@ export const AddBrokerModal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
         setLabel('');
         setClientSecret('');
         setRefreshToken('');
+        setIbkrMode('gateway');
         setGatewayUrl('https://localhost:5000');
         setAccountId('');
+        setShowIbkrHowTo(false);
         setError('');
         setLoading(false);
         setShowHowTo(false);
@@ -176,6 +180,7 @@ export const AddBrokerModal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
             }
             credentials = {
                 brokerType: BrokerType.IBKR,
+                mode: ibkrMode,
                 gatewayUrl: gatewayUrl.trim(),
                 accountId: accountId.trim(),
             } satisfies IIBKRCredentials;
@@ -308,17 +313,71 @@ export const AddBrokerModal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
                                 </>
                             ) : (
                                 <>
-                                    <Label style={{ marginTop: 12 }}>IBKR Client Portal Gateway</Label>
-                                    <IonItem>
-                                        <IonInput
-                                            label="Gateway URL"
-                                            labelPlacement="stacked"
-                                            placeholder="https://localhost:5000"
-                                            value={gatewayUrl}
-                                            onIonInput={e => setGatewayUrl(e.detail.value ?? '')}
-                                        />
-                                    </IonItem>
-                                    <IonItem>
+                                    <Label style={{ marginTop: 12 }}>Mod conectare IBKR</Label>
+                                    <BrokerRow style={{ marginTop: 8 }}>
+                                        <BrokerCard
+                                            $selected={ibkrMode === 'gateway'}
+                                            $rgb="220, 53, 69"
+                                            onClick={() => setIbkrMode('gateway')}
+                                        >
+                                            <BrokerTitle style={{ fontSize: '0.82rem' }}>CP Gateway (Local)</BrokerTitle>
+                                            <BrokerSub>Rulezi Client Portal Gateway pe calculatorul tau. Recomandat.</BrokerSub>
+                                        </BrokerCard>
+                                        <BrokerCard
+                                            $selected={ibkrMode === 'cloud'}
+                                            $rgb="100, 149, 237"
+                                            onClick={() => setIbkrMode('cloud')}
+                                        >
+                                            <BrokerTitle style={{ fontSize: '0.82rem' }}>Cloud OAuth</BrokerTitle>
+                                            <BrokerSub>api.ibkr.com — fara software local, necesita OAuth 2.0.</BrokerSub>
+                                        </BrokerCard>
+                                    </BrokerRow>
+
+                                    {ibkrMode === 'gateway' && (
+                                        <>
+                                            <IonItem style={{ marginTop: 8 }}>
+                                                <IonInput
+                                                    label="Gateway URL"
+                                                    labelPlacement="stacked"
+                                                    placeholder="https://localhost:5000"
+                                                    value={gatewayUrl}
+                                                    onIonInput={e => setGatewayUrl(e.detail.value ?? '')}
+                                                />
+                                            </IonItem>
+                                            <HowToToggle onClick={() => setShowIbkrHowTo(v => !v)}>
+                                                {showIbkrHowTo ? '▲ Ascunde ghidul' : '▼ Cum instalezi CP Gateway?'}
+                                            </HowToToggle>
+                                            {showIbkrHowTo && (
+                                                <HowToBox>
+                                                    <strong>1.</strong> Descarca <strong>Client Portal Gateway</strong> de pe{' '}
+                                                    <span style={{ color: '#f87171' }}>ibkr.com → Technology → APIs → Client Portal API</span>.<br />
+                                                    <strong>2.</strong> Dezarhiveaza si ruleaza:<br />
+                                                    <CodeSnippet>{`# Windows / Mac / Linux
+bin/run.sh root/conf.yaml
+# sau pe Windows:
+bin\\run.bat root\\conf.yaml`}</CodeSnippet>
+                                                    <strong>3.</strong> Deschide{' '}
+                                                    <span style={{ color: '#60a5fa' }}>https://localhost:5000</span>{' '}
+                                                    in browser si logeaza-te cu credentialele IBKR.<br />
+                                                    <strong>4.</strong> Accepta certificatul SSL self-signed (Add Exception in browser).<br />
+                                                    <strong>5.</strong> Listeaza conturile cu:<br />
+                                                    <CodeSnippet>{`GET https://localhost:5000/v1/api/iserver/accounts
+→ copiaza accountId (e.g. U1234567)`}</CodeSnippet>
+                                                    <strong>6.</strong> Gateway trebuie sa ramana pornit cat timp folosesti aplicatia.
+                                                </HowToBox>
+                                            )}
+                                        </>
+                                    )}
+
+                                    {ibkrMode === 'cloud' && (
+                                        <HowToBox style={{ marginTop: 8 }}>
+                                            <strong>Cloud OAuth</strong> necesita configurare OAuth 2.0 in IBKR Developer Portal.<br />
+                                            <span style={{ color: '#fbbf24' }}>⚠ Functionalitate in curs de implementare.</span>{' '}
+                                            Foloseste <strong>CP Gateway (Local)</strong> pentru moment.
+                                        </HowToBox>
+                                    )}
+
+                                    <IonItem style={{ marginTop: 8 }}>
                                         <IonInput
                                             label="Account ID"
                                             labelPlacement="stacked"

@@ -105,8 +105,10 @@ export class IBKRMarketDataProvider implements IMarketDataProviderService {
     quotes: Record<string, IQuoteRawData> = {};
     trades: Record<string, ITradeRawData> = {};
 
-    constructor(gatewayUrl: string, accountId: string) {
-        this._baseUrl = gatewayUrl.replace(/\/+$/, '');
+    constructor(mode: 'gateway' | 'cloud', gatewayUrl: string, accountId: string) {
+        this._baseUrl = mode === 'cloud'
+            ? 'https://api.ibkr.com'
+            : gatewayUrl.replace(/\/+$/, '');
         this._accountId = accountId;
 
         makeObservable(this, {

@@ -75,6 +75,43 @@ const Label = styled.div`
     margin-top: 4px;
 `;
 
+const HowToBox = styled.div`
+    background: rgba(26, 115, 232, 0.07);
+    border: 1px solid rgba(26, 115, 232, 0.2);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-top: 6px;
+    font-size: 0.82rem;
+    color: #93c5fd;
+    line-height: 1.5;
+`;
+
+const HowToToggle = styled.button`
+    background: none;
+    border: none;
+    color: #60a5fa;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0;
+    margin-top: 8px;
+    text-decoration: underline;
+`;
+
+const CodeSnippet = styled.code`
+    display: block;
+    background: #0d1117;
+    border: 1px solid #2a2d38;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 0.75rem;
+    color: #7dd3fc;
+    margin-top: 8px;
+    word-break: break-all;
+    white-space: pre-wrap;
+    line-height: 1.6;
+`;
+
 type AddConfig = Omit<IBrokerAccount, 'id'>;
 
 interface Props {
@@ -100,6 +137,7 @@ export const AddBrokerModal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [showHowTo, setShowHowTo] = useState(false);
 
     const reset = () => {
         setStep('select');
@@ -111,6 +149,7 @@ export const AddBrokerModal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
         setAccountId('');
         setError('');
         setLoading(false);
+        setShowHowTo(false);
     };
 
     const handleClose = () => { reset(); onClose(); };
@@ -248,6 +287,24 @@ export const AddBrokerModal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
                                             <IonIcon icon={showToken ? eyeOffOutline : eyeOutline} />
                                         </IonButton>
                                     </IonItem>
+                                    <HowToToggle onClick={() => setShowHowTo(v => !v)}>
+                                        {showHowTo ? '▲ Ascunde ghidul' : '▼ Cum obtii token-ul?'}
+                                    </HowToToggle>
+                                    {showHowTo && (
+                                        <HowToBox>
+                                            <strong>1.</strong> Mergi pe{' '}
+                                            <a href="https://developer.tastytrade.com" target="_blank" rel="noopener noreferrer"
+                                                style={{ color: '#60a5fa' }}>developer.tastytrade.com</a>{' '}
+                                            si logeaza-te.<br />
+                                            <strong>2.</strong> Creeaza o aplicatie → copiaza <code style={{ color: '#f87171' }}>client_secret</code>.<br />
+                                            <strong>3.</strong> Obtine refresh token cu:<br />
+                                            <CodeSnippet>{`POST https://api.tastytrade.com/sessions
+{"login":"email","password":"parola","remember-me":true}
+
+→ copiaza campul "remember-token" din raspuns`}</CodeSnippet>
+                                            <strong>4.</strong> Lipeste valorile in campurile de mai sus.
+                                        </HowToBox>
+                                    )}
                                 </>
                             ) : (
                                 <>

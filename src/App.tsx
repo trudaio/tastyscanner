@@ -16,6 +16,7 @@ import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { OnboardingPage } from './pages/OnboardingPage';
 import { LandingPage } from './pages/LandingPage';
+import { RiskExposerPage } from './pages/RiskExposerPage';
 
 /* Core CSS required for Ionic components to work properly */
 import '@ionic/react/css/core.css';
@@ -127,6 +128,9 @@ const App: React.FC = () => {
                                 </Route>
                                 <Route path="/strategy-simulator" exact={true}>
                                     <StrategySimulatorPage />
+                                </Route>
+                                <Route path="/risk-exposer" exact={true}>
+                                    <RiskExposerPage />
                                 </Route>
                                 <Route path="/superadmin" exact={true}>
                                     <SuperAdminPage />

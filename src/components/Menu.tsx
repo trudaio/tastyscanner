@@ -21,7 +21,7 @@ import {WatchListsComponent} from "./watch-lists.component";
 import {TickerMenuItemComponent} from "./ticker-menu-item.component";
 import {BrokerAccountsComponent} from "./broker-accounts.component";
 import {AccountInfoComponent} from "./account-info.component";
-import {alertCircleOutline, analyticsOutline, bookOutline, filterOutline, gridOutline, personCircleOutline, shieldOutline, statsChartOutline, keyOutline} from "ionicons/icons";
+import {alertCircleOutline, analyticsOutline, bookOutline, filterOutline, gridOutline, personCircleOutline, shieldOutline, statsChartOutline, keyOutline, shieldHalfOutline} from "ionicons/icons";
 import {useHistory} from "react-router-dom";
 import { auth } from '../firebase';
 
@@ -157,6 +157,11 @@ const Menu: React.FC = observer(() => {
         <IonItem button routerLink="/guvid-history" routerDirection="forward" lines="none">
           <IonIcon slot="start" icon={statsChartOutline} />
           <IonLabel>Guvid History</IonLabel>
+        </IonItem>
+
+        <IonItem button routerLink="/risk-exposer" routerDirection="forward" lines="none">
+          <IonIcon slot="start" icon={shieldHalfOutline} />
+          <IonLabel>Risk Exposer</IonLabel>
         </IonItem>
 
         <IonItem button routerLink="/delta-alert" routerDirection="forward" lines="none">

@@ -247,40 +247,33 @@ const VideosInner = styled.div`
     margin: 0 auto;
 `;
 
-const VideosGrid = styled.div`
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 32px;
+const PlaylistWrapper = styled.div`
     margin-top: 48px;
-
-    @media (max-width: 800px) {
-        grid-template-columns: 1fr;
-        gap: 24px;
-    }
-`;
-
-const VideoCard = styled.div`
     border-radius: 16px;
     overflow: hidden;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
     border: 1px solid #e4e8ef;
-    background: #fff;
+    background: #000;
+    aspect-ratio: 16 / 9;
+    width: 100%;
 `;
 
-const VideoEmbed = styled.iframe`
+const PlaylistEmbed = styled.iframe`
     width: 100%;
-    aspect-ratio: 16 / 9;
+    height: 100%;
     display: block;
     border: none;
 `;
 
-const VideoCaption = styled.div`
-    padding: 16px 20px;
+const PlaylistLink = styled.a`
+    display: block;
+    text-align: center;
+    margin-top: 20px;
+    color: #1a73e8;
     font-size: 0.95rem;
     font-weight: 600;
-    color: #1a1a2e;
-    text-align: center;
-    border-top: 1px solid #f0f2f5;
+    text-decoration: none;
+    &:hover { text-decoration: underline; }
 `;
 
 /* ───────── Features ───────── */
@@ -585,26 +578,21 @@ export const LandingPage: React.FC = () => {
                             <SectionSubtitle>
                                 Tutoriale video pas cu pas pentru a intelege strategia si aplicatia.
                             </SectionSubtitle>
-                            <VideosGrid>
-                                <VideoCard>
-                                    <VideoEmbed
-                                        src="https://www.youtube.com/embed/pw1nwUSLgTc"
-                                        title="Tutorial Operatiunea Guvidul"
-                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                        allowFullScreen
-                                    />
-                                    <VideoCaption>Tutorial — Cum sa folosesti aplicatia</VideoCaption>
-                                </VideoCard>
-                                <VideoCard>
-                                    <VideoEmbed
-                                        src="https://www.youtube.com/embed/P0bdtDqlN30"
-                                        title="Prezentare Soft Iron Condor"
-                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                        allowFullScreen
-                                    />
-                                    <VideoCaption>Prezentare — Soft Iron Condor</VideoCaption>
-                                </VideoCard>
-                            </VideosGrid>
+                            <PlaylistWrapper>
+                                <PlaylistEmbed
+                                    src="https://www.youtube.com/embed/wxlD3dPZ2LU?list=PLIlqy_W3O7tD2QFSYeRmHhjLcTkrdCHr6"
+                                    title="Operatiunea Guvidul — Playlist tutoriale"
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                    allowFullScreen
+                                />
+                            </PlaylistWrapper>
+                            <PlaylistLink
+                                href="https://www.youtube.com/playlist?list=PLIlqy_W3O7tD2QFSYeRmHhjLcTkrdCHr6"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                Vezi toate clipurile pe YouTube →
+                            </PlaylistLink>
                         </VideosInner>
                     </VideosSection>
 

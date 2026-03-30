@@ -271,6 +271,43 @@ const DaySummaryRow = styled.div`
     font-size: 13px;
 `;
 
+/* ─── Pagination ──────────────────────────────────────────── */
+
+const PAGE_SIZE = 20;
+
+const PaginationRow = styled.div`
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: #1a1a2e;
+    border-top: 1px solid #2a2a3e;
+    border-radius: 0 0 8px 8px;
+`;
+
+const PageInfo = styled.span`
+    font-size: 12px;
+    color: #888;
+`;
+
+const PageBtns = styled.div`
+    display: flex;
+    gap: 6px;
+`;
+
+const PageBtn = styled.button<{ $active?: boolean }>`
+    padding: 5px 14px;
+    background: ${p => p.$active ? '#4a9eff' : '#2a2a3e'};
+    border: 1px solid ${p => p.$active ? '#4a9eff' : '#333'};
+    border-radius: 6px;
+    color: ${p => p.$active ? '#fff' : '#aaa'};
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    &:disabled { opacity: 0.3; cursor: not-allowed; }
+    &:not(:disabled):hover { background: ${p => p.$active ? '#4a9eff' : '#3a3a4e'}; }
+`;
+
 /* ─── Helpers ─────────────────────────────────────────────── */
 
 const fmtCur = (v: number): string => {
@@ -292,6 +329,7 @@ export const GuvidHistoryComponent: React.FC = observer(() => {
     const [tickerFilter, setTickerFilter] = useState<string | null>(null);
     const [sortKey, setSortKey] = useState<SortKey>('openDate');
     const [sortDir, setSortDir] = useState<SortDir>('desc');
+    const [page, setPage] = useState(1);
 
     const fetchHistory = async () => {
         if (!services.brokerAccount.currentAccount) return;
@@ -309,6 +347,7 @@ export const GuvidHistoryComponent: React.FC = observer(() => {
     useEffect(() => { fetchHistory(); }, [account]);
 
     const toggleSort = useCallback((key: SortKey) => {
+        setPage(1);
         setSortKey(prev => {
             if (prev === key) {
                 setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -412,6 +451,10 @@ export const GuvidHistoryComponent: React.FC = observer(() => {
         });
         return trades;
     }, [summary, tickerFilter, sortKey, sortDir]);
+
+    /* Paginated trades */
+    const totalPages = Math.max(1, Math.ceil(sortedTrades.length / PAGE_SIZE));
+    const pagedTrades = sortedTrades.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     /* Calendar data: build month grids from dailyPL */
     const calendarMonths = useMemo(() => {
@@ -690,14 +733,14 @@ export const GuvidHistoryComponent: React.FC = observer(() => {
 
             {tickerList.length > 1 && (
                 <TickerFilterRow>
-                    <TickerFilterBtn $active={tickerFilter === null} onClick={() => setTickerFilter(null)}>
+                    <TickerFilterBtn $active={tickerFilter === null} onClick={() => { setTickerFilter(null); setPage(1); }}>
                         ALL ({summary.trades.length})
                     </TickerFilterBtn>
                     {tickerList.map(ticker => (
                         <TickerFilterBtn
                             key={ticker}
                             $active={tickerFilter === ticker}
-                            onClick={() => setTickerFilter(ticker)}
+                            onClick={() => { setTickerFilter(ticker); setPage(1); }}
                         >
                             {ticker}
                         </TickerFilterBtn>
@@ -731,13 +774,13 @@ export const GuvidHistoryComponent: React.FC = observer(() => {
                         </tr>
                     </thead>
                     <tbody>
-                        {sortedTrades.length === 0 ? (
+                        {pagedTrades.length === 0 ? (
                             <tr>
                                 <Td colSpan={11} $align="center" style={{ color: '#444', padding: '24px' }}>
                                     {tickerFilter ? `No IC trades for ${tickerFilter}` : 'No IC trades found'}
                                 </Td>
                             </tr>
-                        ) : sortedTrades.map(trade => {
+                        ) : pagedTrades.map(trade => {
                             const pl = trade.status === 'open' ? trade.openCredit : trade.profit;
                             const debitOrCurrent = trade.status === 'open'
                                 ? (trade.currentPrice > 0 ? fmtCur(trade.currentPrice) : '\u2014')
@@ -773,6 +816,22 @@ export const GuvidHistoryComponent: React.FC = observer(() => {
                         })}
                     </tbody>
                 </Table>
+                {totalPages > 1 && (
+                    <PaginationRow>
+                        <PageInfo>
+                            {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, sortedTrades.length)} din {sortedTrades.length} trades
+                        </PageInfo>
+                        <PageBtns>
+                            <PageBtn onClick={() => setPage(1)} disabled={page === 1}>«</PageBtn>
+                            <PageBtn onClick={() => setPage(p => p - 1)} disabled={page === 1}>‹ Prev</PageBtn>
+                            <PageBtn $active>
+                                {page} / {totalPages}
+                            </PageBtn>
+                            <PageBtn onClick={() => setPage(p => p + 1)} disabled={page === totalPages}>Next ›</PageBtn>
+                            <PageBtn onClick={() => setPage(totalPages)} disabled={page === totalPages}>»</PageBtn>
+                        </PageBtns>
+                    </PaginationRow>
+                )}
             </TableWrap>
 
             {loading && (

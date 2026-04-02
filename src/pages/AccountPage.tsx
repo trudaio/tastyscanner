@@ -15,6 +15,7 @@ import styled from 'styled-components';
 import { useServices } from '../hooks/use-services.hook';
 import { checkmarkCircleOutline, closeCircleOutline, eyeOutline, eyeOffOutline } from 'ionicons/icons';
 import { observer } from 'mobx-react-lite';
+import { BrokerType } from '../services/broker-provider/broker-provider.interface';
 import { BrokerAccountListComponent } from '../components/broker-manager/broker-account-list.component';
 
 const PageBox = styled.div`
@@ -154,9 +155,9 @@ export const AccountPage: React.FC = observer(() => {
 
     useEffect(() => {
         setCredStatus('loading');
-        services.credentials.loadCredentials()
-            .then((creds) => {
-                setCredStatus(creds ? 'set' : 'missing');
+        services.brokerCredentials.getActiveBrokerAccount()
+            .then((active) => {
+                setCredStatus(active ? 'set' : 'missing');
             })
             .catch(() => {
                 setCredStatus('error');
@@ -174,8 +175,33 @@ export const AccountPage: React.FC = observer(() => {
         setCredError('');
         setCredMsg('');
         try {
-            await services.credentials.saveCredentials(clientSecret.trim(), refreshToken.trim());
-            services.initialize(clientSecret.trim(), refreshToken.trim());
+            const credentials = {
+                brokerType: BrokerType.TastyTrade as const,
+                clientSecret: clientSecret.trim(),
+                refreshToken: refreshToken.trim(),
+            };
+            // Save to brokerAccounts subcollection (persisted in Firestore)
+            const existing = await services.brokerCredentials.getActiveBrokerAccount();
+            if (existing && existing.brokerType === BrokerType.TastyTrade) {
+                // Update existing TastyTrade account
+                await services.brokerCredentials.saveBrokerAccount({
+                    id: existing.id,
+                    brokerType: BrokerType.TastyTrade,
+                    label: existing.label,
+                    isActive: true,
+                    credentials,
+                });
+            } else {
+                // Create new TastyTrade account and activate it
+                const id = await services.brokerCredentials.saveBrokerAccount({
+                    brokerType: BrokerType.TastyTrade,
+                    label: 'TastyTrade',
+                    isActive: true,
+                    credentials,
+                });
+                await services.brokerCredentials.setActiveBrokerAccount(id);
+            }
+            services.initialize(credentials);
             setCredStatus('set');
             setCredMsg('Credentialele au fost salvate. Aplicatia s-a reconectat.');
             setClientSecret('');

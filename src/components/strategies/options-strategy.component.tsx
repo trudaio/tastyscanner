@@ -10,7 +10,7 @@ import {warningOutline} from "ionicons/icons";
 
 type DeltaBias = 'bullish' | 'bearish' | 'neutral';
 
-export const StrategyBox = styled.div<{$isBestPop: boolean; $isBestRiskReward: boolean; $hasConflict: boolean; $deltaBias: DeltaBias}>`
+export const StrategyBox = styled.div<{$isBestPop: boolean; $isBestRiskReward: boolean; $hasConflict: boolean; $deltaBias: DeltaBias; $isGuvidPick?: boolean}>`
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -53,6 +53,33 @@ export const StrategyBox = styled.div<{$isBestPop: boolean; $isBestRiskReward: b
                     0 0 40px 10px rgba(255, 77, 109, 0.3),
                     inset 0 0 15px rgba(255, 77, 109, 0.1);
     `}
+
+    ${props => props.$isGuvidPick && !props.$hasConflict && css`
+        border: 3px solid #9b59ff;
+        border-radius: 8px;
+        box-shadow: 0 0 15px 3px rgba(155, 89, 255, 0.4),
+                    0 0 30px 6px rgba(155, 89, 255, 0.15);
+    `}
+`
+
+const GuvidPickBadge = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: rgba(155, 89, 255, 0.15);
+    border: 1px solid #9b59ff;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #9b59ff;
+    margin-bottom: 4px;
+
+    img {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+    }
 `
 
 const ConflictWarningBox = styled.div`
@@ -79,6 +106,7 @@ export interface OptionsStrategyComponentProps {
     bestRiskReward: number;
     onOpenTradeModal: (strategy: IOptionsStrategyViewModel) => void;
     onGuvidChallenge?: (strategy: IOptionsStrategyViewModel) => Promise<void>;
+    isGuvidPick?: boolean;
 }
 // Helper function to determine delta bias
 // Delta threshold: values within ±0.03 are considered neutral
@@ -101,7 +129,14 @@ export const OptionsStrategyComponent: React.FC<OptionsStrategyComponentProps> =
             <StrategyBox $isBestRiskReward={isBestRiskReward}
                          $isBestPop={isBestPop}
                          $hasConflict={hasConflict}
-                         $deltaBias={deltaBias}>
+                         $deltaBias={deltaBias}
+                         $isGuvidPick={props.isGuvidPick}>
+                {props.isGuvidPick && !hasConflict && (
+                    <GuvidPickBadge>
+                        <img src="/logo-guvidul.svg" alt="Guvid" />
+                        Sugestia Guvidului
+                    </GuvidPickBadge>
+                )}
                 {hasConflict && (
                     <ConflictWarningBox>
                         <ConflictIcon icon={warningOutline} />

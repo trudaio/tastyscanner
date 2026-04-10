@@ -97,6 +97,23 @@ export const OptionsExpirationStrategiesComponent: React.FC<OptionsExpirationStr
     const bestRiskReward = Math.min(...strategies.map(strategy => strategy.riskRewardRatio));
     const positionCount = services.positions.getPositionsForExpiration(props.expiration.expirationDate).length;
 
+    // Compute Guvidul's pick: best composite score without conflicts
+    const guvidPickKey = (() => {
+        let bestKey = '';
+        let bestScore = -Infinity;
+        for (const s of strategies) {
+            if (s.positionConflict) continue;
+            const score = (s.pop * 0.6)
+                + (Math.min(Math.max(s.expectedValue / 10, -10), 10) * 0.25)
+                + (Math.min(Math.max(s.alpha, -10), 10) * 0.15);
+            if (score > bestScore) {
+                bestScore = score;
+                bestKey = s.key;
+            }
+        }
+        return bestKey;
+    })();
+
 
     let label = `${props.expiration.expirationDate} (${props.expiration.daysToExpiration} days) - ${props.expiration.expirationType}`;
     if(props.expiration.settlementType === 'AM') {
@@ -130,7 +147,8 @@ export const OptionsExpirationStrategiesComponent: React.FC<OptionsExpirationStr
                     {strategies.map(condor => (<OptionsStrategyComponent key={condor.key}
                                                                          strategy={condor} bestPop={bestPop}
                                                                          bestRiskReward={bestRiskReward} onOpenTradeModal={props.onTrade}
-                                                                         onGuvidChallenge={props.onGuvidChallenge}/>))}
+                                                                         onGuvidChallenge={props.onGuvidChallenge}
+                                                                         isGuvidPick={condor.key === guvidPickKey}/>))}
                 </StrategiesBox>
 
             </IonAccordion>

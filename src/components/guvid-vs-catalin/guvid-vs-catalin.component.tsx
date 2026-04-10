@@ -385,9 +385,39 @@ const fmtCur = (v: number | null): string => {
     return v >= 0 ? `$${abs}` : `-$${abs}`;
 };
 
-/* ─── Sample Data (will be replaced with Firestore) ─── */
+/* ─── Round Data ──────────────────────────────── */
 
-const INITIAL_ROUNDS: IRound[] = [];
+const INITIAL_ROUNDS: IRound[] = [
+    {
+        round: 1,
+        date: '2026-04-10',
+        guvidTrade: {
+            id: 1,
+            date: '2026-04-10',
+            player: 'Guvidul',
+            ticker: 'SPX',
+            strategy: 'IC 6365/6375p 7140/7150c (05-15 Weekly)',
+            entry: 255,
+            exit: null,
+            pl: null,
+            status: 'open',
+            notes: 'POP 86% | EV $115 | Alpha 15.44% | R/R 3.92 | Delta 15/14'
+        },
+        catalinTrade: {
+            id: 2,
+            date: '2026-04-10',
+            player: 'Catalin',
+            ticker: 'SPX',
+            strategy: 'IC 6375/6385p 7140/7150c (05-15 Weekly)',
+            entry: 255,
+            exit: null,
+            pl: null,
+            status: 'open',
+            notes: 'POP 85% | EV $105 | Alpha 14.09% | R/R 3.92 | Delta -0.51'
+        },
+        winner: 'Pending'
+    }
+];
 
 /* ─── Component ───────────────────────────────── */
 

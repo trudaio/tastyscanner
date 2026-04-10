@@ -381,51 +381,85 @@ const RuleItem = styled.li`
 
 /* ─── Sugestia Guvidului ──────────────────────── */
 
+import { StrategyProfileType, STRATEGY_PROFILES } from '../../models/strategy-profile';
+
 const SuggestionSection = styled.div`
     margin-bottom: 24px;
 `;
 
-const SuggestionLabel = styled.span`
-    display: inline-block;
-    font-size: 10px;
+const TickerTabBar = styled.div`
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+`;
+
+const TickerTab = styled.button<{ $active: boolean }>`
+    padding: 8px 24px;
+    border-radius: 6px;
+    border: 1.5px solid ${p => p.$active ? '#4a9eff' : '#2a2a3e'};
+    background: ${p => p.$active ? 'rgba(74, 158, 255, 0.15)' : '#1a1a2e'};
+    color: ${p => p.$active ? '#4a9eff' : '#888'};
+    font-size: 13px;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s;
+    &:hover { border-color: #4a9eff; color: #4a9eff; }
+`;
+
+const StrategyBlock = styled.div<{ $color: string }>`
+    margin-bottom: 20px;
+    border-left: 3px solid ${p => p.$color};
+    padding-left: 16px;
+`;
+
+const StrategyBlockHeader = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+`;
+
+const StrategyBadge = styled.span<{ $color: string }>`
+    font-size: 11px;
+    font-weight: 700;
     padding: 3px 10px;
     border-radius: 4px;
-    background: rgba(155, 89, 255, 0.15);
-    border: 1px solid #9b59ff;
-    color: #9b59ff;
-    margin-bottom: 12px;
+    background: ${p => p.$color}22;
+    border: 1px solid ${p => p.$color};
+    color: ${p => p.$color};
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+`;
+
+const ExitLabel = styled.span`
+    font-size: 11px;
+    color: #666;
 `;
 
 const SuggestionGrid = styled.div`
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 12px;
-
-    @media (max-width: 480px) {
-        grid-template-columns: 1fr;
-    }
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 10px;
+    @media (max-width: 480px) { grid-template-columns: 1fr; }
 `;
 
-const SuggestionCard = styled.div<{ $rank: number }>`
+const SuggestionCard = styled.div<{ $color: string; $isFirst: boolean }>`
     background: #1a1a2e;
     border-radius: 8px;
-    padding: 16px;
-    border-left: 4px solid ${p => p.$rank === 0 ? '#9b59ff' : '#3a3a5e'};
+    padding: 14px;
+    border-left: 4px solid ${p => p.$isFirst ? p.$color : '#3a3a5e'};
     position: relative;
-    ${p => p.$rank === 0 ? 'box-shadow: 0 0 20px rgba(155, 89, 255, 0.1);' : ''}
+    ${p => p.$isFirst ? `box-shadow: 0 0 15px ${p.$color}22;` : ''}
 `;
 
 const SuggestionExpDate = styled.div`
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     color: #888;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
 `;
 
 const SuggestionIC = styled.div`
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     font-weight: 700;
     color: #ddd;
     margin-bottom: 8px;
@@ -435,37 +469,43 @@ const SuggestionIC = styled.div`
 const SuggestionMetrics = styled.div`
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
+    gap: 4px;
 `;
 
 const SuggestionMetric = styled.div`
     text-align: center;
 `;
 
-const SuggestionMetricValue = styled.div<{ $highlight?: boolean }>`
-    font-size: 0.85rem;
+const SuggestionMetricValue = styled.div<{ $color?: string }>`
+    font-size: 0.82rem;
     font-weight: 700;
-    color: ${p => p.$highlight ? '#9b59ff' : '#ccc'};
+    color: ${p => p.$color || '#ccc'};
 `;
 
 const SuggestionMetricLabel = styled.div`
-    font-size: 0.6rem;
+    font-size: 0.58rem;
     color: #666;
     text-transform: uppercase;
 `;
 
-const BestBadge = styled.span`
+const BestBadge = styled.span<{ $color: string }>`
     position: absolute;
-    top: 8px;
-    right: 8px;
-    font-size: 9px;
+    top: 6px;
+    right: 6px;
+    font-size: 8px;
     font-weight: 700;
     text-transform: uppercase;
     padding: 2px 6px;
     border-radius: 3px;
-    background: rgba(155, 89, 255, 0.2);
-    color: #9b59ff;
+    background: ${p => p.$color}33;
+    color: ${p => p.$color};
     letter-spacing: 0.5px;
+`;
+
+const EmptyProfileState = styled.div`
+    color: #555;
+    font-size: 0.8rem;
+    padding: 12px 0;
 `;
 
 interface ISuggestion {
@@ -480,15 +520,37 @@ interface ISuggestion {
     rr: number;
     delta: string;
     score: number;
+    wings: number;
 }
 
-const GUVID_SUGGESTIONS: ISuggestion[] = [
-    { expDate: '2026-04-30', dte: 20, label: 'End-Of-Month', ic: '6455/6465p  7065/7075c', pop: 87, ev: 120, alpha: 16, credit: 250, rr: 4, delta: '14/14', score: 56.20 },
-    { expDate: '2026-05-15', dte: 35, label: 'Weekly', ic: '6360/6370p  7140/7150c', pop: 86, ev: 115, alpha: 15.44, credit: 255, rr: 3.92, delta: '15/14', score: 55.60 },
-    { expDate: '2026-05-15', dte: 35, label: 'Regular [AM]', ic: '6365/6375p  7130/7140c', pop: 86, ev: 120, alpha: 16.22, credit: 260, rr: 3.85, delta: '15/15', score: 55.60 },
-    { expDate: '2026-05-01', dte: 21, label: 'Weekly', ic: '6485/6495p  7070/7080c', pop: 85, ev: 115, alpha: 15.65, credit: 265, rr: 3.77, delta: '16/14', score: 55.00 },
-    { expDate: '2026-04-29', dte: 19, label: 'Weekly', ic: '6620/6630p  6990/7000c', pop: 77, ev: 190, alpha: 32.76, credit: 420, rr: 2.38, delta: '24/23', score: 50.20 },
-];
+type TickerSuggestions = Record<StrategyProfileType, ISuggestion[]>;
+
+const GUVID_SUGGESTIONS: Record<string, TickerSuggestions> = {
+    SPX: {
+        conservative: [
+            { expDate: '2026-05-15', dte: 35, label: 'Weekly', ic: '6370/6380p 7140/7150c', pop: 86, ev: 125, alpha: 17.01, credit: 265, rr: 3.77, delta: '15/15', score: 63.20, wings: 10 },
+            { expDate: '2026-05-15', dte: 35, label: 'Regular [AM]', ic: '6375/6385p 7130/7140c', pop: 86, ev: 125, alpha: 17.01, credit: 265, rr: 3.77, delta: '15/15', score: 63.20, wings: 10 },
+        ],
+        neutral: [
+            { expDate: '2026-04-30', dte: 20, label: 'End-Of-Month', ic: '6465/6475p 7065/7075c', pop: 87, ev: 120, alpha: 16, credit: 250, rr: 4, delta: '14/14', score: 56.20, wings: 10 },
+            { expDate: '2026-05-15', dte: 35, label: 'Weekly', ic: '6370/6380p 7140/7150c', pop: 86, ev: 125, alpha: 17.01, credit: 265, rr: 3.77, delta: '15/15', score: 55.60, wings: 10 },
+            { expDate: '2026-05-15', dte: 35, label: 'Regular [AM]', ic: '6375/6385p 7140/7150c', pop: 86, ev: 110, alpha: 14.67, credit: 250, rr: 4, delta: '15/14', score: 55.60, wings: 10 },
+            { expDate: '2026-05-01', dte: 21, label: 'Weekly', ic: '6495/6505p 7080/7090c', pop: 85, ev: 110, alpha: 14.86, credit: 260, rr: 3.85, delta: '16/14', score: 55.00, wings: 10 },
+            { expDate: '2026-04-29', dte: 19, label: 'Weekly', ic: '6630/6640p 6990/7000c', pop: 77, ev: 210, alpha: 37.5, credit: 440, rr: 2.27, delta: '24/24', score: 50.20, wings: 10 },
+        ],
+        aggressive: [
+            { expDate: '2026-04-30', dte: 20, label: 'End-Of-Month', ic: '6545/6550p 7035/7040c', pop: 83, ev: 85, alpha: 25.76, credit: 170, rr: 2.94, delta: '18/18', score: 27.65, wings: 5 },
+            { expDate: '2026-05-01', dte: 21, label: 'Weekly', ic: '6595/6600p 7025/7030c', pop: 79, ev: 100, alpha: 33.9, credit: 205, rr: 2.44, delta: '22/21', score: 27.25, wings: 5 },
+        ],
+    },
+    QQQ: {
+        conservative: [],
+        neutral: [
+            { expDate: '2026-05-15', dte: 35, label: 'Regular [PM]', ic: '565/575p 645/655c', pop: 81, ev: 71, alpha: 9.61, credit: 261, rr: 3.83, delta: '20/16', score: 51.82, wings: 10 },
+        ],
+        aggressive: [],
+    },
+};
 
 /* ─── Helpers ─────────────────────────────────── */
 
@@ -537,6 +599,7 @@ const INITIAL_ROUNDS: IRound[] = [
 export const GuvidVsCatalinComponent: React.FC = () => {
     const [rounds, setRounds] = useState<IRound[]>(INITIAL_ROUNDS);
     const [firestoreRounds, setFirestoreRounds] = useState<ICompetitionRound[]>([]);
+    const [selectedTicker, setSelectedTicker] = useState<'SPX' | 'QQQ'>('SPX');
     const userEmail = auth.currentUser?.email || 'User';
     const userName = userEmail.split('@')[0];
 
@@ -670,42 +733,62 @@ export const GuvidVsCatalinComponent: React.FC = () => {
 
             {/* Sugestia Guvidului */}
             <SuggestionSection>
-                <SuggestionLabel>Sugestia Guvidului</SuggestionLabel>
-                <SuggestionGrid>
-                    {GUVID_SUGGESTIONS.map((s, i) => (
-                        <SuggestionCard key={s.expDate + s.label} $rank={i}>
-                            {i === 0 && <BestBadge>Top Pick</BestBadge>}
-                            <SuggestionExpDate>{s.expDate} ({s.dte}d) — {s.label}</SuggestionExpDate>
-                            <SuggestionIC>{s.ic}</SuggestionIC>
-                            <SuggestionMetrics>
-                                <SuggestionMetric>
-                                    <SuggestionMetricValue $highlight={i === 0}>{s.pop}%</SuggestionMetricValue>
-                                    <SuggestionMetricLabel>POP</SuggestionMetricLabel>
-                                </SuggestionMetric>
-                                <SuggestionMetric>
-                                    <SuggestionMetricValue>${s.ev}</SuggestionMetricValue>
-                                    <SuggestionMetricLabel>EV</SuggestionMetricLabel>
-                                </SuggestionMetric>
-                                <SuggestionMetric>
-                                    <SuggestionMetricValue>{s.alpha}%</SuggestionMetricValue>
-                                    <SuggestionMetricLabel>Alpha</SuggestionMetricLabel>
-                                </SuggestionMetric>
-                                <SuggestionMetric>
-                                    <SuggestionMetricValue>${s.credit}</SuggestionMetricValue>
-                                    <SuggestionMetricLabel>Credit</SuggestionMetricLabel>
-                                </SuggestionMetric>
-                                <SuggestionMetric>
-                                    <SuggestionMetricValue>{s.rr}</SuggestionMetricValue>
-                                    <SuggestionMetricLabel>R/R</SuggestionMetricLabel>
-                                </SuggestionMetric>
-                                <SuggestionMetric>
-                                    <SuggestionMetricValue>{s.delta}</SuggestionMetricValue>
-                                    <SuggestionMetricLabel>Delta</SuggestionMetricLabel>
-                                </SuggestionMetric>
-                            </SuggestionMetrics>
-                        </SuggestionCard>
-                    ))}
-                </SuggestionGrid>
+                <TickerTabBar>
+                    <TickerTab $active={selectedTicker === 'SPX'} onClick={() => setSelectedTicker('SPX')}>SPX</TickerTab>
+                    <TickerTab $active={selectedTicker === 'QQQ'} onClick={() => setSelectedTicker('QQQ')}>QQQ</TickerTab>
+                </TickerTabBar>
+
+                {(['conservative', 'neutral', 'aggressive'] as StrategyProfileType[]).map(profileType => {
+                    const profile = STRATEGY_PROFILES[profileType];
+                    const suggestions = GUVID_SUGGESTIONS[selectedTicker]?.[profileType] || [];
+                    return (
+                        <StrategyBlock key={profileType} $color={profile.color}>
+                            <StrategyBlockHeader>
+                                <StrategyBadge $color={profile.color}>{profile.name}</StrategyBadge>
+                                <ExitLabel>Exit: {profile.exitProfitPercent}% profit | Wings ${profile.wings[0]} | Delta {profile.minDelta}-{profile.maxDelta}</ExitLabel>
+                            </StrategyBlockHeader>
+                            {suggestions.length === 0 ? (
+                                <EmptyProfileState>Nu exista IC-uri pentru {profile.name} pe {selectedTicker}</EmptyProfileState>
+                            ) : (
+                                <SuggestionGrid>
+                                    {suggestions.map((s, i) => (
+                                        <SuggestionCard key={s.expDate + s.label} $color={profile.color} $isFirst={i === 0}>
+                                            {i === 0 && <BestBadge $color={profile.color}>Top Pick</BestBadge>}
+                                            <SuggestionExpDate>{s.expDate} ({s.dte}d) — {s.label}</SuggestionExpDate>
+                                            <SuggestionIC>{s.ic}</SuggestionIC>
+                                            <SuggestionMetrics>
+                                                <SuggestionMetric>
+                                                    <SuggestionMetricValue $color={i === 0 ? profile.color : undefined}>{s.pop}%</SuggestionMetricValue>
+                                                    <SuggestionMetricLabel>POP</SuggestionMetricLabel>
+                                                </SuggestionMetric>
+                                                <SuggestionMetric>
+                                                    <SuggestionMetricValue>${s.ev}</SuggestionMetricValue>
+                                                    <SuggestionMetricLabel>EV</SuggestionMetricLabel>
+                                                </SuggestionMetric>
+                                                <SuggestionMetric>
+                                                    <SuggestionMetricValue>{s.alpha}%</SuggestionMetricValue>
+                                                    <SuggestionMetricLabel>Alpha</SuggestionMetricLabel>
+                                                </SuggestionMetric>
+                                                <SuggestionMetric>
+                                                    <SuggestionMetricValue>${s.credit}</SuggestionMetricValue>
+                                                    <SuggestionMetricLabel>Credit</SuggestionMetricLabel>
+                                                </SuggestionMetric>
+                                                <SuggestionMetric>
+                                                    <SuggestionMetricValue>{s.rr}</SuggestionMetricValue>
+                                                    <SuggestionMetricLabel>R/R</SuggestionMetricLabel>
+                                                </SuggestionMetric>
+                                                <SuggestionMetric>
+                                                    <SuggestionMetricValue>{s.delta}</SuggestionMetricValue>
+                                                    <SuggestionMetricLabel>Delta</SuggestionMetricLabel>
+                                                </SuggestionMetric>
+                                            </SuggestionMetrics>
+                                        </SuggestionCard>
+                                    ))}
+                                </SuggestionGrid>
+                            )}
+                        </StrategyBlock>
+                    );
+                })}
             </SuggestionSection>
 
             {/* Rounds Table */}

@@ -1,5 +1,6 @@
 import { collection, addDoc, getDocs, query, orderBy, doc, updateDoc, Timestamp } from 'firebase/firestore';
 import { db, auth } from '../../firebase';
+import { StrategyProfileType } from '../../models/strategy-profile';
 
 export interface ICompetitionRound {
     id?: string;
@@ -10,6 +11,7 @@ export interface ICompetitionRound {
     guvidTrade: ICompetitionTrade;
     winner: 'Guvidul' | 'User' | 'Draw' | 'Pending';
     createdAt?: Timestamp;
+    guvidProfile?: StrategyProfileType;
 }
 
 export interface ICompetitionTrade {
@@ -26,6 +28,8 @@ export interface ICompetitionTrade {
     theta: number;
     exitPl: number | null;
     status: 'open' | 'won' | 'lost' | 'draw';
+    strategyProfile?: StrategyProfileType;
+    exitProfitPercent?: number;
 }
 
 function getUserCompetitionRef() {
@@ -59,7 +63,8 @@ export async function updateCompetitionRound(roundId: string, data: Partial<ICom
 
 export function buildTradeFromStrategy(
     strategy: { strategyName: string; credit: number; pop: number; expectedValue: number; alpha: number; riskRewardRatio: number; delta: number; theta: number; legs: { legType: string; option: { optionType: string; strikePrice: number; expirationDate: string } }[] },
-    ticker: string
+    ticker: string,
+    profile?: StrategyProfileType
 ): ICompetitionTrade {
     const expiration = strategy.legs[0]?.option.expirationDate || '';
     const legs = strategy.legs.map(l => ({
@@ -89,6 +94,7 @@ export function buildTradeFromStrategy(
         delta: strategy.delta,
         theta: strategy.theta,
         exitPl: null,
-        status: 'open'
+        status: 'open',
+        strategyProfile: profile,
     };
 }

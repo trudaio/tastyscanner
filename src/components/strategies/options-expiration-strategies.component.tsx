@@ -15,6 +15,7 @@ import {OptionsStrategyComponent} from "./options-strategy.component";
 import {IonAccordion, IonChip, IonItem, IonLabel} from "@ionic/react";
 import styled, {css} from "styled-components";
 import {useServices} from "../../hooks/use-services.hook";
+import {computeCompositeScore, STRATEGY_PROFILES} from "../../models/strategy-profile";
 
 function computeHeaderColor(expirationType: OptionExpirationTypeEnum) {
     switch (expirationType) {
@@ -96,15 +97,13 @@ export const OptionsExpirationStrategiesComponent: React.FC<OptionsExpirationStr
     const bestRiskReward = Math.min(...strategies.map(strategy => strategy.riskRewardRatio));
     const positionCount = services.positions.getPositionsForExpiration(props.expiration.expirationDate).length;
 
-    // Compute Guvidul's pick: best composite score without conflicts
+    // Compute Guvidul's pick: best composite score (neutral profile) without conflicts
     const guvidPickKey = (() => {
         let bestKey = '';
         let bestScore = -Infinity;
         for (const s of strategies) {
             if (s.positionConflict) continue;
-            const score = (s.pop * 0.6)
-                + (Math.min(Math.max(s.expectedValue / 10, -10), 10) * 0.25)
-                + (Math.min(Math.max(s.alpha, -10), 10) * 0.15);
+            const score = computeCompositeScore(s, STRATEGY_PROFILES.neutral);
             if (score > bestScore) {
                 bestScore = score;
                 bestKey = s.key;

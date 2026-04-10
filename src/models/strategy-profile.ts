@@ -67,7 +67,7 @@ export const STRATEGY_PROFILES: Record<StrategyProfileType, IStrategyProfile> = 
         maxRiskRewardRatio: 4,
         maxBidAskSpread: 8,
         minCredit: 1,
-        scoring: { popWeight: 0.25, evWeight: 0.40, alphaWeight: 0.35 },
+        scoring: { popWeight: 0.40, evWeight: 0.35, alphaWeight: 0.25 },
         exitProfitPercent: 90,
     },
 };

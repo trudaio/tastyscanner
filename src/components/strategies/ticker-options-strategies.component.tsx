@@ -21,6 +21,8 @@ import {CallCreditSpreadsComponent} from "./credit-spreads/call-credit-spreads.c
 import {RawLocalStorageKeys} from "../../services/storage/raw-local-storage/raw-local-storage-keys";
 import {IOptionsStrategyViewModel} from "../../models/options-strategy.view-model.interface";
 import {SendOrderDialogComponent} from "./send-order-dialog.component";
+import {saveCompetitionRound, buildTradeFromStrategy, getCompetitionRounds} from "../../services/competition/competition.service";
+import {auth} from "../../firebase";
 
 const SpinnerContainerBox = styled.div`
     display: flex;
@@ -148,7 +150,53 @@ export const TickerOptionsStrategiesComponent: React.FC = observer(() => {
         setCurrentStrategy(strategy);
     }
 
+    const onGuvidChallenge = async (userStrategy: IOptionsStrategyViewModel) => {
+        if (!ticker) return;
+        const userEmail = auth.currentUser?.email || 'unknown';
 
+        // Find the expiration that matches the user's pick
+        const userExpDate = userStrategy.legs[0]?.option.expirationDate;
+        const expirations = ticker.getExpirationsWithIronCondors();
+        const matchedExp = expirations.find(e => e.expirationDate === userExpDate);
+
+        // Guvidul picks: best scoring IC on the same expiration (excluding user's pick)
+        let guvidStrategy: IOptionsStrategyViewModel | null = null;
+        if (matchedExp) {
+            const ics = matchedExp.ironCondors;
+            let bestScore = -Infinity;
+            for (const ic of ics) {
+                if (ic.key === userStrategy.key) continue; // skip user's pick
+                if (ic.positionConflict) continue; // skip conflicts
+                const pop = ic.pop;
+                const ev = ic.expectedValue;
+                const alpha = ic.alpha;
+                const score = (pop * 0.6) + (Math.min(Math.max(ev / 10, -10), 10) * 0.25) + (Math.min(Math.max(alpha, -10), 10) * 0.15);
+                if (score > bestScore) {
+                    bestScore = score;
+                    guvidStrategy = ic;
+                }
+            }
+        }
+
+        if (!guvidStrategy) guvidStrategy = userStrategy; // fallback
+
+        // Get round number
+        let roundNum = 1;
+        try {
+            const existing = await getCompetitionRounds();
+            roundNum = existing.length + 1;
+        } catch { /* first round */ }
+
+        const today = new Date().toISOString().split('T')[0];
+        await saveCompetitionRound({
+            round: roundNum,
+            date: today,
+            userEmail,
+            userTrade: buildTradeFromStrategy(userStrategy as any, ticker.symbol),
+            guvidTrade: buildTradeFromStrategy(guvidStrategy as any, ticker.symbol),
+            winner: 'Pending'
+        });
+    }
 
     return (
         <IonTabs className={STRATEGIES_TABS_CSS_CLASS}>
@@ -173,7 +221,7 @@ export const TickerOptionsStrategiesComponent: React.FC = observer(() => {
                 <IonPage id={CONDORS_TAB}>
                     <TabHeaderComponent title={"Iron Condors"} bestPopMode={bestPopMode} onToggleBestPop={() => setBestPopMode(v => !v)}/>
                     <IonContent style={{ '--padding-bottom': '160px' } as React.CSSProperties}>
-                        <IronCondorsComponent ticker={ticker} onTrade={onTrade} bestPopMode={bestPopMode} />
+                        <IronCondorsComponent ticker={ticker} onTrade={onTrade} onGuvidChallenge={onGuvidChallenge} bestPopMode={bestPopMode} />
                     </IonContent>
                 </IonPage>
 

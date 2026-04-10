@@ -78,6 +78,7 @@ export interface OptionsStrategyComponentProps {
     bestPop: number;
     bestRiskReward: number;
     onOpenTradeModal: (strategy: IOptionsStrategyViewModel) => void;
+    onGuvidChallenge?: (strategy: IOptionsStrategyViewModel) => Promise<void>;
 }
 // Helper function to determine delta bias
 // Delta threshold: values within ±0.03 are considered neutral
@@ -109,7 +110,7 @@ export const OptionsStrategyComponent: React.FC<OptionsStrategyComponentProps> =
                 )}
                 <OptionsStrategyHeaderComponent/>
                 {props.strategy.legs.map(leg => (<OptionsStrategyLegComponent key={leg.key} leg={leg}/>))}
-                <OptionsStrategyFooterComponent strategy={props.strategy} onOpenTradeDialog={() => props.onOpenTradeModal(props.strategy)}/>
+                <OptionsStrategyFooterComponent strategy={props.strategy} onOpenTradeDialog={() => props.onOpenTradeModal(props.strategy)} onGuvidChallenge={props.onGuvidChallenge}/>
             </StrategyBox>
         </IonCard>
     )

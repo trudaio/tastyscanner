@@ -18,7 +18,7 @@ export const GuviduVsCatalinPage: React.FC = () => {
                     <IonButtons slot="start">
                         <IonMenuButton />
                     </IonButtons>
-                    <IonTitle>Guvidul vs Catalin</IonTitle>
+                    <IonTitle>Guvidul vs You</IonTitle>
                 </IonToolbar>
             </IonHeader>
             <IonContent fullscreen>

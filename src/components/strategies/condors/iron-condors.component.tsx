@@ -10,6 +10,7 @@ import {BestPopSummaryComponent} from "./best-pop-summary.component";
 interface IronCondorsProps {
     ticker: ITickerViewModel;
     onTrade: (strategy: IOptionsStrategyViewModel) => void;
+    onGuvidChallenge?: (strategy: IOptionsStrategyViewModel) => Promise<void>;
     bestPopMode?: boolean;
 }
 
@@ -35,6 +36,7 @@ export const IronCondorsComponent: React.FC<IronCondorsProps> = observer((props)
                                            getExpirations={() => expirations}
                                            getExpirationStrategies={(expiration) => expiration.ironCondors}
                                            noStrategiesAvailableMessage="No iron condors available"
-                                           onTrade={props.onTrade}/>
+                                           onTrade={props.onTrade}
+                                           onGuvidChallenge={props.onGuvidChallenge}/>
     )
 })

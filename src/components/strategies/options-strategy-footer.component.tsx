@@ -1,8 +1,8 @@
-import React from "react";
+import React, {useState} from "react";
 import {observer} from "mobx-react-lite";
 import styled, {css} from "styled-components";
 import {IOptionsStrategyViewModel} from "../../models/options-strategy.view-model.interface";
-import {IonButton} from "@ionic/react";
+import {IonButton, IonSpinner} from "@ionic/react";
 
 
 const StrategyFooterBox = styled.div`
@@ -25,8 +25,40 @@ const ButtonBox = styled.div`
     flex-direction: row;
     align-items: center;
     justify-content: flex-end;
+    gap: 8px;
     width: 100%;
     grid-column: 1 / -1;
+`
+
+const GuvidButton = styled.button<{ $saving?: boolean }>`
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: rgba(155, 89, 255, 0.15);
+    border: 1.5px solid #9b59ff;
+    border-radius: 6px;
+    color: #9b59ff;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+
+    &:hover {
+        background: rgba(155, 89, 255, 0.3);
+        box-shadow: 0 0 12px rgba(155, 89, 255, 0.3);
+    }
+
+    &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    img {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+    }
 `
 
 const EvValueBox = styled.span<{ $positive: boolean }>`
@@ -43,10 +75,29 @@ const AlphaValueBox = styled.span<{ $positive: boolean }>`
     }
 `
 
-export const OptionsStrategyFooterComponent: React.FC<{strategy: IOptionsStrategyViewModel; onOpenTradeDialog: () => void}> = observer((props) => {
+export const OptionsStrategyFooterComponent: React.FC<{
+    strategy: IOptionsStrategyViewModel;
+    onOpenTradeDialog: () => void;
+    onGuvidChallenge?: (strategy: IOptionsStrategyViewModel) => Promise<void>;
+}> = observer((props) => {
     const { strategy } = props;
     const evPositive = strategy.expectedValue >= 0;
     const alphaPositive = strategy.alpha >= 0;
+    const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+
+    const handleGuvidChallenge = async () => {
+        if (!props.onGuvidChallenge || saving || saved) return;
+        setSaving(true);
+        try {
+            await props.onGuvidChallenge(strategy);
+            setSaved(true);
+        } catch (e) {
+            console.error('[GuvidChallenge] Error:', e);
+        } finally {
+            setSaving(false);
+        }
+    };
 
     return (
         <StrategyFooterBox>
@@ -71,6 +122,16 @@ export const OptionsStrategyFooterComponent: React.FC<{strategy: IOptionsStrateg
             <span>Theta:</span>
             <span>{strategy.theta}</span>
             <ButtonBox>
+                {props.onGuvidChallenge && (
+                    <GuvidButton onClick={handleGuvidChallenge} disabled={saving || saved}>
+                        {saving ? (
+                            <IonSpinner name="crescent" style={{ width: 16, height: 16 }} />
+                        ) : (
+                            <img src="/logo-guvidul.svg" alt="Guvid" />
+                        )}
+                        {saved ? 'Salvat' : 'Challenge'}
+                    </GuvidButton>
+                )}
                 <IonButton color={"success"} onClick={() => props.onOpenTradeDialog()}>
                     Trade
                 </IonButton>

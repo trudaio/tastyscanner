@@ -1,5 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import styled from 'styled-components';
+import { auth } from '../../firebase';
+import { getCompetitionRounds, ICompetitionRound } from '../../services/competition/competition.service';
 
 /* ─── Types ───────────────────────────────────── */
 
@@ -533,7 +535,48 @@ const INITIAL_ROUNDS: IRound[] = [
 /* ─── Component ───────────────────────────────── */
 
 export const GuvidVsCatalinComponent: React.FC = () => {
-    const [rounds] = useState<IRound[]>(INITIAL_ROUNDS);
+    const [rounds, setRounds] = useState<IRound[]>(INITIAL_ROUNDS);
+    const [firestoreRounds, setFirestoreRounds] = useState<ICompetitionRound[]>([]);
+    const userEmail = auth.currentUser?.email || 'User';
+    const userName = userEmail.split('@')[0];
+
+    useEffect(() => {
+        getCompetitionRounds().then(setFirestoreRounds).catch(() => {});
+    }, []);
+
+    // Merge hardcoded rounds with Firestore rounds
+    const allRounds = useMemo(() => {
+        const fromFirestore: IRound[] = firestoreRounds.map(fr => ({
+            round: fr.round + INITIAL_ROUNDS.length,
+            date: fr.date,
+            guvidTrade: {
+                id: fr.round * 10,
+                date: fr.date,
+                player: 'Guvidul' as const,
+                ticker: fr.guvidTrade.ticker,
+                strategy: fr.guvidTrade.strategy,
+                entry: fr.guvidTrade.credit,
+                exit: fr.guvidTrade.exitPl !== null ? fr.guvidTrade.exitPl : null,
+                pl: fr.guvidTrade.exitPl,
+                status: fr.guvidTrade.status,
+                notes: `POP ${fr.guvidTrade.pop}% | EV $${fr.guvidTrade.ev} | Alpha ${fr.guvidTrade.alpha}% | R/R ${fr.guvidTrade.rr}`
+            },
+            catalinTrade: {
+                id: fr.round * 10 + 1,
+                date: fr.date,
+                player: 'Catalin' as const,
+                ticker: fr.userTrade.ticker,
+                strategy: fr.userTrade.strategy,
+                entry: fr.userTrade.credit,
+                exit: fr.userTrade.exitPl !== null ? fr.userTrade.exitPl : null,
+                pl: fr.userTrade.exitPl,
+                status: fr.userTrade.status,
+                notes: `POP ${fr.userTrade.pop}% | EV $${fr.userTrade.ev} | Alpha ${fr.userTrade.alpha}% | R/R ${fr.userTrade.rr}`
+            },
+            winner: fr.winner === 'User' ? 'Catalin' as const : fr.winner as any
+        }));
+        return [...INITIAL_ROUNDS, ...fromFirestore];
+    }, [firestoreRounds]);
 
     const scores = useMemo(() => {
         let guvid = 0;
@@ -542,7 +585,7 @@ export const GuvidVsCatalinComponent: React.FC = () => {
         let guvidPL = 0;
         let catalinPL = 0;
 
-        for (const r of rounds) {
+        for (const r of allRounds) {
             if (r.winner === 'Guvidul') guvid++;
             else if (r.winner === 'Catalin') catalin++;
             else if (r.winner === 'Draw') draws++;
@@ -551,8 +594,8 @@ export const GuvidVsCatalinComponent: React.FC = () => {
             if (r.catalinTrade.pl !== null) catalinPL += r.catalinTrade.pl;
         }
 
-        return { guvid, catalin, draws, guvidPL, catalinPL, totalRounds: rounds.length };
-    }, [rounds]);
+        return { guvid, catalin, draws, guvidPL, catalinPL, totalRounds: allRounds.length };
+    }, [allRounds]);
 
     return (
         <Container>
@@ -561,9 +604,9 @@ export const GuvidVsCatalinComponent: React.FC = () => {
                 <VsTitle>
                     <VsGuvid>Guvidul</VsGuvid>
                     <VsText>vs</VsText>
-                    <VsCatalin>Catalin</VsCatalin>
+                    <VsCatalin>{userName}</VsCatalin>
                 </VsTitle>
-                <Subtitle>Cine alege pozitiile mai bune? Fiecare runda, fiecare alege un trade. La final, vedem cine castiga.</Subtitle>
+                <Subtitle>Cine alege pozitiile mai bune? Apasa Challenge pe orice IC si Guvidul alege automat cel mai bun IC pe aceeasi expirare.</Subtitle>
             </HeroSection>
 
             {/* Scoreboard */}
@@ -594,8 +637,8 @@ export const GuvidVsCatalinComponent: React.FC = () => {
                 </VsDivider>
 
                 <PlayerCard $color="#ffaa00">
-                    <PlayerAvatar $color="#ffaa00">C</PlayerAvatar>
-                    <PlayerName $color="#ffaa00">Catalin</PlayerName>
+                    <PlayerAvatar $color="#ffaa00">{userName.charAt(0).toUpperCase()}</PlayerAvatar>
+                    <PlayerName $color="#ffaa00">{userName}</PlayerName>
                     <PlayerStats>
                         <StatItem>
                             <StatValue $color="#4dff91">{scores.catalin}</StatValue>
@@ -620,7 +663,7 @@ export const GuvidVsCatalinComponent: React.FC = () => {
                     <PLValue $value={scores.guvidPL}>{fmtCur(scores.guvidPL)}</PLValue>
                 </PLCard>
                 <PLCard $color="#ffaa00">
-                    <PLLabel>Catalin Total P&L</PLLabel>
+                    <PLLabel>{userName} Total P&L</PLLabel>
                     <PLValue $value={scores.catalinPL}>{fmtCur(scores.catalinPL)}</PLValue>
                 </PLCard>
             </PLRow>
@@ -667,7 +710,7 @@ export const GuvidVsCatalinComponent: React.FC = () => {
 
             {/* Rounds Table */}
             <SectionTitle>Runde</SectionTitle>
-            {rounds.length === 0 ? (
+            {allRounds.length === 0 ? (
                 <EmptyState>
                     <EmptyIcon>&#9876;</EmptyIcon>
                     <EmptyText>Nicio runda inca</EmptyText>
@@ -691,7 +734,7 @@ export const GuvidVsCatalinComponent: React.FC = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {rounds.map(r => (
+                            {allRounds.map(r => (
                                 <React.Fragment key={r.round}>
                                     <tr>
                                         <Td rowSpan={2}>{r.round}</Td>

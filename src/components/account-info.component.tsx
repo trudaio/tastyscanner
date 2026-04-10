@@ -320,6 +320,7 @@ export const AccountInfoComponent: React.FC = observer(() => {
 
     const pg         = account.portfolioGreeks;
     const delta      = pg?.delta ?? null;
+    const betaDelta  = pg?.betaWeightedDelta ?? null;
     const theta      = pg?.theta ?? null;
     const gamma      = pg?.gamma ?? null;
     const vega       = pg?.vega  ?? null;
@@ -389,6 +390,18 @@ export const AccountInfoComponent: React.FC = observer(() => {
                             </GreekValue>
                         </GreekRow>
                     </InfoRow>
+
+                    {/* BETA-WEIGHTED DELTA */}
+                    {betaDelta !== null && (
+                        <InfoRow>
+                            <Label>Delta (Δβ)</Label>
+                            <GreekRow>
+                                <GreekValue $color={getDeltaColor(betaDelta)}>
+                                    {betaDelta > 0 ? '+' : ''}{betaDelta.toFixed(2)}
+                                </GreekValue>
+                            </GreekRow>
+                        </InfoRow>
+                    )}
 
                     {/* THETA */}
                     <InfoRow>

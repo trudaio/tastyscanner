@@ -76,13 +76,25 @@ export class BrokerAccountModel implements IBrokerAccountViewModel {
                 this._greeksDisposer();
             }
 
+            // Subscribe to SPY quote for beta-weighted delta
+            const spySymbol = 'SPY';
+            this.services.marketDataProvider.subscribe([spySymbol]);
+
+            // Collect unique underlying symbols for quote subscription
+            const underlyingSymbols = [...new Set(optionPositions.map(p => p.underlyingSymbol))];
+            this.services.marketDataProvider.subscribe(underlyingSymbols);
+
             // Use MobX autorun so portfolio greeks update reactively whenever
             // streamer data arrives — no fixed timeout needed
             this._greeksDisposer = autorun(() => {
                 let totalDelta = 0;
+                let totalBetaDelta = 0;
                 let totalTheta = 0;
                 let totalGamma = 0;
                 let totalVega  = 0;
+
+                const spyQuote = this.services.marketDataProvider.getSymbolQuote(spySymbol);
+                const spyPrice = spyQuote ? (spyQuote.bidPrice + spyQuote.askPrice) / 2 : 0;
 
                 for (const pos of optionPositions) {
                     // Look up by streamerSymbol — this matches the eventSymbol in dxFeed events
@@ -92,17 +104,28 @@ export class BrokerAccountModel implements IBrokerAccountViewModel {
                     const direction = pos.quantityDirection === 'Short' ? -1 : 1;
                     const multiplier = pos.quantity * direction * 100;
 
-                    totalDelta += greeks.delta * multiplier;
+                    const posDelta = greeks.delta * multiplier;
+                    totalDelta += posDelta;
                     totalTheta += greeks.theta * multiplier;
                     totalGamma += greeks.gamma * multiplier;
                     totalVega  += greeks.vega  * multiplier;
+
+                    // Beta-weighted delta: rawDelta * (underlyingPrice / SPY_price)
+                    if (spyPrice > 0) {
+                        const ulQuote = this.services.marketDataProvider.getSymbolQuote(pos.underlyingSymbol);
+                        const ulPrice = ulQuote ? (ulQuote.bidPrice + ulQuote.askPrice) / 2 : 0;
+                        if (ulPrice > 0) {
+                            totalBetaDelta += posDelta * (ulPrice / spyPrice);
+                        }
+                    }
                 }
 
-                console.log(`[BrokerAccountModel] Greeks → Δ:${totalDelta.toFixed(2)} Θ:${totalTheta.toFixed(2)} Γ:${totalGamma.toFixed(4)} V:${totalVega.toFixed(2)}`);
+                console.log(`[BrokerAccountModel] Greeks → Δ:${totalDelta.toFixed(2)} Δβ:${totalBetaDelta.toFixed(2)} Θ:${totalTheta.toFixed(2)} Γ:${totalGamma.toFixed(4)} V:${totalVega.toFixed(2)}`);
 
                 runInAction(() => {
                     this.portfolioGreeks = {
                         delta: Math.round(totalDelta * 100) / 100,
+                        betaWeightedDelta: Math.round(totalBetaDelta * 100) / 100,
                         theta: Math.round(totalTheta * 100) / 100,
                         gamma: Math.round(totalGamma * 10000) / 10000,
                         vega:  Math.round(totalVega  * 100) / 100,

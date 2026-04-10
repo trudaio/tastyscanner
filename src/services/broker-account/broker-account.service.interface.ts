@@ -10,6 +10,7 @@ export interface IAccountBalances {
 
 export interface IPortfolioGreeks {
     delta: number;
+    betaWeightedDelta: number;
     theta: number;
     gamma: number;
     vega: number;

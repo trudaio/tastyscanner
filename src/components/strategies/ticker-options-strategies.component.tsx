@@ -151,26 +151,30 @@ export const TickerOptionsStrategiesComponent: React.FC = observer(() => {
     }
 
     const onGuvidChallenge = async (userStrategy: IOptionsStrategyViewModel) => {
-        if (!ticker) return;
+        if (!ticker) throw new Error('No ticker selected');
         const userEmail = auth.currentUser?.email || 'unknown';
+
+        console.log('[GuvidChallenge] User picked:', userStrategy.strategyName, userStrategy.legs.map(l => `${l.legType} ${l.option.optionType} ${l.option.strikePrice}`));
 
         // Find the expiration that matches the user's pick
         const userExpDate = userStrategy.legs[0]?.option.expirationDate;
+        if (!userExpDate) throw new Error('No expiration date on strategy legs');
+
         const expirations = ticker.getExpirationsWithIronCondors();
         const matchedExp = expirations.find(e => e.expirationDate === userExpDate);
+
+        console.log('[GuvidChallenge] Expiration:', userExpDate, 'Matched:', !!matchedExp, 'Available exps:', expirations.map(e => e.expirationDate));
 
         // Guvidul picks: best scoring IC on the same expiration (excluding user's pick)
         let guvidStrategy: IOptionsStrategyViewModel | null = null;
         if (matchedExp) {
             const ics = matchedExp.ironCondors;
+            console.log('[GuvidChallenge] ICs on expiration:', ics.length);
             let bestScore = -Infinity;
             for (const ic of ics) {
-                if (ic.key === userStrategy.key) continue; // skip user's pick
-                if (ic.positionConflict) continue; // skip conflicts
-                const pop = ic.pop;
-                const ev = ic.expectedValue;
-                const alpha = ic.alpha;
-                const score = (pop * 0.6) + (Math.min(Math.max(ev / 10, -10), 10) * 0.25) + (Math.min(Math.max(alpha, -10), 10) * 0.15);
+                if (ic.key === userStrategy.key) continue;
+                if (ic.positionConflict) continue;
+                const score = (ic.pop * 0.6) + (Math.min(Math.max(ic.expectedValue / 10, -10), 10) * 0.25) + (Math.min(Math.max(ic.alpha, -10), 10) * 0.15);
                 if (score > bestScore) {
                     bestScore = score;
                     guvidStrategy = ic;
@@ -178,7 +182,9 @@ export const TickerOptionsStrategiesComponent: React.FC = observer(() => {
             }
         }
 
-        if (!guvidStrategy) guvidStrategy = userStrategy; // fallback
+        if (!guvidStrategy) guvidStrategy = userStrategy;
+
+        console.log('[GuvidChallenge] Guvid picked:', guvidStrategy.legs.map(l => `${l.legType} ${l.option.optionType} ${l.option.strikePrice}`));
 
         // Get round number
         let roundNum = 1;
@@ -188,14 +194,22 @@ export const TickerOptionsStrategiesComponent: React.FC = observer(() => {
         } catch { /* first round */ }
 
         const today = new Date().toISOString().split('T')[0];
+
+        const userTrade = buildTradeFromStrategy(userStrategy as any, ticker.symbol);
+        const guvidTrade = buildTradeFromStrategy(guvidStrategy as any, ticker.symbol);
+
+        console.log('[GuvidChallenge] Saving round', roundNum, '| User:', userTrade.strategy, '| Guvid:', guvidTrade.strategy);
+
         await saveCompetitionRound({
             round: roundNum,
             date: today,
             userEmail,
-            userTrade: buildTradeFromStrategy(userStrategy as any, ticker.symbol),
-            guvidTrade: buildTradeFromStrategy(guvidStrategy as any, ticker.symbol),
+            userTrade,
+            guvidTrade,
             winner: 'Pending'
         });
+
+        console.log('[GuvidChallenge] Saved successfully!');
     }
 
     return (

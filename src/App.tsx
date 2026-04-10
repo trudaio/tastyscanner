@@ -18,6 +18,7 @@ import { OnboardingPage } from './pages/OnboardingPage';
 import { LandingPage } from './pages/LandingPage';
 import { RiskExposerPage } from './pages/RiskExposerPage';
 import { IbkrCallbackPage } from './pages/IbkrCallbackPage';
+import { GuviduVsCatalinPage } from './pages/GuviduVsCatalinPage';
 
 /* Core CSS required for Ionic components to work properly */
 import '@ionic/react/css/core.css';
@@ -135,6 +136,9 @@ const App: React.FC = () => {
                                 </Route>
                                 <Route path="/risk-exposer" exact={true}>
                                     <RiskExposerPage />
+                                </Route>
+                                <Route path="/guvid-vs-catalin" exact={true}>
+                                    <GuviduVsCatalinPage />
                                 </Route>
                                 <Route path="/superadmin" exact={true}>
                                     <SuperAdminPage />

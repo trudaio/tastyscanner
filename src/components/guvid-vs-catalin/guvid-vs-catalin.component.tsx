@@ -129,6 +129,13 @@ const PlayerAvatar = styled.div<{ $color: string }>`
     align-items: center;
     justify-content: center;
     font-size: 24px;
+    overflow: hidden;
+`;
+
+const AvatarImg = styled.img`
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 `;
 
 const PlayerName = styled.div<{ $color: string }>`
@@ -421,7 +428,9 @@ export const GuvidVsCatalinComponent: React.FC = () => {
             {/* Scoreboard */}
             <ScoreboardGrid>
                 <PlayerCard $color="#4a9eff">
-                    <PlayerAvatar $color="#4a9eff">G</PlayerAvatar>
+                    <PlayerAvatar $color="#4a9eff">
+                        <AvatarImg src="/guvid-robot.svg" alt="Guvidul Robot" />
+                    </PlayerAvatar>
                     <PlayerName $color="#4a9eff">Guvidul</PlayerName>
                     <PlayerStats>
                         <StatItem>

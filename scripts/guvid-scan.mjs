@@ -77,11 +77,42 @@ const sa = JSON.parse(readFileSync('/tmp/firebase-sa.json', 'utf8'));
 admin.initializeApp({ credential: admin.credential.cert(sa) });
 const db = admin.firestore();
 
-// ── TastyTrade credentials ────────────────────────────────────────────────────
-const CLIENT_SECRET = '1f2391186fc378a6e01147167b5436d58d945e61';
-const REFRESH_TOKEN = 'eyJhbGciOiJFZERTQSIsInR5cCI6InJ0K2p3dCIsImtpZCI6IlVWRThTM3BBTWZUbkVtaUhsUHJnMU5oWWZqMzFNeHFhd08teGpubnhKX2ciLCJqa3UiOiJodHRwczovL2FwaS50YXN0eXRyYWRlLmNvbS9vYXV0aC9qd2tzIn0.eyJpc3MiOiJodHRwczovL2FwaS50YXN0eXRyYWRlLmNvbSIsInN1YiI6IlVjZjkyYzUwZi05ZmQyLTQ0N2EtODg3Ni0wOWIzMWI1NjljY2YiLCJpYXQiOjE3NzU3MTgzNTgsImF1ZCI6ImQ4NDAzMWQ2LTlmOTAtNDJjNi1iZDM3LTYwMWQyMjZkMGZkMCIsImdyYW50X2lkIjoiRzA4YThhZjZiLWE2OWEtNDkyYy05NTQ0LTk4M2NhYmFhNjNkYiIsInNjb3BlIjoicmVhZCJ9.U7yOTbXMczm55_FBt1YNoUVfTM-Gn5masb0DyAtZp7IAo68xzN-q6ipKfFtQQZrFGB5PR-He151iwp59OmhIDA';
+// ── TastyTrade credentials (loaded from Firestore at runtime) ─────────────────
+// Fallback hardcoded credentials (used if Firestore lookup fails)
+const FALLBACK_CLIENT_SECRET = '1f2391186fc378a6e01147167b5436d58d945e61';
+const FALLBACK_REFRESH_TOKEN = 'eyJhbGciOiJFZERTQSIsInR5cCI6InJ0K2p3dCIsImtpZCI6IlVWRThTM3BBTWZUbkVtaUhsUHJnMU5oWWZqMzFNeHFhd08teGpubnhKX2ciLCJqa3UiOiJodHRwczovL2FwaS50YXN0eXRyYWRlLmNvbS9vYXV0aC9qd2tzIn0.eyJpc3MiOiJodHRwczovL2FwaS50YXN0eXRyYWRlLmNvbSIsInN1YiI6IlVjZjkyYzUwZi05ZmQyLTQ0N2EtODg3Ni0wOWIzMWI1NjljY2YiLCJpYXQiOjE3NzU3MTgzNTgsImF1ZCI6ImQ4NDAzMWQ2LTlmOTAtNDJjNi1iZDM3LTYwMWQyMjZkMGZkMCIsImdyYW50X2lkIjoiRzA4YThhZjZiLWE2OWEtNDkyYy05NTQ0LTk4M2NhYmFhNjNkYiIsInNjb3BlIjoicmVhZCJ9.U7yOTbXMczm55_FBt1YNoUVfTM-Gn5masb0DyAtZp7IAo68xzN-q6ipKfFtQQZrFGB5PR-He151iwp59OmhIDA';
 const TASTY_BASE = 'https://api.tastyworks.com';
 const axios = require('axios');
+
+// ── Read TastyTrade credentials from Firestore ────────────────────────────────
+async function readCredentials() {
+  console.log('  Reading TastyTrade credentials from Firestore...');
+  try {
+    const usersSnap = await db.collection('users').get();
+    const allCreds = [];
+    for (const userDoc of usersSnap.docs) {
+      const brokerSnap = await db.collection('users').doc(userDoc.id).collection('brokerAccounts').get();
+      for (const brokerDoc of brokerSnap.docs) {
+        const data = brokerDoc.data();
+        const cs = data?.credentials?.clientSecret || data?.clientSecret || null;
+        const rt = data?.credentials?.refreshToken || data?.refreshToken || null;
+        const active = data?.isActive ?? true;
+        const upd = brokerDoc.updateTime?.seconds || 0;
+        if (cs && rt) allCreds.push({ clientSecret: cs, refreshToken: rt, isActive: active, updatedAt: upd });
+      }
+    }
+    allCreds.sort((a, b) => b.updatedAt - a.updatedAt);
+    if (allCreds.length > 0) {
+      const best = allCreds[0];
+      console.log(`  Found credentials in Firestore (updated: ${new Date(best.updatedAt * 1000).toISOString()})`);
+      return { clientSecret: best.clientSecret, refreshToken: best.refreshToken };
+    }
+  } catch (e) {
+    console.warn(`  Firestore credential lookup failed: ${e.message}`);
+  }
+  console.log('  Using fallback hardcoded credentials');
+  return { clientSecret: FALLBACK_CLIENT_SECRET, refreshToken: FALLBACK_REFRESH_TOKEN };
+}
 
 // ── Profile definitions ───────────────────────────────────────────────────────
 const PROFILES = {
@@ -117,8 +148,34 @@ function round2(n) { return Math.round(n * 100) / 100; }
 // ── TastyTrade REST via axios + HttpsProxyAgent ───────────────────────────────
 const axiosCfg = { httpsAgent, proxy: false, maxRedirects: 5 };
 
+// Module-level credential holders — set in main() after Firestore lookup
+let CLIENT_SECRET = '';
+let REFRESH_TOKEN = '';
+
+async function axiosWithRetry(method, url, data, cfg, maxRetries = 4) {
+  let delay = 2000;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const res = method === 'post'
+        ? await axios.post(url, data, cfg)
+        : await axios.get(url, cfg);
+      return res;
+    } catch (e) {
+      const status = e.response?.status;
+      const isRetryable = !status || status === 503 || status === 502 || status === 429;
+      if (isRetryable && attempt < maxRetries) {
+        console.log(`  Retry ${attempt}/${maxRetries - 1} after ${delay}ms (${e.message})...`);
+        await new Promise(r => setTimeout(r, delay));
+        delay *= 2;
+      } else {
+        throw e;
+      }
+    }
+  }
+}
+
 async function getAccessToken() {
-  const res = await axios.post(`${TASTY_BASE}/oauth/token`, {
+  const res = await axiosWithRetry('post', `${TASTY_BASE}/oauth/token`, {
     refresh_token: REFRESH_TOKEN,
     client_secret: CLIENT_SECRET,
     scope: 'read',
@@ -130,7 +187,7 @@ async function getAccessToken() {
 }
 
 async function getApiQuoteToken(accessToken) {
-  const res = await axios.get(`${TASTY_BASE}/api-quote-tokens`, {
+  const res = await axiosWithRetry('get', `${TASTY_BASE}/api-quote-tokens`, null, {
     ...axiosCfg,
     headers: { Authorization: accessToken },
   });
@@ -138,7 +195,7 @@ async function getApiQuoteToken(accessToken) {
 }
 
 async function getNestedOptionChain(accessToken, symbol) {
-  const res = await axios.get(`${TASTY_BASE}/option-chains/${encodeURIComponent(symbol)}/nested`, {
+  const res = await axiosWithRetry('get', `${TASTY_BASE}/option-chains/${encodeURIComponent(symbol)}/nested`, null, {
     ...axiosCfg,
     headers: { Authorization: accessToken },
   });
@@ -241,11 +298,16 @@ async function main() {
   console.log('=== Guvid Agent — IC Scanner ===');
   console.log('Date:', new Date().toISOString());
 
-  console.log('\n[1] Getting TastyTrade access token...');
+  console.log('\n[1] Loading TastyTrade credentials...');
+  const creds = await readCredentials();
+  CLIENT_SECRET = creds.clientSecret;
+  REFRESH_TOKEN = creds.refreshToken;
+
+  console.log('\n[2] Getting TastyTrade access token...');
   const accessToken = await getAccessToken();
   console.log('  Access token obtained.');
 
-  console.log('\n[2] Getting DxLink quote token...');
+  console.log('\n[3] Getting DxLink quote token...');
   const qtData      = await getApiQuoteToken(accessToken);
   const dxLinkUrl   = qtData['dxlink-url'];
   const dxAuthToken = qtData['token'];

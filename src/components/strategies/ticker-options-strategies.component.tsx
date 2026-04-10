@@ -221,7 +221,7 @@ export const TickerOptionsStrategiesComponent: React.FC = observer(() => {
                 <IonPage id={CONDORS_TAB}>
                     <TabHeaderComponent title={"Iron Condors"} bestPopMode={bestPopMode} onToggleBestPop={() => setBestPopMode(v => !v)}/>
                     <IonContent style={{ '--padding-bottom': '160px' } as React.CSSProperties}>
-                        <IronCondorsComponent ticker={ticker} onTrade={onTrade} onGuvidChallenge={onGuvidChallenge} bestPopMode={bestPopMode} />
+                        <IronCondorsComponent ticker={ticker} onTrade={onTrade} bestPopMode={bestPopMode} />
                     </IonContent>
                 </IonPage>
 
@@ -250,7 +250,8 @@ export const TickerOptionsStrategiesComponent: React.FC = observer(() => {
             {currentStrategy && <SendOrderDialogComponent isOpen={Boolean(currentStrategy)}
                                                           strategy={currentStrategy}
                                                           symbol={ticker.symbol}
-                                                          onDitDismiss={() => setCurrentStrategy(null)}/>}
+                                                          onDitDismiss={() => setCurrentStrategy(null)}
+                                                          onGuvidChallenge={onGuvidChallenge}/>}
         </IonTabs>
 
     )

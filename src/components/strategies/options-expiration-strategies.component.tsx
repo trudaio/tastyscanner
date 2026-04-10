@@ -87,7 +87,6 @@ interface OptionsExpirationStrategiesComponentProps {
     strategies: IOptionsStrategyViewModel[];
     earningsDatePosition: EarningsDatePositionEnum;
     onTrade: (strategy: IOptionsStrategyViewModel) => void;
-    onGuvidChallenge?: (strategy: IOptionsStrategyViewModel) => Promise<void>;
 }
 export const OptionsExpirationStrategiesComponent: React.FC<OptionsExpirationStrategiesComponentProps> = observer((props) => {
     const services = useServices();
@@ -147,7 +146,6 @@ export const OptionsExpirationStrategiesComponent: React.FC<OptionsExpirationStr
                     {strategies.map(condor => (<OptionsStrategyComponent key={condor.key}
                                                                          strategy={condor} bestPop={bestPop}
                                                                          bestRiskReward={bestRiskReward} onOpenTradeModal={props.onTrade}
-                                                                         onGuvidChallenge={props.onGuvidChallenge}
                                                                          isGuvidPick={condor.key === guvidPickKey}/>))}
                 </StrategiesBox>
 

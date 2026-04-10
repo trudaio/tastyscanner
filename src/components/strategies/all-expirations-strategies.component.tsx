@@ -17,7 +17,6 @@ interface AllExpirationsStrategiesComponentProps {
     getExpirationStrategies: (expiration: IOptionsExpirationVewModel) => IOptionsStrategyViewModel[];
     noStrategiesAvailableMessage: string;
     onTrade: (strategy: IOptionsStrategyViewModel) => void;
-    onGuvidChallenge?: (strategy: IOptionsStrategyViewModel) => Promise<void>;
 }
 export const AllExpirationsStrategiesComponent: React.FC<AllExpirationsStrategiesComponentProps> = observer((props) => {
     const services = useServices();
@@ -64,7 +63,6 @@ export const AllExpirationsStrategiesComponent: React.FC<AllExpirationsStrategie
                 expiration={expiration}
                 strategies={expiration.key === expandedExpirationKey ? expandedExpirationStrategies : getExpirationStrategies(expiration)}
                 onTrade={props.onTrade}
-                onGuvidChallenge={props.onGuvidChallenge}
                 earningsDatePosition={getEarningsDateRenderPosition(props.ticker, expirations, index)}/>)}
         </IonAccordionGroup>
     )

@@ -317,7 +317,7 @@ interface RiskRow {
 const calcRiskRow = (trade: IIronCondorTrade): RiskRow => {
     const putWings = trade.putSellStrike - trade.putBuyStrike;
     const callWings = trade.callBuyStrike - trade.callSellStrike;
-    const wingsWidth = Math.min(putWings, callWings);
+    const wingsWidth = Math.max(putWings, callWings);
     const multiplier = 100;
     const qty = trade.quantity || 1;
 

@@ -377,6 +377,117 @@ const RuleItem = styled.li`
     }
 `;
 
+/* ─── Sugestia Guvidului ──────────────────────── */
+
+const SuggestionSection = styled.div`
+    margin-bottom: 24px;
+`;
+
+const SuggestionLabel = styled.span`
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    background: rgba(155, 89, 255, 0.15);
+    border: 1px solid #9b59ff;
+    color: #9b59ff;
+    margin-bottom: 12px;
+`;
+
+const SuggestionGrid = styled.div`
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 12px;
+
+    @media (max-width: 480px) {
+        grid-template-columns: 1fr;
+    }
+`;
+
+const SuggestionCard = styled.div<{ $rank: number }>`
+    background: #1a1a2e;
+    border-radius: 8px;
+    padding: 16px;
+    border-left: 4px solid ${p => p.$rank === 0 ? '#9b59ff' : '#3a3a5e'};
+    position: relative;
+    ${p => p.$rank === 0 ? 'box-shadow: 0 0 20px rgba(155, 89, 255, 0.1);' : ''}
+`;
+
+const SuggestionExpDate = styled.div`
+    font-size: 0.75rem;
+    color: #888;
+    margin-bottom: 6px;
+`;
+
+const SuggestionIC = styled.div`
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #ddd;
+    margin-bottom: 8px;
+    font-family: monospace;
+`;
+
+const SuggestionMetrics = styled.div`
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+`;
+
+const SuggestionMetric = styled.div`
+    text-align: center;
+`;
+
+const SuggestionMetricValue = styled.div<{ $highlight?: boolean }>`
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: ${p => p.$highlight ? '#9b59ff' : '#ccc'};
+`;
+
+const SuggestionMetricLabel = styled.div`
+    font-size: 0.6rem;
+    color: #666;
+    text-transform: uppercase;
+`;
+
+const BestBadge = styled.span`
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 3px;
+    background: rgba(155, 89, 255, 0.2);
+    color: #9b59ff;
+    letter-spacing: 0.5px;
+`;
+
+interface ISuggestion {
+    expDate: string;
+    dte: number;
+    label: string;
+    ic: string;
+    pop: number;
+    ev: number;
+    alpha: number;
+    credit: number;
+    rr: number;
+    delta: string;
+    score: number;
+}
+
+const GUVID_SUGGESTIONS: ISuggestion[] = [
+    { expDate: '2026-04-30', dte: 20, label: 'End-Of-Month', ic: '6455/6465p  7065/7075c', pop: 87, ev: 120, alpha: 16, credit: 250, rr: 4, delta: '14/14', score: 56.20 },
+    { expDate: '2026-05-15', dte: 35, label: 'Weekly', ic: '6360/6370p  7140/7150c', pop: 86, ev: 115, alpha: 15.44, credit: 255, rr: 3.92, delta: '15/14', score: 55.60 },
+    { expDate: '2026-05-15', dte: 35, label: 'Regular [AM]', ic: '6365/6375p  7130/7140c', pop: 86, ev: 120, alpha: 16.22, credit: 260, rr: 3.85, delta: '15/15', score: 55.60 },
+    { expDate: '2026-05-01', dte: 21, label: 'Weekly', ic: '6485/6495p  7070/7080c', pop: 85, ev: 115, alpha: 15.65, credit: 265, rr: 3.77, delta: '16/14', score: 55.00 },
+    { expDate: '2026-04-29', dte: 19, label: 'Weekly', ic: '6620/6630p  6990/7000c', pop: 77, ev: 190, alpha: 32.76, credit: 420, rr: 2.38, delta: '24/23', score: 50.20 },
+];
+
 /* ─── Helpers ─────────────────────────────────── */
 
 const fmtCur = (v: number | null): string => {
@@ -513,6 +624,46 @@ export const GuvidVsCatalinComponent: React.FC = () => {
                     <PLValue $value={scores.catalinPL}>{fmtCur(scores.catalinPL)}</PLValue>
                 </PLCard>
             </PLRow>
+
+            {/* Sugestia Guvidului */}
+            <SuggestionSection>
+                <SuggestionLabel>Sugestia Guvidului</SuggestionLabel>
+                <SuggestionGrid>
+                    {GUVID_SUGGESTIONS.map((s, i) => (
+                        <SuggestionCard key={s.expDate + s.label} $rank={i}>
+                            {i === 0 && <BestBadge>Top Pick</BestBadge>}
+                            <SuggestionExpDate>{s.expDate} ({s.dte}d) — {s.label}</SuggestionExpDate>
+                            <SuggestionIC>{s.ic}</SuggestionIC>
+                            <SuggestionMetrics>
+                                <SuggestionMetric>
+                                    <SuggestionMetricValue $highlight={i === 0}>{s.pop}%</SuggestionMetricValue>
+                                    <SuggestionMetricLabel>POP</SuggestionMetricLabel>
+                                </SuggestionMetric>
+                                <SuggestionMetric>
+                                    <SuggestionMetricValue>${s.ev}</SuggestionMetricValue>
+                                    <SuggestionMetricLabel>EV</SuggestionMetricLabel>
+                                </SuggestionMetric>
+                                <SuggestionMetric>
+                                    <SuggestionMetricValue>{s.alpha}%</SuggestionMetricValue>
+                                    <SuggestionMetricLabel>Alpha</SuggestionMetricLabel>
+                                </SuggestionMetric>
+                                <SuggestionMetric>
+                                    <SuggestionMetricValue>${s.credit}</SuggestionMetricValue>
+                                    <SuggestionMetricLabel>Credit</SuggestionMetricLabel>
+                                </SuggestionMetric>
+                                <SuggestionMetric>
+                                    <SuggestionMetricValue>{s.rr}</SuggestionMetricValue>
+                                    <SuggestionMetricLabel>R/R</SuggestionMetricLabel>
+                                </SuggestionMetric>
+                                <SuggestionMetric>
+                                    <SuggestionMetricValue>{s.delta}</SuggestionMetricValue>
+                                    <SuggestionMetricLabel>Delta</SuggestionMetricLabel>
+                                </SuggestionMetric>
+                            </SuggestionMetrics>
+                        </SuggestionCard>
+                    ))}
+                </SuggestionGrid>
+            </SuggestionSection>
 
             {/* Rounds Table */}
             <SectionTitle>Runde</SectionTitle>

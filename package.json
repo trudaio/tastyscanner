@@ -30,11 +30,13 @@
     "firebase-admin": "^13.8.0",
     "https-proxy-agent": "^9.0.0",
     "ionicons": "^7.4.0",
+    "node-fetch": "^3.3.2",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-router": "^5.3.4",
     "react-router-dom": "^5.3.4",
-    "recharts": "^3.8.0"
+    "recharts": "^3.8.0",
+    "undici": "^8.0.2"
   },
   "devDependencies": {
     "@capacitor/cli": "8.0.0",

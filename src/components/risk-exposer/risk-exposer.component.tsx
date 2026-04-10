@@ -519,10 +519,8 @@ export const RiskExposerComponent: React.FC = observer(() => {
                                     <SortableTh $align="right" $active={sortKey === 'maxLoss'} onClick={() => toggleSort('maxLoss')}>
                                         Max Loss{sa('maxLoss')}
                                     </SortableTh>
-                                    <SortableTh $align="center" $active={sortKey === 'ratio'} onClick={() => toggleSort('ratio')}>
-                                        Ratio W/L{sa('ratio')}
-                                    </SortableTh>
-                                    <Th $align="center">Breakevenuri</Th>
+
+
                                 </tr>
                             </thead>
                             <tbody>
@@ -546,14 +544,8 @@ export const RiskExposerComponent: React.FC = observer(() => {
                                         </Td>
                                         <WinTd $align="right">{fmtCur(row.maxWin)}</WinTd>
                                         <LossTd $align="right">{fmtCur(row.maxLoss)}</LossTd>
-                                        <Td $align="center">
-                                            <RatioBadge $ratio={row.ratio}>
-                                                {(row.ratio * 100).toFixed(0)}%
-                                            </RatioBadge>
-                                        </Td>
-                                        <BreakevenCell $align="center">
-                                            ↓{row.lowerBreakeven.toFixed(2)} / ↑{row.upperBreakeven.toFixed(2)}
-                                        </BreakevenCell>
+
+
                                     </tr>
                                 ))}
                             </tbody>

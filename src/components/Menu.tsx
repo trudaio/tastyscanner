@@ -159,9 +159,9 @@ const Menu: React.FC = observer(() => {
           <IonLabel>Guvid History</IonLabel>
         </IonItem>
 
-        <IonItem button routerLink="/guvid-vs-catalin" routerDirection="forward" lines="none">
+        <IonItem button routerLink="/guvid-vs-user" routerDirection="forward" lines="none">
           <IonIcon slot="start" icon={trophyOutline} />
-          <IonLabel>Guvidul vs Catalin</IonLabel>
+          <IonLabel>Guvidul vs User</IonLabel>
         </IonItem>
 
         <IonItem button routerLink="/risk-exposer" routerDirection="forward" lines="none">

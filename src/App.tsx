@@ -137,7 +137,7 @@ const App: React.FC = () => {
                                 <Route path="/risk-exposer" exact={true}>
                                     <RiskExposerPage />
                                 </Route>
-                                <Route path="/guvid-vs-catalin" exact={true}>
+                                <Route path="/guvid-vs-user" exact={true}>
                                     <GuviduVsCatalinPage />
                                 </Route>
                                 <Route path="/superadmin" exact={true}>

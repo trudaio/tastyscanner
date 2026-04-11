@@ -76,9 +76,10 @@ export function computeCompositeScore(
     ic: { pop: number; expectedValue: number; alpha: number },
     profile: IStrategyProfile
 ): number {
+    const normalizedPOP = Math.min(Math.max(ic.pop / 10, 0), 10);
     const normalizedEV = Math.min(Math.max(ic.expectedValue / 10, -10), 10);
     const normalizedAlpha = Math.min(Math.max(ic.alpha, -10), 10);
-    return (ic.pop * profile.scoring.popWeight)
+    return (normalizedPOP * profile.scoring.popWeight)
          + (normalizedEV * profile.scoring.evWeight)
          + (normalizedAlpha * profile.scoring.alphaWeight);
 }

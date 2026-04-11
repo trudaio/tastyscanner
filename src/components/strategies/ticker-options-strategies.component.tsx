@@ -23,6 +23,7 @@ import {IOptionsStrategyViewModel} from "../../models/options-strategy.view-mode
 import {SendOrderDialogComponent} from "./send-order-dialog.component";
 import {saveCompetitionRound, buildTradeFromStrategy, getCompetitionRounds} from "../../services/competition/competition.service";
 import {auth} from "../../firebase";
+import {computeCompositeScore, STRATEGY_PROFILES} from "../../models/strategy-profile";
 
 const SpinnerContainerBox = styled.div`
     display: flex;
@@ -174,7 +175,7 @@ export const TickerOptionsStrategiesComponent: React.FC = observer(() => {
             for (const ic of ics) {
                 if (ic.key === userStrategy.key) continue;
                 if (ic.positionConflict) continue;
-                const score = (ic.pop * 0.6) + (Math.min(Math.max(ic.expectedValue / 10, -10), 10) * 0.25) + (Math.min(Math.max(ic.alpha, -10), 10) * 0.15);
+                const score = computeCompositeScore(ic, STRATEGY_PROFILES.neutral);
                 if (score > bestScore) {
                     bestScore = score;
                     guvidStrategy = ic;

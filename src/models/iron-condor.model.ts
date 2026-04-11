@@ -28,7 +28,8 @@ export class IronCondorModel implements IIronCondorViewModel {
     }
 
     get riskRewardRatio(): number {
-        const rr = this.wingsWidth / this.credit;
+        if (this.credit <= 0) return 999;
+        const rr = (this.wingsWidth - this.credit) / this.credit;
         return Math.round(rr * 100) / 100;
     }
 
@@ -42,10 +43,10 @@ export class IronCondorModel implements IIronCondorViewModel {
         const breakEvenCall = this.stoCall.strike.expiration.getStrikeAbove(callBreakEven)?.call;
 
 
-        const putBreakEventDelta = breakEvenPut?.absoluteDeltaPercent ?? 0;
-        const callBreakEventDelta = breakEvenCall?.absoluteDeltaPercent ?? 0;
+        const putBreakEventDelta = breakEvenPut?.absoluteDeltaPercent ?? 50;
+        const callBreakEventDelta = breakEvenCall?.absoluteDeltaPercent ?? 50;
 
-        return 100 - Math.max(putBreakEventDelta, callBreakEventDelta);
+        return Math.max(0, 100 - putBreakEventDelta - callBreakEventDelta);
 
 
     }

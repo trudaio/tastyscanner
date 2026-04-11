@@ -86,7 +86,7 @@ export function buildTradeFromStrategy(
         strategy: strategyStr,
         expiration,
         legs,
-        credit: Math.round(strategy.credit * 100),
+        credit: Math.round(strategy.credit * 100) / 100,
         pop: strategy.pop,
         ev: Math.round(strategy.expectedValue * 100) / 100,
         alpha: Math.round(strategy.alpha * 100) / 100,

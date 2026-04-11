@@ -26,7 +26,8 @@ export abstract class CreditSpreadModel implements ICreditSpreadViewModel {
     }
 
     get riskRewardRatio(): number {
-        const rr = this.wingsWidth / this.credit;
+        if (this.credit <= 0) return 999;
+        const rr = (this.wingsWidth - this.credit) / this.credit;
         return Math.round(rr * 100) / 100;
     }
 

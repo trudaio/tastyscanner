@@ -95,6 +95,6 @@ export function buildTradeFromStrategy(
         theta: strategy.theta,
         exitPl: null,
         status: 'open',
-        strategyProfile: profile,
+        ...(profile ? { strategyProfile: profile } : {}),
     };
 }

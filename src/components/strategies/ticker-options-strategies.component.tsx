@@ -21,7 +21,7 @@ import {CallCreditSpreadsComponent} from "./credit-spreads/call-credit-spreads.c
 import {RawLocalStorageKeys} from "../../services/storage/raw-local-storage/raw-local-storage-keys";
 import {IOptionsStrategyViewModel} from "../../models/options-strategy.view-model.interface";
 import {SendOrderDialogComponent} from "./send-order-dialog.component";
-import {saveCompetitionRound, buildTradeFromStrategy, getCompetitionRounds} from "../../services/competition/competition.service";
+import {saveCompetitionRound, buildTradeFromStrategy, getCompetitionRounds, IMarketContext} from "../../services/competition/competition.service";
 import {auth} from "../../firebase";
 import {computeCompositeScore, STRATEGY_PROFILES} from "../../models/strategy-profile";
 
@@ -196,8 +196,20 @@ export const TickerOptionsStrategiesComponent: React.FC = observer(() => {
 
         const today = new Date().toISOString().split('T')[0];
 
-        const userTrade = buildTradeFromStrategy(userStrategy as any, ticker.symbol);
-        const guvidTrade = buildTradeFromStrategy(guvidStrategy as any, ticker.symbol);
+        // Capture market context: underlying price, VIX, IV Rank
+        services.marketDataProvider.subscribe(['$VIX.X']);
+        const underlyingPrice = ticker.currentPrice || 0;
+        const ivRank = ticker.ivRank || 0;
+        let vix = 0;
+        const vixQuote = services.marketDataProvider.getSymbolQuote('$VIX.X');
+        if (vixQuote) {
+            vix = Math.round(((vixQuote.bidPrice + vixQuote.askPrice) / 2) * 100) / 100;
+        }
+        const marketContext: IMarketContext = { underlyingPrice, vix, ivRank };
+        console.log('[GuvidChallenge] Market context:', marketContext);
+
+        const userTrade = buildTradeFromStrategy(userStrategy as any, ticker.symbol, undefined, marketContext);
+        const guvidTrade = buildTradeFromStrategy(guvidStrategy as any, ticker.symbol, undefined, marketContext);
 
         console.log('[GuvidChallenge] Saving round', roundNum, '| User:', userTrade.strategy, '| Guvid:', guvidTrade.strategy);
 

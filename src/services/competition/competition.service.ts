@@ -14,6 +14,12 @@ export interface ICompetitionRound {
     guvidProfile?: StrategyProfileType;
 }
 
+export interface IMarketContext {
+    underlyingPrice: number;
+    vix: number;
+    ivRank: number;
+}
+
 export interface ICompetitionTrade {
     ticker: string;
     strategy: string;
@@ -30,6 +36,7 @@ export interface ICompetitionTrade {
     status: 'open' | 'won' | 'lost' | 'draw';
     strategyProfile?: StrategyProfileType;
     exitProfitPercent?: number;
+    marketContext?: IMarketContext;
 }
 
 function getUserCompetitionRef() {
@@ -64,7 +71,8 @@ export async function updateCompetitionRound(roundId: string, data: Partial<ICom
 export function buildTradeFromStrategy(
     strategy: { strategyName: string; credit: number; pop: number; expectedValue: number; alpha: number; riskRewardRatio: number; delta: number; theta: number; legs: { legType: string; option: { optionType: string; strikePrice: number; expirationDate: string } }[] },
     ticker: string,
-    profile?: StrategyProfileType
+    profile?: StrategyProfileType,
+    marketContext?: IMarketContext
 ): ICompetitionTrade {
     const expiration = strategy.legs[0]?.option.expirationDate || '';
     const legs = strategy.legs.map(l => ({
@@ -96,5 +104,6 @@ export function buildTradeFromStrategy(
         exitPl: null,
         status: 'open',
         ...(profile ? { strategyProfile: profile } : {}),
+        ...(marketContext ? { marketContext } : {}),
     };
 }

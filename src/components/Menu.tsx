@@ -21,7 +21,7 @@ import {WatchListsComponent} from "./watch-lists.component";
 import {TickerMenuItemComponent} from "./ticker-menu-item.component";
 import {BrokerAccountsComponent} from "./broker-accounts.component";
 import {AccountInfoComponent} from "./account-info.component";
-import {alertCircleOutline, analyticsOutline, bookOutline, filterOutline, gridOutline, personCircleOutline, shieldOutline, statsChartOutline, keyOutline, shieldHalfOutline, trophyOutline} from "ionicons/icons";
+import {alertCircleOutline, analyticsOutline, bookOutline, filterOutline, personCircleOutline, keyOutline, trophyOutline, layersOutline, barChartOutline, warningOutline, notificationsOutline, timerOutline, flaskOutline} from "ionicons/icons";
 import {useHistory} from "react-router-dom";
 import { auth } from '../firebase';
 
@@ -150,12 +150,12 @@ const Menu: React.FC = observer(() => {
         </IonAccordionGroup>
 
         <IonItem button routerLink="/dashboard" routerDirection="forward" lines="none" style={{ marginTop: '16px' }}>
-          <IonIcon slot="start" icon={gridOutline} />
+          <IonIcon slot="start" icon={layersOutline} />
           <IonLabel>Guvid Management</IonLabel>
         </IonItem>
 
         <IonItem button routerLink="/guvid-history" routerDirection="forward" lines="none">
-          <IonIcon slot="start" icon={statsChartOutline} />
+          <IonIcon slot="start" icon={barChartOutline} />
           <IonLabel>Guvid History</IonLabel>
         </IonItem>
 
@@ -165,22 +165,22 @@ const Menu: React.FC = observer(() => {
         </IonItem>
 
         <IonItem button routerLink="/risk-exposer" routerDirection="forward" lines="none">
-          <IonIcon slot="start" icon={shieldHalfOutline} />
+          <IonIcon slot="start" icon={warningOutline} />
           <IonLabel>Risk Exposer</IonLabel>
         </IonItem>
 
         <IonItem button routerLink="/delta-alert" routerDirection="forward" lines="none">
-          <IonIcon slot="start" icon={alertCircleOutline} />
+          <IonIcon slot="start" icon={notificationsOutline} />
           <IonLabel>Delta Alert</IonLabel>
         </IonItem>
 
         <IonItem button routerLink="/dte-analyzer" routerDirection="forward" lines="none">
-          <IonIcon slot="start" icon={analyticsOutline} />
+          <IonIcon slot="start" icon={timerOutline} />
           <IonLabel>DTE Analyzer</IonLabel>
         </IonItem>
 
         <IonItem button routerLink="/strategy-simulator" routerDirection="forward" lines="none">
-          <IonIcon slot="start" icon={analyticsOutline} />
+          <IonIcon slot="start" icon={flaskOutline} />
           <IonLabel>Strategy Simulator</IonLabel>
         </IonItem>
 

@@ -23,6 +23,9 @@ export interface ITradeLogEntry {
     closePrice?: number;
     realizedPnl?: number;
     notes?: string;
+    underlyingPrice?: number;
+    vix?: number;
+    ivRank?: number;
 }
 
 export interface ITradeLogLeg {

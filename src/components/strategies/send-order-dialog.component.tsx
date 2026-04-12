@@ -415,10 +415,19 @@ export const SendOrderDialogComponent: React.FC<SendOrderDialogComponentProps> =
 
         await props.strategy.sendOrder(orderParams);
 
-        // Log the trade
+        // Log the trade with market context
         const firstLeg = props.strategy.legs[0];
         const dte = firstLeg?.option?.daysToExpiration ?? 0;
         const icType = services.settings.strategyFilters.icType;
+
+        // Capture market context: underlying price, VIX, IV Rank
+        const ulQuote = services.marketDataProvider.getSymbolQuote(props.symbol);
+        const underlyingPrice = ulQuote ? Math.round(((ulQuote.bidPrice + ulQuote.askPrice) / 2) * 100) / 100 : 0;
+        services.marketDataProvider.subscribe(['$VIX.X']);
+        const vixQuote = services.marketDataProvider.getSymbolQuote('$VIX.X');
+        const vix = vixQuote ? Math.round(((vixQuote.bidPrice + vixQuote.askPrice) / 2) * 100) / 100 : 0;
+        const ticker = services.tickers.currentTicker;
+        const ivRank = ticker?.ivRank ?? 0;
 
         await services.tradeLog.logTrade({
             symbol: props.symbol,
@@ -437,6 +446,9 @@ export const SendOrderDialogComponent: React.FC<SendOrderDialogComponentProps> =
             limitPrice: resolvedPrice,
             bpe: props.strategy.maxLoss * quantity,
             icType,
+            underlyingPrice,
+            vix,
+            ivRank,
             legs: props.strategy.legs.map(leg => ({
                 action: leg.legType,
                 optionType: leg.option.optionType,

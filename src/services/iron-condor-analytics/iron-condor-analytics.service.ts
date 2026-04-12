@@ -781,9 +781,10 @@ export class IronCondorAnalyticsService extends ServiceBase implements IIronCond
         const largestWin = profits.length > 0 ? Math.max(...profits) : 0;
         const largestLoss = profits.length > 0 ? Math.min(...profits) : 0;
 
-        // Group by ticker - include ALL trades (open and closed)
+        // Group by ticker - ONLY closed/expired trades (realized P&L)
         const byTicker = new Map<string, ITickerSummary>();
         for (const trade of trades) {
+            if (trade.status === 'open') continue;
             if (!byTicker.has(trade.ticker)) {
                 byTicker.set(trade.ticker, {
                     ticker: trade.ticker,
@@ -795,21 +796,24 @@ export class IronCondorAnalyticsService extends ServiceBase implements IIronCond
             }
             const summary = byTicker.get(trade.ticker)!;
             summary.totalTrades++;
-            // For open trades, use openCredit as potential profit
-            const tradeProfit = trade.status === 'open' ? trade.openCredit : trade.profit;
-            if (tradeProfit > 0) summary.profitableTrades++;
-            summary.totalProfit += tradeProfit;
+            if (trade.profit > 0) summary.profitableTrades++;
+            summary.totalProfit += trade.profit;
             summary.winRate = (summary.profitableTrades / summary.totalTrades) * 100;
         }
 
-        // Group by month - include ALL trades (open and closed)
+        // Group by month - ONLY closed/expired trades, grouped by close date
         const byMonth = new Map<string, IMonthSummary>();
         for (const trade of trades) {
-            // Use openDate if available, fall back to expirationDate
-            const dateSource = (trade.openDate && trade.openDate.length >= 7)
-                ? trade.openDate : trade.expirationDate;
-            const month = dateSource.substring(0, 7); // YYYY-MM
-            if (!month || month.length < 7) continue; // Skip trades with no valid date
+            if (trade.status === 'open') continue; // Skip open trades — no realized P&L yet
+            // Use closeDate for P&L attribution (when profit was realized)
+            const dateSource = (trade.closeDate && trade.closeDate.length >= 7)
+                ? trade.closeDate
+                : (trade.expirationDate && trade.expirationDate.length >= 7)
+                    ? trade.expirationDate
+                    : (trade.openDate && trade.openDate.length >= 7)
+                        ? trade.openDate : '';
+            const month = dateSource.substring(0, 7);
+            if (!month || month.length < 7) continue;
             if (!byMonth.has(month)) {
                 byMonth.set(month, {
                     month,
@@ -821,10 +825,8 @@ export class IronCondorAnalyticsService extends ServiceBase implements IIronCond
             }
             const summary = byMonth.get(month)!;
             summary.totalTrades++;
-            // For open trades, use openCredit as potential profit
-            const tradeProfit = trade.status === 'open' ? trade.openCredit : trade.profit;
-            if (tradeProfit > 0) summary.profitableTrades++;
-            summary.totalProfit += tradeProfit;
+            if (trade.profit > 0) summary.profitableTrades++;
+            summary.totalProfit += trade.profit;
             summary.winRate = (summary.profitableTrades / summary.totalTrades) * 100;
         }
 

@@ -46,7 +46,7 @@ export class IronCondorModel implements IIronCondorViewModel {
         const putBreakEventDelta = breakEvenPut?.absoluteDeltaPercent ?? 50;
         const callBreakEventDelta = breakEvenCall?.absoluteDeltaPercent ?? 50;
 
-        return Math.max(0, 100 - putBreakEventDelta - callBreakEventDelta);
+        return 100 - Math.max(putBreakEventDelta, callBreakEventDelta);
 
 
     }

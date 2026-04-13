@@ -427,6 +427,178 @@ This normalization is CRITICAL because earlier exits = shorter time in trade = m
 
 ---
 
-*Ultima actualizare: 2026-04-11*
-*Surse: 14 video-uri YouTube analizate (transcript complet)*
-*Autori: Options With Davis, Jim Schultz (TastyTrade), Mike (TastyTrade), TastyTrade Research Team, Kirk Du Plessis (OptionAlpha), Rick, Chris Butler (ProjectOption), Ben (TastyTrade)*
+# APPENDIX — Sinteza Top 100 YouTube IC Videos (sursa: iron_condor_training.md)
+
+Material complementar din analiza top 100 YouTube videos despre IC. Doar continut UNIC fata de sectiunile de mai sus.
+
+## A1. 0DTE Iron Condor Framework (SPX)
+
+SPX are expirari **Luni / Miercuri / Vineri** (0DTE). Marti / Joi se folosesc 1DTE.
+
+### Diferente vs 30-45 DTE
+
+| Factor | 0DTE | 30-45 DTE |
+|--------|------|-----------|
+| Theta decay | Extrema (intraday) | Gradual |
+| Gamma risk | Extrema langa strikes | Moderata |
+| Time to adjust | Ore | Zile |
+| Position size | Mai mic | Standard |
+| Win rate | Mare dar profit mic | Moderat, profit mai mare |
+
+### Sasha the Options Coach — 0DTE timing
+
+- **Best entry**: 11am-12pm ET dupa volatility settle
+- **Strikes**: ±0.3-0.5% de la pretul curent
+- **Credit target**: $1-3 pe spread $5 wide pe SPX
+- **Management**: Close la 50% profit OR cu 15 min inainte de close
+
+### Theta Profits — studiu 9000+ trade-uri 0DTE pe SPX
+
+- Win rate: **~40% individual wins** (mai mic decat 30-45 DTE)
+- DAR: average win >> average loss (asymmetric payoff)
+- "Breakeven Iron Condor" (premium egal pe ambele parti) consistent profitable
+- Cheia: **position sizing** + nu over-trade in zile volatile
+- AVOID: zile cu CPI/FOMC/jobs report
+
+## A2. Strategy Comparison — IC vs Alternatives
+
+| Strategy | Structure | Use Case |
+|----------|-----------|----------|
+| **Iron Condor** | 4 legs, defined risk | Neutral, range-bound |
+| **Short Strangle** | 2 legs, undefined risk | Neutral, high IV, large account |
+| **Iron Butterfly** | 4 legs, ATM short strikes | Pinpoint neutral, narrow range |
+| **Jade Lizard** | Put spread + naked call | Slight bullish bias |
+| **Broken Wing Butterfly** | Unbalanced condor | Eliminate one-sided risk |
+| **Calendar Spread** | Same strike, diff expirations | Flat spot, rising IV |
+
+### IC vs Iron Butterfly
+
+- **Iron Butterfly**: short ATM = credit mai mare, profit zone mai ingusta, max loss potential mai mare
+- **Iron Condor**: short OTM = credit mai mic, profit zone mai larga, mai forgiving la miscari mici
+
+### Jade Lizard
+- Put spread + naked call = no upside risk (call premium > put spread width)
+- Bias usor bullish — colectezi premium pe ambele parti dar nu poti pierde sus
+
+### Broken Wing Butterfly
+- Wings asimetrice — eliminates downside (sau upside) risk complet
+- Trade-off: max profit redus pe partea cu wing larg
+
+## A3. EV (Expected Value) — Calcul Explicit
+
+```
+EV = (P(win) × Average Win) − (P(loss) × Average Loss)
+```
+
+**Exemplu fara management:**
+- 70% win × $150 win medie − 30% × $350 loss medie = $105 − $105 = **$0 EV**
+
+**Cu management 50% profit target:**
+- 78% win × $100 (average win mai mic) − 22% × $400 (loss mai mare cand pierzi) = $78 − $88 = **slightly negative**
+
+**Edge-ul vine din**:
+1. Selectia high-IV environments (IVR > 30, ideal > 50)
+2. Avoiding earnings + macro events
+3. Wing width potrivit (NU $5 — vezi studiul 12-yr)
+4. Disciplina pe 50% profit target + 2× credit stop loss
+
+## A4. Position Sizing — Kelly Criterion
+
+**Formula Kelly pentru IC:**
+```
+P(win) = 0.68 (16-delta default)
+Win/Loss ratio = 0.5 (credit / max loss)
+Kelly fraction ≈ 0.36 (full Kelly)
+```
+
+- **Recomandare practica**: 1/4 Kelly = **9% of capital per trade** (TEORETIC)
+- **Realitate**: cei mai succesfuli traderi folosesc **2-5% per pozitie**
+- Half-Kelly vs Full-Kelly: half = lower drawdown, similar long-term return
+
+**Implicatii pentru Catalin (NLV ~$X):**
+- 5% rule = max risk per trade (compatibil cu sizing-ul tau actual)
+- Total portfolio theta target: 0.1-0.5% NLV/zi
+- Max simultaneous positions: 5-10 (in linie cu regula ta de 5-6/expirare)
+
+## A5. SKY VIEW TRADING Framework (5 pasi)
+
+Strategie compacta cu 1.3M views:
+1. Enter at high IV (IV Rank > 30%)
+2. Target 1/3 credit of spread width
+3. Manage at 50% profit
+4. Roll untested side closer when one threatened
+5. Exit entire position at **2× credit loss**
+
+## A6. Adjustment Decision Tree (Quick Reference)
+
+```
+Is profit > 50%?           → CLOSE (take profit)
+Is loss > 2× credit?       → CLOSE (cut loss)
+Is DTE ≤ 21?               → CLOSE (avoid gamma)
+Is one side tested?        → EVALUATE roll
+
+Price near short PUT:
+  → Roll untested CALL side DOWN for credit
+  → OR roll put spread DOWN/OUT for credit
+  → Last resort: take the loss
+
+Price near short CALL:
+  → Roll untested PUT side UP for credit
+  → OR roll call spread UP/OUT for credit
+  → Last resort: take the loss
+```
+
+## A7. Skew (puts > calls IV)
+
+**Realitate de piata:** put-urile au tipic IV mai mare decat call-urile la acelasi delta.
+
+**Implicatii pentru Catalin:**
+- 16-delta put = strike mai aproape de spot decat 16-delta call
+- Asta inseamna IC simetric pe delta = ASYMMETRIC pe distanta
+- Daca vrei distanta egala (wings simetrice), foloseste delta diferit (ex. 16 put + 14 call)
+
+## A8. Backtesting Metrics — KPI Reference
+
+Pentru evaluarea oricarei strategii IC:
+- **Win Rate**: % trade-uri profitable
+- **Profit Factor**: gross profit / gross loss (target > 1.5)
+- **Avg P&L per trade**: trebuie pozitiv
+- **Max Drawdown**: cea mai mare scadere peak-to-trough
+- **Sharpe Ratio**: target > 1.0 (return / volatility)
+- **Sortino Ratio**: ca Sharpe dar doar downside vol
+- **Calmar Ratio**: annual return / max drawdown
+
+## A9. Common Mistakes — Lista Definitiva (TastyTrade)
+
+1. **Sizing prea mare** — peste 5% portfolio per trade
+2. **Ignori IV Rank** — IV prea mic = premium insuficient
+3. **No exit plan** — trebuie sa decizi profit target + stop INAINTE de entry
+4. **Over-adjusting** — rolling multiple ori = comisioane + risc
+5. **Trading prin earnings** — IV crush merge contra ta daca direction wrong
+6. **Letting positions go to max loss** — manage la 2× credit ALWAYS
+
+### Why You're Losing on ICs (ProjectOption real trader analysis)
+- Take profits too early (under 50%) reduces edge
+- Hold losers too long destroys account
+- Ignore skew when picking strikes
+- Underestimate gamma in last week
+
+## A10. Top YouTube Creators (referenta)
+
+| Creator | Channel | Focus |
+|---------|---------|-------|
+| Chris Butler | projectoption | In-depth tutorials, data studies |
+| Tom Sosnoff | tastylive | Systematic, research |
+| Kirk Du Plessis | Option Alpha | Automation |
+| Davis | Options With Davis | Beginners step-by-step |
+| Sasha | Sasha the Options Coach | Weekly income, SPX 0DTE |
+| Henry | Invest with Henry | Small accounts |
+| Pushkar Raj Thakur | (Indian channel) | Large following |
+| - | Volatility Trading Strategies | Rules-based |
+
+---
+
+*Ultima actualizare: 2026-04-13*
+*Surse adaugate: iron_condor_training.md (sinteza top 100 YouTube videos), iron_condor_youtube_top100.csv (referinta)*
+*Surse originale: 14 video-uri YouTube analizate complet*
+*Autori: Options With Davis, Jim Schultz (TastyTrade), Mike (TastyTrade), TastyTrade Research Team, Kirk Du Plessis (OptionAlpha), Rick, Chris Butler (ProjectOption), Ben (TastyTrade), Sasha the Options Coach, Theta Profits, SKY VIEW TRADING*

@@ -22,6 +22,7 @@ import {RawLocalStorageKeys} from "../../services/storage/raw-local-storage/raw-
 import {IOptionsStrategyViewModel} from "../../models/options-strategy.view-model.interface";
 import {SendOrderDialogComponent} from "./send-order-dialog.component";
 import {saveCompetitionRound, buildTradeFromStrategy, getCompetitionRounds, IMarketContext} from "../../services/competition/competition.service";
+import { submitUserPick, type ICompetitionTradeV2 } from "../../services/competition/competition-v2.service";
 import {auth} from "../../firebase";
 import {computeCompositeScore, STRATEGY_PROFILES} from "../../models/strategy-profile";
 
@@ -155,48 +156,12 @@ export const TickerOptionsStrategiesComponent: React.FC = observer(() => {
         if (!ticker) throw new Error('No ticker selected');
         const userEmail = auth.currentUser?.email || 'unknown';
 
-        console.log('[GuvidChallenge] User picked:', userStrategy.strategyName, userStrategy.legs.map(l => `${l.legType} ${l.option.optionType} ${l.option.strikePrice}`));
-
-        // Find the expiration that matches the user's pick
         const userExpDate = userStrategy.legs[0]?.option.expirationDate;
         if (!userExpDate) throw new Error('No expiration date on strategy legs');
 
-        const expirations = ticker.getExpirationsWithIronCondors();
-        const matchedExp = expirations.find(e => e.expirationDate === userExpDate);
+        console.log('[GuvidChallenge] User picked:', userStrategy.strategyName, '| Exp:', userExpDate);
 
-        console.log('[GuvidChallenge] Expiration:', userExpDate, 'Matched:', !!matchedExp, 'Available exps:', expirations.map(e => e.expirationDate));
-
-        // Guvidul picks: best scoring IC on the same expiration (excluding user's pick)
-        let guvidStrategy: IOptionsStrategyViewModel | null = null;
-        if (matchedExp) {
-            const ics = matchedExp.ironCondors;
-            console.log('[GuvidChallenge] ICs on expiration:', ics.length);
-            let bestScore = -Infinity;
-            for (const ic of ics) {
-                if (ic.key === userStrategy.key) continue;
-                if (ic.positionConflict) continue;
-                const score = computeCompositeScore(ic, STRATEGY_PROFILES.neutral);
-                if (score > bestScore) {
-                    bestScore = score;
-                    guvidStrategy = ic;
-                }
-            }
-        }
-
-        if (!guvidStrategy) guvidStrategy = userStrategy;
-
-        console.log('[GuvidChallenge] Guvid picked:', guvidStrategy.legs.map(l => `${l.legType} ${l.option.optionType} ${l.option.strikePrice}`));
-
-        // Get round number
-        let roundNum = 1;
-        try {
-            const existing = await getCompetitionRounds();
-            roundNum = existing.length + 1;
-        } catch { /* first round */ }
-
-        const today = new Date().toISOString().split('T')[0];
-
-        // Capture market context: underlying price, VIX, IV Rank
+        // Capture market context (used by aiDailySubmit when it picks tomorrow)
         services.marketDataProvider.subscribe(['$VIX.X']);
         const underlyingPrice = ticker.currentPrice || 0;
         const ivRank = ticker.ivRank || 0;
@@ -205,24 +170,69 @@ export const TickerOptionsStrategiesComponent: React.FC = observer(() => {
         if (vixQuote) {
             vix = Math.round(((vixQuote.bidPrice + vixQuote.askPrice) / 2) * 100) / 100;
         }
-        const marketContext: IMarketContext = { underlyingPrice, vix, ivRank };
-        console.log('[GuvidChallenge] Market context:', marketContext);
+        const marketContext = { underlyingPrice, vix, ivRank };
 
-        const userTrade = buildTradeFromStrategy(userStrategy as any, ticker.symbol, undefined, marketContext);
-        const guvidTrade = buildTradeFromStrategy(guvidStrategy as any, ticker.symbol, undefined, marketContext);
+        // Build V2 user trade format
+        const legs = userStrategy.legs.map(l => ({
+            type: l.legType,
+            optionType: l.option.optionType,
+            strike: l.option.strikePrice,
+        }));
+        const btoPut = legs.find(l => l.type === 'BTO' && l.optionType === 'P');
+        const stoPut = legs.find(l => l.type === 'STO' && l.optionType === 'P');
+        const stoCall = legs.find(l => l.type === 'STO' && l.optionType === 'C');
+        const btoCall = legs.find(l => l.type === 'BTO' && l.optionType === 'C');
+        const strategyStr = `IC ${btoPut?.strike}/${stoPut?.strike}p ${stoCall?.strike}/${btoCall?.strike}c`;
+        const wings = (stoPut?.strike ?? 0) - (btoPut?.strike ?? 0);
+        const credit = userStrategy.credit;
+        const quantity = 1;
+        const maxProfit = credit * 100 * quantity;
+        const maxLoss = (wings - credit) * 100 * quantity;
 
-        console.log('[GuvidChallenge] Saving round', roundNum, '| User:', userTrade.strategy, '| Guvid:', guvidTrade.strategy);
+        const userTrade: ICompetitionTradeV2 = {
+            ticker: ticker.symbol,
+            strategy: strategyStr,
+            expiration: userExpDate,
+            legs,
+            credit: Math.round(credit * 100) / 100,
+            quantity,
+            wings,
+            maxProfit,
+            maxLoss,
+            pop: userStrategy.pop,
+            ev: Math.round(userStrategy.expectedValue * 100) / 100,
+            alpha: Math.round(userStrategy.alpha * 100) / 100,
+            rr: userStrategy.riskRewardRatio,
+            delta: userStrategy.delta,
+            theta: userStrategy.theta,
+            exitPl: null, exitDate: null, closedBy: null,
+            status: 'open',
+        };
 
-        await saveCompetitionRound({
-            round: roundNum,
+        const today = new Date().toISOString().split('T')[0];
+
+        // Submit to V2 collection — aiDailySubmit will attach AI's pick at next 10:30 AM ET
+        const roundId = await submitUserPick({
+            roundNumber: 0,
             date: today,
             userEmail,
+            expirationDate: userExpDate,
+            ticker: ticker.symbol as 'SPX' | 'QQQ',
             userTrade,
-            guvidTrade,
-            winner: 'Pending'
+            winner: 'Pending',
+            ghost: false,
+            marketContext,
+            userScore: null,
+            aiScore: null,
+            winnerDecidedAt: null,
         });
 
-        console.log('[GuvidChallenge] Saved successfully!');
+        // Suppress unused-var warning for legacy v1 helpers (still imported for backward compat)
+        void saveCompetitionRound; void buildTradeFromStrategy; void getCompetitionRounds;
+        void STRATEGY_PROFILES; void computeCompositeScore;
+        const _legacyTypeRef: IMarketContext | null = null; void _legacyTypeRef;
+
+        console.log('[GuvidChallenge] V2 round saved:', roundId, '— AI will respond at next 10:30 AM ET');
     }
 
     return (

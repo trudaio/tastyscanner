@@ -180,8 +180,10 @@ export const AccountPage: React.FC = observer(() => {
                 clientSecret: clientSecret.trim(),
                 refreshToken: refreshToken.trim(),
             };
+            console.log('[AccountPage] Saving credentials, user:', auth.currentUser?.uid);
             // Save to brokerAccounts subcollection (persisted in Firestore)
             const existing = await services.brokerCredentials.getActiveBrokerAccount();
+            console.log('[AccountPage] Existing active account:', existing?.id, existing?.brokerType);
             if (existing && existing.brokerType === BrokerType.TastyTrade) {
                 // Update existing TastyTrade account
                 await services.brokerCredentials.saveBrokerAccount({

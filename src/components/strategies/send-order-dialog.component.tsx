@@ -383,7 +383,7 @@ export const SendOrderDialogComponent: React.FC<SendOrderDialogComponentProps> =
         try {
             await props.onGuvidChallenge(props.strategy);
             setGuvidSaved(true);
-            alert('Pozitia ta + sugestia Guvidului au fost salvate! Verifica pagina Guvidul vs User.');
+            alert('Pozitia ta a fost salvata! Guvidul AI va raspunde la urmatoarea rulare 10:30 AM ET. Verifica pagina Guvidul vs User.');
         } catch (e: any) {
             console.error('[AddToGuvid] Error:', e);
             alert('Eroare la salvare: ' + (e?.message || 'Unknown error'));

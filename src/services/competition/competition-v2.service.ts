@@ -122,7 +122,8 @@ function getV2Collection() {
     return collection(db, 'users', user.uid, 'competitionV2');
 }
 
-/** Submit user's pick for a given expiration. Creates the round; AI will attach its pick when aiDailySubmit runs. */
+/** Submit user's pick for a given expiration. Creates the round; AI will attach its pick when aiDailySubmit runs.
+ *  Doc ID includes strike signature so multiple ICs on same expiration don't overwrite. */
 export async function submitUserPick(
     round: Omit<ICompetitionRoundV2, 'id' | 'createdAt' | 'revealedAt' | 'aiTrade'> & {
         aiTrade?: IAiCompetitionTrade;
@@ -130,7 +131,11 @@ export async function submitUserPick(
 ): Promise<string> {
     const ref = getV2Collection();
     const date = round.date;
-    const roundId = `${date}_${round.ticker}_${round.expirationDate}`;
+    // Uniquify by short-strike pair: allows multiple ICs on same exp same day
+    const userTrade = round.userTrade;
+    const shortPut = userTrade?.legs.find((l) => l.type === 'STO' && l.optionType === 'P')?.strike ?? 0;
+    const shortCall = userTrade?.legs.find((l) => l.type === 'STO' && l.optionType === 'C')?.strike ?? 0;
+    const roundId = `${date}_${round.ticker}_${round.expirationDate}_${shortPut}p${shortCall}c`;
 
     const baseRound: ICompetitionRoundV2 = {
         ...round,

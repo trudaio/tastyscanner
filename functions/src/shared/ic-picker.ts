@@ -1,7 +1,44 @@
 // AI Iron Condor picker — seeded with Catalin's rules, extensible via AiState
 
 import type { IAiState, IAiCompetitionTrade, IMarketContext } from './types';
-import type { IOptionQuote } from './tasty-rest-client';
+import type { IOptionQuote, IRawPosition } from './tasty-rest-client';
+
+/**
+ * Strike overlap detection. Prevents picking an IC that shares a strike with an
+ * existing open position in a way that cancels protection or creates duplicates.
+ *
+ * Learned 2026-04-13 from a real Catalin trade: he took two SPX ICs on the same
+ * expiration where long call strike of IC #1 matched short call strike of IC #2,
+ * creating an effective $20-wide naked-between-strikes spread with amplified
+ * intermediate loss.
+ */
+export function hasStrikeOverlap(
+    candidate: { putBuy: number; putSell: number; callSell: number; callBuy: number },
+    expirationDate: string,
+    existingPositions: IRawPosition[],
+): { overlaps: boolean; reason: string } {
+    const sameExpPositions = existingPositions.filter((p) => p.expirationDate === expirationDate);
+    for (const pos of sameExpPositions) {
+        // Check each leg of the candidate against the existing position
+        const legs: Array<{ strike: number; type: 'P' | 'C'; direction: 'Long' | 'Short' }> = [
+            { strike: candidate.putBuy, type: 'P', direction: 'Long' },
+            { strike: candidate.putSell, type: 'P', direction: 'Short' },
+            { strike: candidate.callSell, type: 'C', direction: 'Short' },
+            { strike: candidate.callBuy, type: 'C', direction: 'Long' },
+        ];
+        for (const leg of legs) {
+            if (pos.strikePrice === leg.strike && pos.optionType === leg.type) {
+                // Same strike + same type. Does direction cancel or duplicate?
+                if (pos.quantityDirection !== leg.direction) {
+                    return { overlaps: true, reason: `CANCEL: ${leg.direction} ${leg.type} @ ${leg.strike} would cancel existing ${pos.quantityDirection} position (same strike, opposite direction) — removes protection` };
+                } else {
+                    return { overlaps: true, reason: `DUPLICATE: ${leg.direction} ${leg.type} @ ${leg.strike} duplicates existing position at same strike` };
+                }
+            }
+        }
+    }
+    return { overlaps: false, reason: 'no overlap' };
+}
 
 export interface ChainInput {
     ticker: 'SPX' | 'QQQ';

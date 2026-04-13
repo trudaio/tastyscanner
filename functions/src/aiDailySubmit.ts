@@ -7,9 +7,9 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { defineSecret } from 'firebase-functions/params';
 import { getCredentialsForUser, findActiveTastyUser } from './shared/credentials';
 import {
-    getAccessToken, getAccounts, getOptionsChain, getMarketDataSnapshot, getUnderlyingPrice, getAccountBalances,
+    getAccessToken, getAccounts, getOptionsChain, getMarketDataSnapshot, getUnderlyingPrice, getAccountBalances, getPositions,
 } from './shared/tasty-rest-client';
-import { getTopCandidates, type ChainInput } from './shared/ic-picker';
+import { getTopCandidates, hasStrikeOverlap, type ChainInput } from './shared/ic-picker';
 import { pickWithLlm } from './shared/llm-picker';
 import type {
     IAiState, ICompetitionRoundV2, IMarketContext, IWeeklyMemo,
@@ -102,6 +102,10 @@ export const aiDailySubmit = onSchedule(
         const bpePct = balances.derivativeBuyingPowerPercentage;
         console.log(`[aiDailySubmit] Current BPE: ${bpePct.toFixed(1)}% of net liq`);
 
+        // 4c. Fetch current open positions (for strike-overlap conflict detection)
+        const existingPositions = await getPositions(token, accountNumber);
+        console.log(`[aiDailySubmit] Open positions: ${existingPositions.length} option legs`);
+
         // Hard cap 80%, soft cap 50% (or 70% with VIX>22 exception)
         if (bpePct >= 80) {
             console.warn(`[aiDailySubmit] BPE ${bpePct}% >= 80% hard cap — skipping all picks today`);
@@ -181,12 +185,31 @@ export const aiDailySubmit = onSchedule(
                         quotes: quoteMap,
                     };
 
-                    // Generate top candidates with rule-based picker
-                    const candidates = getTopCandidates(chainInput, aiState, marketContext, 5);
+                    // Generate top candidates with rule-based picker (request extra so we can filter overlaps)
+                    const candidates = getTopCandidates(chainInput, aiState, marketContext, 10);
                     if (candidates.topN.length === 0) {
                         console.log(`[aiDailySubmit] ${ticker} ${expDate}: no candidates — ${candidates.reason}`);
                         continue;
                     }
+
+                    // Filter out candidates with strike overlap against existing positions on same expiration
+                    const conflictFree = candidates.topN.filter((c) => {
+                        const check = hasStrikeOverlap(
+                            { putBuy: c.putBuy, putSell: c.putSell, callSell: c.callSell, callBuy: c.callBuy },
+                            expDate,
+                            existingPositions,
+                        );
+                        if (check.overlaps) {
+                            console.log(`[aiDailySubmit] ${ticker} ${expDate}: filtered candidate ${c.putBuy}/${c.putSell}p ${c.callSell}/${c.callBuy}c — ${check.reason}`);
+                        }
+                        return !check.overlaps;
+                    }).slice(0, 5);
+
+                    if (conflictFree.length === 0) {
+                        console.log(`[aiDailySubmit] ${ticker} ${expDate}: all candidates conflict with existing positions — skipping`);
+                        continue;
+                    }
+                    candidates.topN = conflictFree;
 
                     const isGhost = !userExps.has(expDate);
                     const existingUserRound = userRounds.find((r) => r.ticker === ticker && r.expirationDate === expDate);

@@ -274,7 +274,10 @@ export async function getAccountBalances(token: string, accountNumber: string): 
         const netLiq = parseFloat(d['net-liquidating-value'] || '0');
         const dbp = parseFloat(d['derivative-buying-power'] || '0');
         const maint = parseFloat(d['maintenance-requirement'] || '0');
-        const dbpPct = netLiq > 0 ? (maint / netLiq) * 100 : 0;
+        // BPE used = 1 - (available derivative BP / net liq)
+        // Fixed 2026-04-13: previous formula `maint / netLiq` was wrong — maintenance includes
+        // stock positions and doesn't represent derivative BPE usage correctly.
+        const dbpPct = netLiq > 0 ? (1 - dbp / netLiq) * 100 : 0;
         return {
             netLiquidatingValue: netLiq,
             derivativeBuyingPower: dbp,

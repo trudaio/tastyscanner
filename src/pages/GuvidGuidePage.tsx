@@ -85,7 +85,7 @@ const Intro = styled.p`
     margin-bottom: 24px;
 `;
 
-export const GreeksGuidePage: React.FC = () => {
+export const GuvidGuidePage: React.FC = () => {
     return (
         <IonPage>
             <IonHeader>
@@ -93,15 +93,16 @@ export const GreeksGuidePage: React.FC = () => {
                     <IonButtons slot="start">
                         <IonMenuButton />
                     </IonButtons>
-                    <IonTitle>Greeks & Metrics Guide</IonTitle>
+                    <IonTitle>Guvid Guide</IonTitle>
                 </IonToolbar>
             </IonHeader>
             <IonContent>
                 <PageContent>
                     <Intro>
-                        This guide explains the key metrics used in Operatiunea Guvidul
-                        to evaluate Iron Condor strategies. Understanding these numbers
-                        helps you select high-probability trades with defined risk.
+                        This guide explains the metrics used in Operatiunea Guvidul to
+                        evaluate Iron Condor strategies: the option Greeks, strategy
+                        metrics, Strategia Guvidul itself, and the technical indicators
+                        (RSI, Bollinger Bands, ATR) shown in the ticker header.
                     </Intro>
 
                     {/* ============ THE GREEKS ============ */}
@@ -406,6 +407,114 @@ export const GreeksGuidePage: React.FC = () => {
                                     ))}
                                 </tbody>
                             </table>
+                        </IonCardContent>
+                    </GuideCard>
+
+                    {/* ============ TECHNICAL INDICATORS ============ */}
+                    <SectionTitle>Technical Indicators</SectionTitle>
+
+                    <p style={{ color: 'var(--ion-color-medium)', marginBottom: 16 }}>
+                        The header of each ticker shows three daily-close indicators for
+                        context before placing a trade. They are computed at 4:15 PM ET
+                        each weekday and passed to the autonomous AI (Operatiunea Guvid)
+                        as informational context &mdash; not as mechanical triggers.
+                    </p>
+
+                    {/* RSI */}
+                    <GuideCard>
+                        <IonCardHeader>
+                            <CardTitleBox>RSI(14) &mdash; Relative Strength Index</CardTitleBox>
+                        </IonCardHeader>
+                        <IonCardContent>
+                            <p>
+                                RSI measures the speed and change of price movements on a 0&ndash;100 scale.
+                                It compares average up-closes against average down-closes over the last
+                                14 days, using Wilder&#39;s smoothing.
+                            </p>
+                            <FormulaBox>
+                                RSI = 100 &minus; 100 / (1 + avgGain / avgLoss)<br/>
+                                where avgGain / avgLoss are Wilder-smoothed over 14 bars
+                            </FormulaBox>
+                            <InterpretBox>
+                                <strong>How to read it:</strong><br/>
+                                &bull; <strong>RSI &lt; 30</strong> &mdash; oversold (possible bounce / put-side risk)<br/>
+                                &bull; <strong>RSI 30&ndash;70</strong> &mdash; neutral, normal trading range<br/>
+                                &bull; <strong>RSI &gt; 70</strong> &mdash; overbought (possible reversal / call-side risk)<br/>
+                                &bull; <strong>&lt;25 or &gt;75</strong> &mdash; extreme, highest-conviction signal<br/>
+                                For an IC: elevated RSI argues for pulling call wings slightly tighter.
+                            </InterpretBox>
+                            <WarningBox>
+                                RSI <strong>fails in strong trends</strong> &mdash; during a sustained uptrend
+                                it can stay above 70 for weeks without reversing. Do not sell premium
+                                against a trend on RSI signal alone. Use it as a <em>tail-risk input</em>,
+                                not a directional call.
+                            </WarningBox>
+                        </IonCardContent>
+                    </GuideCard>
+
+                    {/* Bollinger Bands */}
+                    <GuideCard>
+                        <IonCardHeader>
+                            <CardTitleBox>Bollinger Bands(20, 2&sigma;)</CardTitleBox>
+                        </IonCardHeader>
+                        <IonCardContent>
+                            <p>
+                                Bollinger Bands plot a 20-period simple moving average (the &ldquo;mid band&rdquo;)
+                                and two lines at +2 and &minus;2 standard deviations around it. They show
+                                where price is relative to its own recent volatility.
+                            </p>
+                            <FormulaBox>
+                                mid = SMA(close, 20)<br/>
+                                upper = mid + 2 &times; stdDev(close, 20)<br/>
+                                lower = mid &minus; 2 &times; stdDev(close, 20)<br/>
+                                distance&sigma; = (close &minus; mid) / stdDev
+                            </FormulaBox>
+                            <InterpretBox>
+                                <strong>How to read it:</strong><br/>
+                                &bull; <strong>|distance&sigma;| &lt; 1</strong> &mdash; price near mid, neutral<br/>
+                                &bull; <strong>+1&sigma; to +2&sigma;</strong> &mdash; price near upper band, call-side stretched<br/>
+                                &bull; <strong>&gt;+2&sigma;</strong> &mdash; above upper band, strong overextension<br/>
+                                &bull; <strong>&minus;1&sigma; to &minus;2&sigma;</strong> &mdash; near lower band, put-side stretched<br/>
+                                &bull; <strong>&lt;&minus;2&sigma;</strong> &mdash; below lower band, strong downward extension<br/>
+                                For an IC: being deep near one band is a signal that side is richer in premium.
+                            </InterpretBox>
+                            <WarningBox>
+                                Beware of the <strong>band walk</strong> &mdash; in a strong trend, price can
+                                ride the upper band for many days. BB alone is not a reversal signal.
+                                Combine with RSI and trend context.
+                            </WarningBox>
+                        </IonCardContent>
+                    </GuideCard>
+
+                    {/* ATR */}
+                    <GuideCard>
+                        <IonCardHeader>
+                            <CardTitleBox>ATR(14) &mdash; Average True Range</CardTitleBox>
+                        </IonCardHeader>
+                        <IonCardContent>
+                            <p>
+                                ATR measures realized volatility in dollar terms: the Wilder-smoothed
+                                average of the true range (high&ndash;low or gap) over the last 14 days.
+                                Unlike VIX (which is implied), ATR tells you how far price actually
+                                moved, on average, each day.
+                            </p>
+                            <FormulaBox>
+                                TR = max(high &minus; low, |high &minus; prevClose|, |low &minus; prevClose|)<br/>
+                                ATR = Wilder-smooth(TR, 14)
+                            </FormulaBox>
+                            <InterpretBox>
+                                <strong>How to read it:</strong><br/>
+                                &bull; <strong>SPX:</strong> &lt;40 low, 40&ndash;70 normal, &gt;70 elevated<br/>
+                                &bull; <strong>QQQ:</strong> &lt;5 low, 5&ndash;9 normal, &gt;9 elevated<br/>
+                                &bull; <strong>Wing-width guidance for ICs:</strong> if ATR is elevated, prefer
+                                wider wings ($15 instead of $10 on SPX) &mdash; tight wings can be blown
+                                through on a single day&#39;s range.
+                            </InterpretBox>
+                            <WarningBox>
+                                ATR is <strong>not directional</strong> &mdash; a high ATR tells you volume of
+                                movement, not its sign. Pair with RSI/BB to know whether the risk is on
+                                the call side or the put side.
+                            </WarningBox>
                         </IonCardContent>
                     </GuideCard>
 

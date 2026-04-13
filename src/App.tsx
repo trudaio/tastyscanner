@@ -6,7 +6,7 @@ import Page from './pages/Page';
 import { DashboardPage } from './pages/DashboardPage';
 import { IronCondorSaviorPage } from './pages/IronCondorSaviorPage';
 import { AccountPage } from './pages/AccountPage';
-import { GreeksGuidePage } from './pages/GreeksGuidePage';
+import { GuvidGuidePage } from './pages/GuvidGuidePage';
 import { GuvidHistoryPage } from './pages/GuvidHistoryPage';
 import { SuperAdminPage } from './pages/SuperAdminPage';
 import { DeltaAlertPage } from './pages/DeltaAlertPage';
@@ -124,7 +124,7 @@ const App: React.FC = () => {
                                     <GuvidHistoryPage />
                                 </Route>
                                 <Route path="/guide" exact={true}>
-                                    <GreeksGuidePage />
+                                    <GuvidGuidePage />
                                 </Route>
                                 <Route path="/delta-alert" exact={true}>
                                     <DeltaAlertPage />

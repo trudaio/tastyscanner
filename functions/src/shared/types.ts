@@ -3,10 +3,23 @@
 
 export type StrategyProfileType = 'Conservative' | 'Neutral' | 'Aggressive';
 
+export interface ITechnicalsContext {
+    rsi: number;
+    rsiVerdict: string;           // e.g. 'neutral' | 'overbought' | 'oversold_extreme'
+    bbDistance: number;           // signed σ distance from mid band
+    bbVerdict: string;            // e.g. 'near_upper' | 'neutral' | 'below_lower'
+    atr: number;
+    atrVerdict: string;           // 'low' | 'normal' | 'elevated'
+    computedAt: string;           // ISO timestamp of last compute
+    stale: boolean;               // true if freshness > 48h
+}
+
 export interface IMarketContext {
     underlyingPrice: number;
     vix: number;
     ivRank: number;
+    /** Technical indicators (RSI/BB/ATR) for the ticker, if available. */
+    technicals?: ITechnicalsContext | null;
 }
 
 export interface ICompetitionLeg {

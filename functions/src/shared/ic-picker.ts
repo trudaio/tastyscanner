@@ -50,6 +50,14 @@ export interface CandidatesResult {
     };
 }
 
+// Slippage: realistic fill is 2-3 cents below mid (Catalin's documented practice)
+// Apply to credit before scoring so all metrics reflect realistic fill
+const SLIPPAGE_PER_IC = 0.025; // $0.025 below mid = 2.5 cents
+
+function applySlippage(rawCredit: number): number {
+    return Math.max(0, rawCredit - SLIPPAGE_PER_IC);
+}
+
 // Strike spacing detection — skip if weekly with $25 gaps
 function detectStrikeSpacing(strikes: number[]): number {
     if (strikes.length < 3) return 0;
@@ -156,10 +164,14 @@ export function buildCandidates(
             const cbExists = allStrikes.includes(cbStrike);
             if (!pbExists || !cbExists) continue;
 
-            const { credit, valid, deltas, theta } = calcCredit(
+            const { credit: rawCredit, valid, deltas, theta } = calcCredit(
                 input.strikes, input.quotes, sp.strike, pbStrike, sc.strike, cbStrike,
             );
             if (!valid) continue;
+
+            // Apply slippage: realistic fill is 2-3 cents below mid
+            const credit = applySlippage(rawCredit);
+            if (credit <= 0) continue;
 
             const pop = calcPOP(deltas.sp, deltas.sc);
             if (pop < rules.minPOP) continue;

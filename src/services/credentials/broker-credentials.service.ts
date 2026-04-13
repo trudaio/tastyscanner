@@ -103,7 +103,14 @@ export class BrokerCredentialsService implements IBrokerCredentialsService {
         const ref = this.getBrokerAccountsRef();
         const docRef = account.id ? doc(ref, account.id) : doc(ref);
         const { id: _id, ...data } = account as IBrokerAccount;
-        await setDoc(docRef, data, { merge: true });
+        console.log('[BrokerCredentials] saveBrokerAccount path:', docRef.path, 'data:', JSON.stringify({ ...data, credentials: '***' }));
+        try {
+            await setDoc(docRef, data, { merge: true });
+            console.log('[BrokerCredentials] saveBrokerAccount SUCCESS:', docRef.id);
+        } catch (err) {
+            console.error('[BrokerCredentials] saveBrokerAccount FAILED:', err);
+            throw err;
+        }
         return docRef.id;
     }
 

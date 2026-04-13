@@ -7,7 +7,7 @@ import {
 import { trophyOutline, lockClosedOutline, eyeOutline, flashOutline, sparklesOutline, closeCircleOutline } from 'ionicons/icons';
 import {
     subscribeRoundsV2, submitUserPick, calculateDeadline, computeLeaderboard,
-    setApproval, submitFeedback,
+    setApproval, submitFeedback, vetoAiPick,
     type ICompetitionRoundV2, type ICompetitionTradeV2,
 } from '../../services/competition/competition-v2.service';
 import { auth } from '../../firebase';
@@ -475,6 +475,29 @@ const FeedbackBadge = styled.div`
     color: #aaa;
 `;
 
+const VetoBtn = styled.button`
+    background: transparent;
+    border: 1px dashed #ff4d6d;
+    color: #ff4d6d;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 6px;
+    &:hover { background: rgba(255,77,109,0.1); }
+`;
+
+const VetoBadge = styled.div`
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: rgba(255,77,109,0.08);
+    border-left: 3px solid #ff4d6d;
+    border-radius: 0 4px 4px 0;
+    font-size: 11px;
+    color: #ff4d6d;
+`;
+
 const WinnerBanner = styled.div<{ $winner: string }>`
     padding: 8px 12px;
     text-align: center;
@@ -768,7 +791,7 @@ const RoundCardComponent: React.FC<{ round: ICompetitionRoundV2 }> = ({ round })
                         </LockedPlaceholder>
                     </Side>
                 ) : (
-                    <AiSide trade={round.aiTrade} />
+                    <AiSide trade={round.aiTrade} round={round} />
                 )}
             </RoundBody>
 
@@ -878,9 +901,20 @@ const UserSide: React.FC<{ trade: ICompetitionTradeV2 }> = ({ trade }) => {
     );
 };
 
-const AiSide: React.FC<{ trade: import('../../services/competition/competition-v2.service').IAiCompetitionTrade }> = ({ trade }) => {
+const AiSide: React.FC<{
+    trade: import('../../services/competition/competition-v2.service').IAiCompetitionTrade;
+    round: ICompetitionRoundV2;
+}> = ({ trade, round }) => {
     const pl = trade.exitPl;
     const isPlaceholder = trade.strategy === 'PENDING';
+    const isOpen = trade.status === 'open' && !round.userVeto;
+    const handleVeto = async () => {
+        if (!round.id) return;
+        const reason = window.prompt('Why would you NEVER take this pick? (becomes a strong negative training signal)');
+        if (reason === null) return;
+        try { await vetoAiPick(round.id, reason); }
+        catch (e) { console.error('Veto error:', e); }
+    };
 
     if (isPlaceholder) {
         return (
@@ -936,6 +970,16 @@ const AiSide: React.FC<{ trade: import('../../services/competition/competition-v
                         <RuleBadge key={r}>{r}</RuleBadge>
                     ))}
                 </RuleBadges>
+            )}
+
+            {round.userVeto && (
+                <VetoBadge>
+                    🚫 You vetoed this pick — reason: "{round.userVeto.reason}"
+                </VetoBadge>
+            )}
+
+            {isOpen && !round.userVeto && (
+                <VetoBtn onClick={handleVeto}>🚫 I'd never take this</VetoBtn>
             )}
         </Side>
     );

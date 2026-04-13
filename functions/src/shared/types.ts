@@ -60,6 +60,12 @@ export interface IUserFeedback {
     submittedAt: string;
 }
 
+/** Strong negative signal — user would NEVER take this pick. Stronger than a loss. */
+export interface IUserVeto {
+    reason: string;
+    vetoedAt: string;
+}
+
 export interface ICompetitionRoundV2 {
     id?: string;
     roundNumber: number;
@@ -78,6 +84,7 @@ export interface ICompetitionRoundV2 {
     createdAt: string;           // ISO
     revealedAt: string | null;   // ISO — when poker reveal happened
     userFeedback?: IUserFeedback;
+    userVeto?: IUserVeto;
 }
 
 export interface IWeeklyMemo {
@@ -139,7 +146,7 @@ export interface ILearningLogEntry {
     roundId: string;
     timestamp: string;
     featureVector: IFeatureVector;
-    outcome: 'win' | 'loss' | 'draw';
+    outcome: 'win' | 'loss' | 'draw' | 'vetoed';
     userScore: number;
     aiScore: number;
     adjustmentsApplied: string[];

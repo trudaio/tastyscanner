@@ -62,6 +62,11 @@ export interface IUserFeedback {
     submittedAt: string;
 }
 
+export interface IUserVeto {
+    reason: string;
+    vetoedAt: string;
+}
+
 export interface ICompetitionRoundV2 {
     id?: string;
     roundNumber: number;
@@ -80,6 +85,7 @@ export interface ICompetitionRoundV2 {
     createdAt: string;
     revealedAt: string | null;
     userFeedback?: IUserFeedback;
+    userVeto?: IUserVeto;
 }
 
 export interface IAiState {
@@ -191,6 +197,19 @@ export async function setApproval(roundId: string, status: 'approved' | 'rejecte
         update.winner = 'GhostOnly';
     }
     await updateDoc(ref, update);
+}
+
+/** Veto an AI pick (strong negative signal — "I'd never take this") */
+export async function vetoAiPick(roundId: string, reason: string): Promise<void> {
+    const user = auth.currentUser;
+    if (!user) throw new Error('Not authenticated');
+    const ref = doc(db, 'users', user.uid, 'competitionV2', roundId);
+    await updateDoc(ref, {
+        userVeto: {
+            reason: reason.trim() || '(no reason given)',
+            vetoedAt: new Date().toISOString(),
+        },
+    });
 }
 
 /** Submit user feedback on a closed round */

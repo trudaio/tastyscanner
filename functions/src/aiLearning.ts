@@ -44,7 +44,7 @@ function extractFeatures(round: ICompetitionRoundV2): IFeatureVector {
 function updateRuleAdjustments(
     adjustments: IRuleAdjustment[],
     fv: IFeatureVector,
-    outcome: 'win' | 'loss' | 'draw',
+    outcome: 'win' | 'loss' | 'draw' | 'vetoed',
 ): IRuleAdjustment[] {
     const updated = [...adjustments];
 
@@ -83,6 +83,10 @@ function updateRuleAdjustments(
         } else if (outcome === 'loss') {
             existing.winRate = (existing.winRate * (existing.samplesSeen - 1)) / existing.samplesSeen;
             existing.effect = Math.max(-1, existing.effect - 0.1);
+        } else if (outcome === 'vetoed') {
+            // Veto from Catalin = 3x stronger negative signal than a loss
+            existing.winRate = (existing.winRate * (existing.samplesSeen - 1)) / existing.samplesSeen;
+            existing.effect = Math.max(-1, existing.effect - 0.3);
         }
         // draws don't change the weight materially
     }
@@ -91,8 +95,14 @@ function updateRuleAdjustments(
     return updated.filter((a) => !(a.samplesSeen >= 20 && a.winRate < 0.4 && a.effect > -0.8));
 }
 
-function generatePostMortem(round: ICompetitionRoundV2, outcome: 'win' | 'loss' | 'draw'): string {
+function generatePostMortem(round: ICompetitionRoundV2, outcome: 'win' | 'loss' | 'draw' | 'vetoed'): string {
     const ai = round.aiTrade;
+    if (outcome === 'vetoed') {
+        const reason = round.userVeto?.reason || 'no reason given';
+        return `AI pick VETOED by Catalin. ${ai.strategy} at ${ai.expiration}. ` +
+            `Entry: POP ${ai.pop}%, credit $${ai.credit}, wings $${ai.wings}, VIX=${round.marketContext.vix.toFixed(1)}. ` +
+            `Reason: "${reason}". Strong negative training signal — features penalized 3x normal.`;
+    }
     const sign = (ai.exitPl ?? 0) >= 0 ? '+' : '';
     const pctOfMax = ai.maxProfit > 0 ? ((ai.exitPl ?? 0) / ai.maxProfit) * 100 : 0;
     const outcomeStr = outcome === 'win' ? 'WON' : outcome === 'loss' ? 'LOST' : 'DRAW';
@@ -112,9 +122,10 @@ export const aiLearning = onDocumentUpdated(
         const after = event.data?.after.data() as ICompetitionRoundV2 | undefined;
         if (!before || !after) return;
 
-        // Only trigger when winner transitions from Pending → decided
-        if (before.winner === after.winner) return;
-        if (after.winner === 'Pending' || after.winner === 'GhostOnly') return;
+        // Trigger on (1) winner transition Pending → decided OR (2) new userVeto added
+        const becameVetoed = !before.userVeto && !!after.userVeto;
+        const winnerChanged = before.winner !== after.winner && after.winner !== 'Pending' && after.winner !== 'GhostOnly';
+        if (!winnerChanged && !becameVetoed) return;
 
         const uid = event.params.uid;
         const roundId = event.params.roundId;
@@ -127,8 +138,9 @@ export const aiLearning = onDocumentUpdated(
         let state: IAiState = stateDoc.exists ? stateDoc.data() as IAiState : { ...DEFAULT_AI_STATE };
 
         // Determine AI outcome
-        let outcome: 'win' | 'loss' | 'draw';
-        if (after.winner === 'AI') outcome = 'win';
+        let outcome: 'win' | 'loss' | 'draw' | 'vetoed';
+        if (becameVetoed) outcome = 'vetoed';
+        else if (after.winner === 'AI') outcome = 'win';
         else if (after.winner === 'User') outcome = 'loss';
         else outcome = 'draw';
 

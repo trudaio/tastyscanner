@@ -31,3 +31,8 @@ yarn-error.log*
 
 # Optional eslint cache
 .eslintcache
+autoresearch-results.tsv
+
+# Agent tool outputs
+.superpowers/
+graphify-out/

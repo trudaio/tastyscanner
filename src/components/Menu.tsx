@@ -21,7 +21,7 @@ import {WatchListsComponent} from "./watch-lists.component";
 import {TickerMenuItemComponent} from "./ticker-menu-item.component";
 import {BrokerAccountsComponent} from "./broker-accounts.component";
 import {AccountInfoComponent} from "./account-info.component";
-import {alertCircleOutline, analyticsOutline, bookOutline, filterOutline, personCircleOutline, keyOutline, trophyOutline, layersOutline, barChartOutline, warningOutline, notificationsOutline, timerOutline, flaskOutline} from "ionicons/icons";
+import {alertCircleOutline, analyticsOutline, bookOutline, filterOutline, personCircleOutline, keyOutline, trophyOutline, layersOutline, barChartOutline, warningOutline, notificationsOutline, timerOutline, flaskOutline, eyeOutline} from "ionicons/icons";
 import {useHistory} from "react-router-dom";
 import { auth } from '../firebase';
 
@@ -162,6 +162,11 @@ const Menu: React.FC = observer(() => {
         <IonItem button routerLink="/guvid-vs-user" routerDirection="forward" lines="none">
           <IonIcon slot="start" icon={trophyOutline} />
           <IonLabel>Guvidul vs User</IonLabel>
+        </IonItem>
+
+        <IonItem button routerLink="/guvid-visualization" routerDirection="forward" lines="none">
+          <IonIcon slot="start" icon={eyeOutline} />
+          <IonLabel>Guvid Visualization</IonLabel>
         </IonItem>
 
         <IonItem button routerLink="/risk-exposer" routerDirection="forward" lines="none">

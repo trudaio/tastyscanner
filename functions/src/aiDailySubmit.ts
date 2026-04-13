@@ -93,11 +93,16 @@ export const aiDailySubmit = onSchedule(
         console.log(`[aiDailySubmit] Using account ${accountNumber}`);
 
         // 4b. BPE gate — fetch current buying power usage
+        // FAIL-SAFE: if balances API fails, SKIP all picks (never trade blind)
         const balances = await getAccountBalances(token, accountNumber);
-        const bpePct = balances?.derivativeBuyingPowerPercentage ?? 0;
+        if (!balances) {
+            console.error('[aiDailySubmit] Cannot fetch account balances — skipping all picks (fail-safe: never trade without BPE check)');
+            return;
+        }
+        const bpePct = balances.derivativeBuyingPowerPercentage;
         console.log(`[aiDailySubmit] Current BPE: ${bpePct.toFixed(1)}% of net liq`);
 
-        // Hard cap 80%, soft cap 50% (or 70% with VIX>22 + 16-delta exception)
+        // Hard cap 80%, soft cap 50% (or 70% with VIX>22 exception)
         if (bpePct >= 80) {
             console.warn(`[aiDailySubmit] BPE ${bpePct}% >= 80% hard cap — skipping all picks today`);
             return;

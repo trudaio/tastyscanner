@@ -141,7 +141,8 @@ export function buildCandidates(
         targetDeltaSymmetric: [number, number]; // e.g. [16, 20]
         maxRRRatio: number;                      // e.g. 5 (wings:credit)
         minCredit: number;                       // e.g. 1.0 per share for $5 wings
-        minPOP: number;                          // e.g. 70
+        minPOP: number;                          // default POP threshold (e.g. 70)
+        minPOPForWings5?: number;                // POP exception ONLY for $5 wings (VIX-crunch scenario)
     },
 ): IcCandidate[] {
     const candidates: IcCandidate[] = [];
@@ -174,7 +175,9 @@ export function buildCandidates(
             if (credit <= 0) continue;
 
             const pop = calcPOP(deltas.sp, deltas.sc);
-            if (pop < rules.minPOP) continue;
+            // POP threshold: default minPOP for most wings; relaxed threshold only for $5 wings (Catalin's VIX-crunch exception)
+            const popThreshold = wings === 5 && rules.minPOPForWings5 !== undefined ? rules.minPOPForWings5 : rules.minPOP;
+            if (pop < popThreshold) continue;
 
             const rr = wings / credit;
             if (rr > rules.maxRRRatio) continue;
@@ -288,12 +291,14 @@ export function getTopCandidates(
         };
     }
 
+    // POP rules: default 70% for all wings; VIX-crunch exception (VIX 18-22) allows 60% ONLY for $5 wings
     const rules = {
         wingWidths: [5, 10, 15, 20],
         targetDeltaSymmetric: [16, 20] as [number, number],
         maxRRRatio: 5,
         minCredit: 1.0,
-        minPOP: marketCtx.vix < 22 ? 60 : 70,
+        minPOP: 70,
+        minPOPForWings5: marketCtx.vix < 22 ? 60 : 70, // only relaxes for $5 wings during VIX crunch
     };
 
     const candidates = buildCandidates(input, rules);
@@ -323,18 +328,15 @@ export function pickBestIC(
     }
 
     // Seed rules (copy of Catalin's as starting point)
+    // POP exception: VIX-crunch (18-22) allows 60% POP ONLY on $5 wings
     const rules = {
         wingWidths: [5, 10, 15, 20],
         targetDeltaSymmetric: [16, 20] as [number, number],
         maxRRRatio: 5,
         minCredit: 1.0,
         minPOP: 70,
+        minPOPForWings5: marketCtx.vix < 22 ? 60 : 70,
     };
-
-    // VIX crunch exception: VIX 18-22, allow lower POP on $5 wings
-    if (marketCtx.vix < 22) {
-        rules.minPOP = 60; // relax for exploration
-    }
 
     const candidates = buildCandidates(input, rules);
     if (candidates.length === 0) {

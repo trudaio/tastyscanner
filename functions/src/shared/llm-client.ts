@@ -198,10 +198,28 @@ export function extractJson<T>(text: string): T | null {
         try { return JSON.parse(fenceMatch[1]) as T; } catch { /* fall through */ }
     }
 
-    // Try first {...} block
-    const braceMatch = text.match(/\{[\s\S]*\}/);
-    if (braceMatch) {
-        try { return JSON.parse(braceMatch[0]) as T; } catch { /* fall through */ }
+    // Try to extract balanced braces starting from first `{`
+    // (avoids greedy regex matching across multiple objects or noise)
+    const firstBrace = text.indexOf('{');
+    if (firstBrace >= 0) {
+        let depth = 0;
+        let inString = false;
+        let escape = false;
+        for (let i = firstBrace; i < text.length; i++) {
+            const ch = text[i];
+            if (escape) { escape = false; continue; }
+            if (ch === '\\') { escape = true; continue; }
+            if (ch === '"' && !escape) { inString = !inString; continue; }
+            if (inString) continue;
+            if (ch === '{') depth++;
+            else if (ch === '}') {
+                depth--;
+                if (depth === 0) {
+                    const candidate = text.substring(firstBrace, i + 1);
+                    try { return JSON.parse(candidate) as T; } catch { return null; }
+                }
+            }
+        }
     }
 
     return null;

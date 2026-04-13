@@ -1,0 +1,210 @@
+// aiDailySubmit — Cloud Scheduler runs this daily at 10:30 AM ET (14:30 UTC)
+// Scans Catalin's submitted rounds for today, picks 1 AI IC per expiration
+// If no user submission for an expiration, runs "ghost mode" (tracked, no leaderboard)
+
+import * as admin from 'firebase-admin';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { defineSecret } from 'firebase-functions/params';
+import { getCredentialsForUser } from './shared/credentials';
+import {
+    getAccessToken, getAccounts, getOptionsChain, getMarketDataSnapshot, getUnderlyingPrice,
+} from './shared/tasty-rest-client';
+import { pickBestIC, type ChainInput } from './shared/ic-picker';
+import type {
+    IAiState, ICompetitionRoundV2, IMarketContext,
+} from './shared/types';
+import { DEFAULT_AI_STATE } from './shared/types';
+
+const encryptionKey = defineSecret('ENCRYPTION_KEY');
+
+const CATALIN_UID = process.env.CATALIN_UID ?? ''; // set via config
+const TICKERS: Array<'SPX' | 'QQQ'> = ['SPX', 'QQQ'];
+
+async function getAiState(uid: string): Promise<IAiState> {
+    const doc = await admin.firestore().collection('users').doc(uid).collection('aiState').doc('current').get();
+    if (doc.exists) return doc.data() as IAiState;
+    // Seed with default
+    await admin.firestore().collection('users').doc(uid).collection('aiState').doc('current').set(DEFAULT_AI_STATE);
+    return { ...DEFAULT_AI_STATE };
+}
+
+async function getTodayUserRounds(uid: string, date: string): Promise<ICompetitionRoundV2[]> {
+    const snap = await admin.firestore()
+        .collection('users').doc(uid)
+        .collection('competitionV2')
+        .where('date', '==', date)
+        .get();
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ICompetitionRoundV2));
+}
+
+export const aiDailySubmit = onSchedule(
+    {
+        schedule: '30 14 * * 1-5', // 10:30 AM ET weekdays = 14:30 UTC
+        timeZone: 'America/New_York',
+        region: 'us-east1',
+        secrets: [encryptionKey],
+        timeoutSeconds: 540,
+        memory: '1GiB',
+    },
+    async (_event) => {
+        const uid = CATALIN_UID;
+        if (!uid) {
+            console.error('[aiDailySubmit] CATALIN_UID env not set — aborting');
+            return;
+        }
+
+        const date = new Date().toISOString().split('T')[0];
+        console.log(`[aiDailySubmit] Starting for uid=${uid}, date=${date}`);
+
+        // 1. Load credentials + access token
+        const creds = await getCredentialsForUser(uid);
+        if (!creds) {
+            console.error('[aiDailySubmit] No credentials for user');
+            return;
+        }
+        const token = await getAccessToken(creds);
+
+        // 2. Load AI state
+        const aiState = await getAiState(uid);
+
+        // 3. Determine target expirations: union of (user-submitted today) + (top 2 upcoming weeklies per ticker for ghost mode)
+        const userRounds = await getTodayUserRounds(uid, date);
+        const userExpsByTicker = new Map<string, Set<string>>();
+        for (const r of userRounds) {
+            if (!userExpsByTicker.has(r.ticker)) userExpsByTicker.set(r.ticker, new Set());
+            userExpsByTicker.get(r.ticker)!.add(r.expirationDate);
+        }
+
+        // 4. Fetch accounts (for position conflict check later if needed)
+        const accounts = await getAccounts(token);
+        if (accounts.length === 0) {
+            console.error('[aiDailySubmit] No accounts found');
+            return;
+        }
+        const accountNumber = accounts[0]['account-number'];
+        console.log(`[aiDailySubmit] Using account ${accountNumber}`);
+
+        // 5. For each ticker, fetch chain + underlying price + market data, pick ICs
+        for (const ticker of TICKERS) {
+            try {
+                const underlyingPrice = await getUnderlyingPrice(token, ticker) ?? 0;
+                if (!underlyingPrice) {
+                    console.warn(`[aiDailySubmit] No underlying price for ${ticker} — skipping`);
+                    continue;
+                }
+
+                const chain = await getOptionsChain(token, ticker);
+                const firstChain = chain.items[0];
+                if (!firstChain) {
+                    console.warn(`[aiDailySubmit] No chain for ${ticker}`);
+                    continue;
+                }
+
+                // Filter expirations: user-picked + next 3-4 upcoming (for ghost mode)
+                const userExps = userExpsByTicker.get(ticker) ?? new Set<string>();
+                const upcomingGhost = firstChain.expirations
+                    .filter((e) => e['days-to-expiration'] >= 7 && e['days-to-expiration'] <= 45)
+                    .slice(0, 4)
+                    .map((e) => e['expiration-date']);
+                const targetExps = new Set<string>([...userExps, ...upcomingGhost]);
+
+                // Market context
+                const vix = await getUnderlyingPrice(token, 'VIX') ?? 20;
+                const marketContext: IMarketContext = {
+                    underlyingPrice,
+                    vix,
+                    ivRank: 0, // TODO: fetch IV rank via /instruments/cryptocurrencies or /market-metrics
+                };
+
+                for (const expDate of targetExps) {
+                    const exp = firstChain.expirations.find((e) => e['expiration-date'] === expDate);
+                    if (!exp) continue;
+
+                    // Collect ALL streamer symbols in this expiration
+                    const streamerSymbols: string[] = [];
+                    for (const s of exp.strikes) {
+                        streamerSymbols.push(s['call-streamer-symbol'], s['put-streamer-symbol']);
+                    }
+
+                    // Fetch snapshots
+                    const quoteMap = await getMarketDataSnapshot(token, streamerSymbols);
+                    if (quoteMap.size === 0) {
+                        console.warn(`[aiDailySubmit] No quotes for ${ticker} ${expDate}`);
+                        continue;
+                    }
+
+                    // Build ChainInput
+                    const chainInput: ChainInput = {
+                        ticker,
+                        underlyingPrice,
+                        expirationDate: expDate,
+                        dte: exp['days-to-expiration'],
+                        strikes: exp.strikes.map((s) => ({
+                            strike: parseFloat(s['strike-price']),
+                            callSymbol: s.call,
+                            callStreamerSymbol: s['call-streamer-symbol'],
+                            putSymbol: s.put,
+                            putStreamerSymbol: s['put-streamer-symbol'],
+                        })),
+                        quotes: quoteMap,
+                    };
+
+                    const result = pickBestIC(chainInput, aiState, marketContext);
+                    if (!result.pick) {
+                        console.log(`[aiDailySubmit] ${ticker} ${expDate}: no pick — ${result.reason}`);
+                        continue;
+                    }
+
+                    const isGhost = !userExps.has(expDate);
+
+                    // Find matching user round or create ghost
+                    const existingUserRound = userRounds.find((r) => r.ticker === ticker && r.expirationDate === expDate);
+
+                    if (existingUserRound && existingUserRound.id) {
+                        // Attach AI pick to existing round
+                        await admin.firestore()
+                            .collection('users').doc(uid)
+                            .collection('competitionV2').doc(existingUserRound.id)
+                            .update({
+                                aiTrade: result.pick,
+                                revealedAt: new Date().toISOString(),
+                                ghost: false,
+                            });
+                        console.log(`[aiDailySubmit] Attached AI pick to round ${existingUserRound.id}`);
+                    } else {
+                        // Create ghost round
+                        const roundId = `${date}_${ticker}_${expDate}_ghost`;
+                        const round: Omit<ICompetitionRoundV2, 'id'> = {
+                            roundNumber: 0, // assigned later
+                            date,
+                            userEmail: '', // ghost
+                            expirationDate: expDate,
+                            ticker,
+                            userTrade: null,
+                            aiTrade: result.pick,
+                            winner: 'GhostOnly',
+                            ghost: true,
+                            marketContext,
+                            userScore: null,
+                            aiScore: null,
+                            winnerDecidedAt: null,
+                            createdAt: new Date().toISOString(),
+                            revealedAt: new Date().toISOString(),
+                        };
+                        await admin.firestore()
+                            .collection('users').doc(uid)
+                            .collection('competitionV2').doc(roundId)
+                            .set(round);
+                        console.log(`[aiDailySubmit] Created ghost round ${roundId} for ${ticker} ${expDate}`);
+                    }
+
+                    void isGhost; // linter
+                }
+            } catch (e) {
+                console.error(`[aiDailySubmit] Error processing ${ticker}:`, e);
+            }
+        }
+
+        console.log('[aiDailySubmit] Complete');
+    },
+);

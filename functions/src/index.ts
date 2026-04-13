@@ -673,3 +673,9 @@ app.post('/api/polygon/option-bars-batch', async (req: express.Request, res: exp
 });
 
 export const api = onRequest({ invoker: 'public', secrets: [polygonApiKey, ibkrConsumerSecret] }, app);
+
+// ─── Guvid vs User Competition v2 ─────────────────────────────────────────────
+// Autonomous AI that competes against Catalin — scheduled daily
+export { aiDailySubmit } from './aiDailySubmit';
+export { closeCheck } from './closeCheck';
+export { aiLearning } from './aiLearning';

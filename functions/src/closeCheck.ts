@@ -5,14 +5,12 @@
 
 import * as admin from 'firebase-admin';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
-import { defineSecret } from 'firebase-functions/params';
-import { getCredentialsForUser } from './shared/credentials';
+import { getCredentialsForUser, findActiveTastyUser } from './shared/credentials';
 import {
     getAccessToken, getAccounts, getMarketDataSnapshot, getTransactions,
 } from './shared/tasty-rest-client';
 import type { ICompetitionRoundV2, ICompetitionTradeV2, IAiCompetitionTrade } from './shared/types';
 
-const encryptionKey = defineSecret('ENCRYPTION_KEY');
 const CATALIN_UID = process.env.CATALIN_UID ?? '';
 
 function daysUntil(expirationDate: string): number {
@@ -134,13 +132,13 @@ export const closeCheck = onSchedule(
         schedule: '0 21 * * 1-5', // 4:00 PM ET weekdays = 21:00 UTC (EST) or 20:00 UTC (EDT)
         timeZone: 'America/New_York',
         region: 'us-east1',
-        secrets: [encryptionKey],
         timeoutSeconds: 540,
         memory: '1GiB',
     },
     async () => {
-        const uid = CATALIN_UID;
-        if (!uid) { console.error('[closeCheck] CATALIN_UID not set'); return; }
+        const uid = CATALIN_UID || await findActiveTastyUser();
+        if (!uid) { console.error('[closeCheck] No active TastyTrade user found'); return; }
+        console.log(`[closeCheck] Resolved uid=${uid}`);
 
         const creds = await getCredentialsForUser(uid);
         if (!creds) { console.error('[closeCheck] No credentials'); return; }

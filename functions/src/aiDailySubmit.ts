@@ -4,8 +4,7 @@
 
 import * as admin from 'firebase-admin';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
-import { defineSecret } from 'firebase-functions/params';
-import { getCredentialsForUser } from './shared/credentials';
+import { getCredentialsForUser, findActiveTastyUser } from './shared/credentials';
 import {
     getAccessToken, getAccounts, getOptionsChain, getMarketDataSnapshot, getUnderlyingPrice,
 } from './shared/tasty-rest-client';
@@ -14,8 +13,6 @@ import type {
     IAiState, ICompetitionRoundV2, IMarketContext,
 } from './shared/types';
 import { DEFAULT_AI_STATE } from './shared/types';
-
-const encryptionKey = defineSecret('ENCRYPTION_KEY');
 
 const CATALIN_UID = process.env.CATALIN_UID ?? ''; // set via config
 const TICKERS: Array<'SPX' | 'QQQ'> = ['SPX', 'QQQ'];
@@ -42,16 +39,16 @@ export const aiDailySubmit = onSchedule(
         schedule: '30 14 * * 1-5', // 10:30 AM ET weekdays = 14:30 UTC
         timeZone: 'America/New_York',
         region: 'us-east1',
-        secrets: [encryptionKey],
         timeoutSeconds: 540,
         memory: '1GiB',
     },
     async (_event) => {
-        const uid = CATALIN_UID;
+        const uid = CATALIN_UID || await findActiveTastyUser();
         if (!uid) {
-            console.error('[aiDailySubmit] CATALIN_UID env not set — aborting');
+            console.error('[aiDailySubmit] No user with active TastyTrade found — aborting');
             return;
         }
+        console.log(`[aiDailySubmit] Resolved uid=${uid}`);
 
         const date = new Date().toISOString().split('T')[0];
         console.log(`[aiDailySubmit] Starting for uid=${uid}, date=${date}`);

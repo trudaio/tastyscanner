@@ -2,7 +2,7 @@
 // Mirrors functions/src/shared/types.ts
 
 import {
-    collection, doc, getDocs, setDoc, query, orderBy, onSnapshot, Unsubscribe, where,
+    collection, doc, getDocs, setDoc, updateDoc, query, orderBy, onSnapshot, Unsubscribe, where,
 } from 'firebase/firestore';
 import { db, auth } from '../../firebase';
 
@@ -45,6 +45,21 @@ export interface IAiCompetitionTrade extends ICompetitionTradeV2 {
     confidenceScore: number;
     rulesApplied: string[];
     experimentVariant: string | null;
+    llmModel?: string;
+    llmAuditLogId?: string;
+    deviatesFromRules?: boolean;
+    deviationReason?: string | null;
+    requiresApproval?: boolean;
+    approvalStatus?: 'pending' | 'approved' | 'rejected';
+    approvedAt?: string | null;
+    customStrategy?: boolean;
+}
+
+export interface IUserFeedback {
+    pickRating: number;
+    rationaleRating: number;
+    comment: string;
+    submittedAt: string;
 }
 
 export interface ICompetitionRoundV2 {
@@ -64,6 +79,7 @@ export interface ICompetitionRoundV2 {
     winnerDecidedAt: string | null;
     createdAt: string;
     revealedAt: string | null;
+    userFeedback?: IUserFeedback;
 }
 
 export interface IAiState {
@@ -159,6 +175,38 @@ export async function getAiState(): Promise<IAiState | null> {
     void ref;
     if (snap.empty) return null;
     return snap.docs[0].data() as IAiState;
+}
+
+/** Approve or reject an AI pick that requires manual approval */
+export async function setApproval(roundId: string, status: 'approved' | 'rejected'): Promise<void> {
+    const user = auth.currentUser;
+    if (!user) throw new Error('Not authenticated');
+    const ref = doc(db, 'users', user.uid, 'competitionV2', roundId);
+    const update: Record<string, unknown> = {
+        'aiTrade.approvalStatus': status,
+        'aiTrade.approvedAt': new Date().toISOString(),
+    };
+    if (status === 'rejected') {
+        update.ghost = true;
+        update.winner = 'GhostOnly';
+    }
+    await updateDoc(ref, update);
+}
+
+/** Submit user feedback on a closed round */
+export async function submitFeedback(
+    roundId: string,
+    feedback: { pickRating: number; rationaleRating: number; comment: string },
+): Promise<void> {
+    const user = auth.currentUser;
+    if (!user) throw new Error('Not authenticated');
+    const ref = doc(db, 'users', user.uid, 'competitionV2', roundId);
+    await updateDoc(ref, {
+        userFeedback: {
+            ...feedback,
+            submittedAt: new Date().toISOString(),
+        },
+    });
 }
 
 export function calculateDeadline(): { daysRemaining: number; deadline: string } {

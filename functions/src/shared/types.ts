@@ -42,6 +42,22 @@ export interface IAiCompetitionTrade extends ICompetitionTradeV2 {
     confidenceScore: number;     // 0-100
     rulesApplied: string[];
     experimentVariant: string | null;
+    // Phase 1 LLM additions:
+    llmModel?: string;            // "claude-opus-4-6"
+    llmAuditLogId?: string;       // ref to aiAuditLog entry
+    deviatesFromRules?: boolean;
+    deviationReason?: string | null;
+    requiresApproval?: boolean;
+    approvalStatus?: 'pending' | 'approved' | 'rejected';
+    approvedAt?: string | null;
+    customStrategy?: boolean;     // true if Claude proposed variant outside rule-picker candidates
+}
+
+export interface IUserFeedback {
+    pickRating: number;       // 1-5 stars
+    rationaleRating: number;  // 1-5 stars
+    comment: string;
+    submittedAt: string;
 }
 
 export interface ICompetitionRoundV2 {
@@ -61,6 +77,20 @@ export interface ICompetitionRoundV2 {
     winnerDecidedAt: string | null;
     createdAt: string;           // ISO
     revealedAt: string | null;   // ISO — when poker reveal happened
+    userFeedback?: IUserFeedback;
+}
+
+export interface IWeeklyMemo {
+    weekId: string;              // YYYY-WW
+    weekStart: string;
+    weekEnd: string;
+    memoText: string;
+    roundsAnalyzed: number;
+    aiWins: number;
+    aiLosses: number;
+    aiCumulativeScore: number;
+    auditLogId: string;
+    createdAt: string;
 }
 
 export interface IAiState {

@@ -679,3 +679,4 @@ export const api = onRequest({ invoker: 'public', secrets: [polygonApiKey, ibkrC
 export { aiDailySubmit } from './aiDailySubmit';
 export { closeCheck } from './closeCheck';
 export { aiLearning } from './aiLearning';
+export { weeklyReflect } from './weeklyReflect';

@@ -4,15 +4,19 @@
 
 import * as admin from 'firebase-admin';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { defineSecret } from 'firebase-functions/params';
 import { getCredentialsForUser, findActiveTastyUser } from './shared/credentials';
 import {
     getAccessToken, getAccounts, getOptionsChain, getMarketDataSnapshot, getUnderlyingPrice,
 } from './shared/tasty-rest-client';
-import { pickBestIC, type ChainInput } from './shared/ic-picker';
+import { getTopCandidates, type ChainInput } from './shared/ic-picker';
+import { pickWithLlm } from './shared/llm-picker';
 import type {
-    IAiState, ICompetitionRoundV2, IMarketContext,
+    IAiState, ICompetitionRoundV2, IMarketContext, IWeeklyMemo,
 } from './shared/types';
 import { DEFAULT_AI_STATE } from './shared/types';
+
+const anthropicKey = defineSecret('ANTHROPIC_API_KEY');
 
 const CATALIN_UID = process.env.CATALIN_UID ?? ''; // set via config
 const TICKERS: Array<'SPX' | 'QQQ'> = ['SPX', 'QQQ'];
@@ -39,6 +43,7 @@ export const aiDailySubmit = onSchedule(
         schedule: '30 14 * * 1-5', // 10:30 AM ET weekdays = 14:30 UTC
         timeZone: 'America/New_York',
         region: 'us-east1',
+        secrets: [anthropicKey],
         timeoutSeconds: 540,
         memory: '1GiB',
     },
@@ -61,8 +66,14 @@ export const aiDailySubmit = onSchedule(
         }
         const token = await getAccessToken(creds);
 
-        // 2. Load AI state
+        // 2. Load AI state + latest weekly memo
         const aiState = await getAiState(uid);
+        const memoSnap = await admin.firestore()
+            .collection('users').doc(uid)
+            .collection('aiState').doc('current').collection('weeklyMemos')
+            .orderBy('createdAt', 'desc').limit(1).get();
+        const latestMemo: IWeeklyMemo | null = memoSnap.empty ? null : (memoSnap.docs[0].data() as IWeeklyMemo);
+        const memoText = latestMemo?.memoText ?? null;
 
         // 3. Determine target expirations: union of (user-submitted today) + (top 2 upcoming weeklies per ticker for ghost mode)
         const userRounds = await getTodayUserRounds(uid, date);
@@ -146,16 +157,29 @@ export const aiDailySubmit = onSchedule(
                         quotes: quoteMap,
                     };
 
-                    const result = pickBestIC(chainInput, aiState, marketContext);
-                    if (!result.pick) {
-                        console.log(`[aiDailySubmit] ${ticker} ${expDate}: no pick — ${result.reason}`);
+                    // Generate top candidates with rule-based picker
+                    const candidates = getTopCandidates(chainInput, aiState, marketContext, 5);
+                    if (candidates.topN.length === 0) {
+                        console.log(`[aiDailySubmit] ${ticker} ${expDate}: no candidates — ${candidates.reason}`);
                         continue;
                     }
 
                     const isGhost = !userExps.has(expDate);
-
-                    // Find matching user round or create ghost
                     const existingUserRound = userRounds.find((r) => r.ticker === ticker && r.expirationDate === expDate);
+
+                    // Use Claude Opus to pick (with fallback to rule-based on failure)
+                    const llmResult = await pickWithLlm(
+                        uid, ticker, expDate, exp['days-to-expiration'],
+                        marketContext, aiState, candidates,
+                        memoText,
+                        existingUserRound?.userTrade ?? null,
+                    );
+
+                    if (!llmResult.trade) {
+                        console.log(`[aiDailySubmit] ${ticker} ${expDate}: no trade — ${llmResult.reason}`);
+                        continue;
+                    }
+                    console.log(`[aiDailySubmit] ${ticker} ${expDate}: ${llmResult.reason} (fallback=${llmResult.fallback})`);
 
                     if (existingUserRound && existingUserRound.id) {
                         // Attach AI pick to existing round
@@ -163,7 +187,7 @@ export const aiDailySubmit = onSchedule(
                             .collection('users').doc(uid)
                             .collection('competitionV2').doc(existingUserRound.id)
                             .update({
-                                aiTrade: result.pick,
+                                aiTrade: llmResult.trade,
                                 revealedAt: new Date().toISOString(),
                                 ghost: false,
                             });
@@ -178,7 +202,7 @@ export const aiDailySubmit = onSchedule(
                             expirationDate: expDate,
                             ticker,
                             userTrade: null,
-                            aiTrade: result.pick,
+                            aiTrade: llmResult.trade,
                             winner: 'GhostOnly',
                             ghost: true,
                             marketContext,

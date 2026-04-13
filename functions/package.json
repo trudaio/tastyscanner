@@ -1,7 +1,7 @@
 {
   "name": "tastyscanner-functions",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && cp src/shared/best-practices.md lib/shared/best-practices.md",
     "serve": "npm run build && firebase emulators:start --only functions",
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log",
@@ -12,6 +12,7 @@
   },
   "main": "lib/index.js",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.88.0",
     "@tastytrade/api": "^7.0.1",
     "cors": "^2.8.5",
     "express": "^4.18.2",

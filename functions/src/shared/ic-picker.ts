@@ -38,6 +38,18 @@ export interface PickResult {
     candidatesEvaluated: number;
 }
 
+export interface CandidatesResult {
+    candidates: IcCandidate[];
+    topN: IcCandidate[];        // top 5 sorted by score
+    reason: string;
+    rules: {
+        minPOP: number;
+        maxRRRatio: number;
+        minCredit: number;
+        wingWidths: number[];
+    };
+}
+
 // Strike spacing detection — skip if weekly with $25 gaps
 function detectStrikeSpacing(strikes: number[]): number {
     if (strikes.length < 3) return 0;
@@ -216,6 +228,76 @@ function matchesCondition(c: IcCandidate, condition: string): boolean {
         if (op === 'gt' && !(cv > val)) return false;
     }
     return true;
+}
+
+/** Convert an IcCandidate into an IAiCompetitionTrade (without LLM rationale). */
+export function candidateToTrade(
+    c: IcCandidate,
+    ticker: 'SPX' | 'QQQ',
+    expirationDate: string,
+): Omit<IAiCompetitionTrade, 'rationale' | 'confidenceScore' | 'rulesApplied' | 'experimentVariant'> {
+    return {
+        ticker,
+        strategy: `IC ${c.putBuy}/${c.putSell}p ${c.callSell}/${c.callBuy}c`,
+        expiration: expirationDate,
+        legs: [
+            { type: 'BTO', optionType: 'P', strike: c.putBuy },
+            { type: 'STO', optionType: 'P', strike: c.putSell },
+            { type: 'STO', optionType: 'C', strike: c.callSell },
+            { type: 'BTO', optionType: 'C', strike: c.callBuy },
+        ],
+        credit: Math.round(c.credit * 100) / 100,
+        quantity: c.quantity,
+        wings: c.wings,
+        maxProfit: Math.round(c.maxProfit * 100) / 100,
+        maxLoss: Math.round(c.maxLoss * 100) / 100,
+        pop: Math.round(c.pop * 10) / 10,
+        ev: Math.round(c.ev * 100) / 100,
+        alpha: Math.round(c.alpha * 100) / 100,
+        rr: Math.round(c.rr * 100) / 100,
+        delta: Math.round(c.deltaShortPut * 100) / 100,
+        theta: Math.round(c.thetaTotal * 100) / 100,
+        exitPl: null, exitDate: null, closedBy: null, status: 'open',
+    };
+}
+
+/** Generate top N candidates with scoring, without selection. Used by LLM pipeline. */
+export function getTopCandidates(
+    input: ChainInput,
+    state: IAiState,
+    marketCtx: IMarketContext,
+    n: number = 5,
+): CandidatesResult {
+    if (marketCtx.vix < 18) {
+        return {
+            candidates: [], topN: [],
+            reason: `VIX ${marketCtx.vix} < 18 — gate closed`,
+            rules: { minPOP: 70, maxRRRatio: 5, minCredit: 1.0, wingWidths: [5, 10, 15, 20] },
+        };
+    }
+
+    const rules = {
+        wingWidths: [5, 10, 15, 20],
+        targetDeltaSymmetric: [16, 20] as [number, number],
+        maxRRRatio: 5,
+        minCredit: 1.0,
+        minPOP: marketCtx.vix < 22 ? 60 : 70,
+    };
+
+    const candidates = buildCandidates(input, rules);
+    if (candidates.length === 0) {
+        return { candidates: [], topN: [], reason: 'No candidates passed filters', rules };
+    }
+
+    for (const c of candidates) c.score = scoreCandidate(c, state);
+    candidates.sort((a, b) => b.score - a.score);
+
+    return {
+        candidates,
+        topN: candidates.slice(0, n),
+        reason: `Found ${candidates.length} candidates`,
+        rules,
+    };
 }
 
 export function pickBestIC(

@@ -7,6 +7,7 @@ import {
 import { trophyOutline, lockClosedOutline, eyeOutline, flashOutline, sparklesOutline, closeCircleOutline } from 'ionicons/icons';
 import {
     subscribeRoundsV2, submitUserPick, calculateDeadline, computeLeaderboard,
+    setApproval, submitFeedback,
     type ICompetitionRoundV2, type ICompetitionTradeV2,
 } from '../../services/competition/competition-v2.service';
 import { auth } from '../../firebase';
@@ -404,6 +405,76 @@ const PostMortem = styled.div`
     line-height: 1.5;
 `;
 
+const ApprovalBanner = styled.div`
+    background: linear-gradient(90deg, rgba(255,170,0,0.15), rgba(255,170,0,0.25));
+    border: 2px solid #ffaa00;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+`;
+
+const ApprovalActions = styled.div`
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+`;
+
+const ApprovalBtn = styled.button<{ $variant: 'approve' | 'reject' }>`
+    flex: 1;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    background: ${p => p.$variant === 'approve' ? '#4dff91' : '#ff4d6d'};
+    color: #0d0d1a;
+    &:hover { opacity: 0.9; }
+    &:disabled { opacity: 0.4; cursor: not-allowed; }
+`;
+
+const FeedbackBtn = styled.button`
+    background: transparent;
+    border: 1px solid #4a9eff;
+    color: #4a9eff;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 8px;
+    &:hover { background: rgba(74,158,255,0.1); }
+`;
+
+const StarRow = styled.div`
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
+`;
+
+const StarBtn = styled.button<{ $filled: boolean }>`
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 24px;
+    color: ${p => p.$filled ? '#ffaa00' : '#444'};
+    padding: 0;
+    &:hover { color: #ffaa00; }
+`;
+
+const FeedbackBadge = styled.div`
+    margin-top: 8px;
+    padding: 6px 10px;
+    background: rgba(74,158,255,0.05);
+    border-left: 2px solid #4a9eff;
+    border-radius: 0 4px 4px 0;
+    font-size: 11px;
+    color: #aaa;
+`;
+
 const WinnerBanner = styled.div<{ $winner: string }>`
     padding: 8px 12px;
     text-align: center;
@@ -600,6 +671,21 @@ const RoundCardComponent: React.FC<{ round: ICompetitionRoundV2 }> = ({ round })
         round.winner === 'User' ? 'user' :
         round.winner === 'AI' ? 'ai' : 'draw';
 
+    const ai = round.aiTrade;
+    const needsApproval = ai.requiresApproval && ai.approvalStatus === 'pending';
+    const isClosed = round.winner !== 'Pending' && round.winner !== 'GhostOnly';
+    const hasFeedback = !!round.userFeedback;
+    const [showFeedback, setShowFeedback] = React.useState(false);
+    const [approving, setApproving] = React.useState(false);
+
+    const handleApproval = async (action: 'approved' | 'rejected') => {
+        if (!round.id) return;
+        setApproving(true);
+        try { await setApproval(round.id, action); }
+        catch (e) { console.error('Approval error:', e); }
+        finally { setApproving(false); }
+    };
+
     return (
         <RoundCard $status={status}>
             <RoundHeader>
@@ -617,6 +703,34 @@ const RoundCardComponent: React.FC<{ round: ICompetitionRoundV2 }> = ({ round })
                         round.winner === 'Draw' ? '🤝 Draw' : round.winner}
                 </StatusBadge>
             </RoundHeader>
+
+            {needsApproval && !locked && (
+                <ApprovalBanner>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#ffaa00' }}>
+                        ⚠️ AI deviates from rules — your approval needed
+                    </div>
+                    {ai.deviationReason && (
+                        <div style={{ fontSize: 11, color: '#ddd', fontStyle: 'italic' }}>
+                            "{ai.deviationReason}"
+                        </div>
+                    )}
+                    <ApprovalActions>
+                        <ApprovalBtn $variant="approve" onClick={() => handleApproval('approved')} disabled={approving}>
+                            ✓ Approve
+                        </ApprovalBtn>
+                        <ApprovalBtn $variant="reject" onClick={() => handleApproval('rejected')} disabled={approving}>
+                            ✗ Reject (becomes ghost)
+                        </ApprovalBtn>
+                    </ApprovalActions>
+                </ApprovalBanner>
+            )}
+
+            {ai.approvalStatus === 'approved' && (
+                <div style={{ fontSize: 11, color: '#4dff91', marginBottom: 8 }}>✓ You approved this deviation</div>
+            )}
+            {ai.approvalStatus === 'rejected' && (
+                <div style={{ fontSize: 11, color: '#ff4d6d', marginBottom: 8 }}>✗ Rejected — converted to ghost</div>
+            )}
 
             {round.winner && round.winner !== 'Pending' && !round.ghost && (
                 <WinnerBanner $winner={round.winner}>
@@ -657,7 +771,89 @@ const RoundCardComponent: React.FC<{ round: ICompetitionRoundV2 }> = ({ round })
                     <AiSide trade={round.aiTrade} />
                 )}
             </RoundBody>
+
+            {/* Feedback */}
+            {isClosed && !round.ghost && !hasFeedback && (
+                <FeedbackBtn onClick={() => setShowFeedback(true)}>
+                    📝 Give feedback on this round
+                </FeedbackBtn>
+            )}
+            {hasFeedback && round.userFeedback && (
+                <FeedbackBadge>
+                    <div>Your feedback: pick {'⭐'.repeat(round.userFeedback.pickRating)} · rationale {'⭐'.repeat(round.userFeedback.rationaleRating)}</div>
+                    {round.userFeedback.comment && <div style={{ marginTop: 4, fontStyle: 'italic' }}>"{round.userFeedback.comment}"</div>}
+                </FeedbackBadge>
+            )}
+
+            <FeedbackModal
+                isOpen={showFeedback}
+                roundId={round.id ?? ''}
+                onClose={() => setShowFeedback(false)}
+            />
         </RoundCard>
+    );
+};
+
+/* ═══ Feedback Modal ═════════════════════════════════════════ */
+
+const FeedbackModal: React.FC<{ isOpen: boolean; roundId: string; onClose: () => void }> = ({ isOpen, roundId, onClose }) => {
+    const [pickRating, setPickRating] = useState(0);
+    const [rationaleRating, setRationaleRating] = useState(0);
+    const [comment, setComment] = useState('');
+    const [submitting, setSubmitting] = useState(false);
+
+    const handleSubmit = async () => {
+        if (pickRating === 0 || rationaleRating === 0) return;
+        setSubmitting(true);
+        try {
+            await submitFeedback(roundId, { pickRating, rationaleRating, comment: comment.trim() });
+            onClose();
+            setPickRating(0); setRationaleRating(0); setComment('');
+        } catch (e) { console.error('Feedback error:', e); }
+        finally { setSubmitting(false); }
+    };
+
+    return (
+        <IonModal isOpen={isOpen} onDidDismiss={onClose}>
+            <ModalBody>
+                <h2 style={{ margin: '0 0 16px 0' }}>Rate AI's pick</h2>
+                <p style={{ color: '#888', fontSize: 12, marginBottom: 20 }}>
+                    Your feedback shapes next week's strategy memo and AI reasoning.
+                </p>
+
+                <FormRow>
+                    <FormLabel>Pick quality (was the IC choice good?)</FormLabel>
+                    <StarRow>
+                        {[1, 2, 3, 4, 5].map((n) => (
+                            <StarBtn key={n} $filled={n <= pickRating} onClick={() => setPickRating(n)}>★</StarBtn>
+                        ))}
+                    </StarRow>
+                </FormRow>
+
+                <FormRow>
+                    <FormLabel>Rationale quality (was the explanation insightful?)</FormLabel>
+                    <StarRow>
+                        {[1, 2, 3, 4, 5].map((n) => (
+                            <StarBtn key={n} $filled={n <= rationaleRating} onClick={() => setRationaleRating(n)}>★</StarBtn>
+                        ))}
+                    </StarRow>
+                </FormRow>
+
+                <FormRow>
+                    <FormLabel>Comment (optional)</FormLabel>
+                    <IonItem>
+                        <IonInput value={comment} onIonInput={(e) => setComment(e.detail.value ?? '')} placeholder="What did AI get right/wrong? Anything to remember?" />
+                    </IonItem>
+                </FormRow>
+
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
+                    <IonButton fill="outline" onClick={onClose}>Cancel</IonButton>
+                    <IonButton onClick={handleSubmit} disabled={submitting || pickRating === 0 || rationaleRating === 0}>
+                        {submitting ? 'Saving…' : 'Submit feedback'}
+                    </IonButton>
+                </div>
+            </ModalBody>
+        </IonModal>
     );
 };
 

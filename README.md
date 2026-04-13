@@ -1,126 +1,102 @@
-# Operatiunea Guvidul — TastyScanner
+# Operatiunea Guvidul -- TastyScanner
 
-Iron Condor options trading platform connected to TastyTrade API + DxLink WebSocket. Live streaming of Greeks/quotes, IC combo filtering by delta/DTE/wings/EV/Alpha/POP, expiration accordions, order execution.
+**Systematic Iron Condor premium selling platform targeting $1,000/day.**
 
-**Live:** https://operatiunea-guvidul.web.app
+Live: [https://operatiunea-guvidul.web.app](https://operatiunea-guvidul.web.app)
 
-## Goal
+## What Is This?
 
-Systematic premium selling targeting **$1,000/day** with defined risk iron condor strategies.
+TastyScanner connects to TastyTrade's API and DxLink WebSocket to scan the entire options chain for iron condor opportunities. It filters by delta, DTE, spread width, EV, Alpha, and POP -- then lets you execute trades with one click. An autonomous multi-agent AI (Claude Opus + Sonnet) competes against the human trader daily, picking its own ICs, managing risk, and learning from outcomes.
+
+## Key Features
+
+- **IC Builder** -- Scan, filter, and execute iron condor strategies across SPX/QQQ with real-time Greeks streaming
+- **Multi-Agent AI Competition** ("Guvidul vs Catalin") -- Claude Opus picks trades, Claude Sonnet manages risk, weekly strategy memos auto-generated
+- **Dashboard** -- P&L summary, net liquidity chart, open IC trades with live Greeks
+- **Delta Alert** -- Monitors short option deltas and alerts when risk thresholds are breached
+- **DTE Analyzer** -- Compare premium efficiency ($/day, theta/gamma ratio) across expirations
+- **IC Savior** -- Find rescue positions for underwater trades
+- **Guvid History** -- YTD performance tracking with 364+ closed trades, win/loss analysis
+- **Position Visualization** -- IC positions plotted on price-axis charts per ticker
+- **Risk Exposer** -- Max win/loss visualization with breakeven points
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | React 19 + Ionic 8 + TypeScript (strict) |
-| State | MobX 6 (observables, autorun, runInAction) |
-| Build | Vite |
-| Broker API | `@tastytrade/api` v6.0.1 (REST + DxLink WebSocket) |
-| Charts | Recharts |
-| Backend | Firebase Functions (Node.js) + Express |
-| Auth | Firebase Authentication |
-| Database | Cloud Firestore |
-| Hosting | Firebase Hosting |
-| Testing | Cypress (E2E) |
-
-## Features
-
-### IC Builder (Iron Condor)
-- Scan the entire options chain for iron condor opportunities
-- Filter by delta, DTE, spread width, EV, Alpha, POP
-- Symmetric / Bullish / Bearish IC types
-- Single or Fill-All laddering modes
-- Real-time Greeks streaming via DxLink WebSocket
-- Conflict detection with existing positions
-- One-click order execution to TastyTrade
-
-### Dashboard
-- P&L summary (realized + unrealized)
-- Net liquidity chart (reconstructed from transaction history)
-- Open IC trades table with live Greeks
-- Profit-by-ticker breakdown
-
-### Delta Alert
-- Monitors ALL short option positions from your TastyTrade account
-- Alerts when current delta reaches threshold vs initial delta (ratio-based)
-- Absolute delta threshold (40+) for positions without trade log entry
-- Shows DTE, underlying price, strike distance %
-- Background monitoring every 4 hours
-
-### DTE Analyzer
-- Compare same-delta option across all available expirations (3-90 DTE)
-- $/Day = premium / DTE (premium efficiency)
-- Theta/Gamma ratio (risk-adjusted decay)
-- Strike Decay: click any row to see how a fixed strike evolves across DTEs
-- Interactive charts + interpretation guide
-
-### Guvid Management
-- IC Savior: find rescue positions for underwater trades
-- Position sizing: max 5% of net liquidity per trade
-- Kelly criterion (fractional) position sizing guidance
-
-### Guvid History
-- YTD performance tracking
-- Win/loss analysis
-- P&L by ticker and month
-
-### Multi-Broker Foundation
-- TastyTrade fully integrated
-- IBKR stub prepared for future integration
-- Broker-agnostic credential storage (Firestore subcollections)
-
-## Architecture
-
-### Service Layer (ServiceFactory pattern with lazy initialization)
-
-| Service | Purpose |
-|---------|---------|
-| MarketDataProvider | WebSocket streaming, options chains, Greeks, quotes, orders |
-| BrokerAccount | Account management, balances, portfolio Greeks aggregation |
-| IronCondorAnalytics | YTD performance, win/loss, P&L by ticker/month |
-| IronCondorSavior | Rescue position finder for underwater trades |
-| TradingDashboard | P&L aggregation, net liquidity history |
-| Positions | Current holdings with conflict detection |
-| DeltaAlert | Live position monitoring with delta ratio alerts |
-| TradeLog | Trade execution logging with Discord webhook |
-| WatchlistData | Real-time watchlist with auto-refresh |
-| Settings | Strategy filter preferences |
-| Tickers | Symbol search and recent tracking |
-| Credentials | Encrypted broker credential storage |
-
-### Models
-- **IronCondorModel** — 4-leg strategy with credit, risk/reward, POP, delta, theta
-- **CreditSpreadModel** — 2-leg spread building blocks
-- **OptionModel / OptionStrikeModel / OptionsExpirationModel** — Options chain hierarchy
-- **TickerModel** — Underlying with IV Rank, beta, earnings date
+| Layer | Technology | Version |
+|-------|-----------|---------|
+| Frontend | React + Ionic + TypeScript (strict) | 19 / 8.5 / 5.9 |
+| State | MobX (observables, autorun, runInAction) | 6.15 |
+| Build | Vite | 5.x |
+| Styling | styled-components | 6.1 |
+| Charts | Recharts | 3.8 |
+| Broker API | @tastytrade/api (REST + DxLink WebSocket) | 6.0.1 (frontend) / 7.0.1 (functions) |
+| AI | Anthropic SDK (Claude Opus 4.6 + Sonnet 4.6) | 0.88 |
+| Backend | Firebase Functions (Node 20) + Express | v2 / 4.18 |
+| Database | Cloud Firestore | -- |
+| Auth | Firebase Authentication (email/password) | -- |
+| Hosting | Firebase Hosting | -- |
+| Testing | Cypress (E2E) + Vitest (unit) | 13.5 / 0.34 |
 
 ## Quick Start
 
 ```bash
-# Install dependencies
+# Clone the repository
+git clone https://github.com/trudaio/tastyscanner.git
+cd tastyscanner
+
+# Install frontend dependencies
 npm install
+
+# Install backend dependencies
+cd functions && npm install && cd ..
+
+# Create environment file
+cp .env.example .env.local
+# Fill in Firebase config + TastyTrade credentials (see docs/deployment-guide.md)
 
 # Start dev server
 npm run dev
-
-# Production build
-npm run build
+# App available at http://localhost:5173
 
 # Type check
 npx tsc --noEmit
 
-# E2E tests
-npx cypress open
+# Run tests
+npm run test.unit     # Vitest
+npm run test.e2e      # Cypress
+```
 
-# Deploy
-firebase deploy
+## Project Structure
+
+```
+tastyscanner/
+├── src/                    # Frontend application
+│   ├── components/         # React components (28 dirs/files)
+│   ├── pages/              # 20 route pages
+│   ├── services/           # 16 services via ServiceFactory
+│   ├── models/             # Domain models (IC, spreads, options, ticker)
+│   ├── theme/              # CSS variables (dark theme)
+│   └── firebase.ts         # Firebase initialization
+├── functions/              # Firebase Cloud Functions (Node 20)
+│   └── src/
+│       ├── index.ts        # Express API (credentials, IBKR OAuth, Polygon proxy)
+│       ├── aiDailySubmit.ts    # Scheduled: AI picks IC daily 10:30 AM ET
+│       ├── closeCheck.ts       # Scheduled: Auto-close positions 4:00 PM ET
+│       ├── weeklyReflect.ts    # Scheduled: Strategy memo Sunday 8 PM ET
+│       ├── aiLearning.ts       # Firestore trigger: Feature extraction on round close
+│       └── shared/             # LLM client, prompts, TastyTrade REST, IC picker
+├── docs/                   # Project documentation
+├── tasks/                  # TODO and task tracking
+├── cypress/                # E2E test specs
+├── firebase.json           # Hosting + Functions + Firestore config
+├── firestore.rules         # Security rules (user isolation)
+└── CLAUDE.md               # AI assistant context file
 ```
 
 ## Environment Variables
 
-Create `.env.local` in the project root:
-
-```env
+Frontend (`.env.local`):
+```
 VITE_FIREBASE_API_KEY=...
 VITE_FIREBASE_AUTH_DOMAIN=operatiunea-guvidul.firebaseapp.com
 VITE_FIREBASE_PROJECT_ID=operatiunea-guvidul
@@ -130,32 +106,25 @@ VITE_FIREBASE_APP_ID=...
 VITE_FUNCTIONS_BASE_URL=https://us-central1-operatiunea-guvidul.cloudfunctions.net
 ```
 
-## Critical Knowledge
+Firebase Secrets (Cloud Functions): `ANTHROPIC_API_KEY`, `ENCRYPTION_KEY`, `IBKR_CONSUMER_SECRET`, `POLYGON_API_KEY`
 
-### Symbol Format Mismatch
-TastyTrade API: `QQQ   260227C00665000` — DxLink streamer: `.QQQ260227C665`
+## Branch Model
 
-**Always use `pos['streamer-symbol']`** for WebSocket subscriptions. TastyTrade format silently fails.
+- **main** -- stable production
+- **feature/guvid-vs-catalin** -- active development branch (multi-agent AI competition)
+- Feature branches only; never commit directly to main
 
-### quantityDirection
-Returns strings `"Long"` or `"Short"`, NOT numbers. Use string comparison.
+## Documentation
 
-### Portfolio Greeks
-Uses MobX `autorun` to reactively aggregate from streamer data. Must call `waitForConnection()` before subscribing.
+| Document | Description |
+|----------|-------------|
+| [Project Overview & Roadmap](docs/project-overview-pdr.md) | Vision, features, roadmap, success metrics |
+| [Codebase Summary](docs/codebase-summary.md) | File inventory, services, pages, dependencies |
+| [Code Standards](docs/code-standards.md) | TypeScript, MobX, naming, precision conventions |
+| [System Architecture](docs/system-architecture.md) | Architecture diagrams (Mermaid), data flows, Firestore schema |
+| [Deployment Guide](docs/deployment-guide.md) | Build, deploy, monitoring, rollback |
+| [Design Guidelines](docs/design-guidelines.md) | Dark theme, responsive breakpoints, component patterns |
 
-## Trading Rules (enforced in code)
+---
 
-- **Position sizing**: Max 5% of net liquidity per trade
-- **Profit target**: Close at 75% of max profit
-- **DTE management**: Close or roll at 21 DTE
-- **IV preference**: IV Rank > 30 preferred, > 50 ideal
-- **Portfolio balance**: Target delta-neutral, positive theta
-
-## Security
-
-- AES-256-GCM encrypted credential storage (Firebase Functions)
-- Firebase custom claims for RBAC (superadmin role)
-- CORS restricted to production domain + localhost
-- CSP, HSTS, X-Frame-Options, X-Content-Type-Options headers
-- API fails closed when API_KEY unset in production
-- No plaintext secrets in Firestore or client bundle
+*Last updated: 2026-04-13*

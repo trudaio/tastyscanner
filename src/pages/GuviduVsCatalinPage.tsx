@@ -8,7 +8,7 @@ import {
     IonTitle,
     IonToolbar
 } from '@ionic/react';
-import { GuvidVsCatalinComponent } from '../components/guvid-vs-catalin/guvid-vs-catalin.component';
+import { GuviduVsCatalinComponent } from '../components/guvid-vs-catalin/guvid-vs-catalin.component';
 
 export const GuviduVsCatalinPage: React.FC = () => {
     return (
@@ -22,7 +22,7 @@ export const GuviduVsCatalinPage: React.FC = () => {
                 </IonToolbar>
             </IonHeader>
             <IonContent fullscreen>
-                <GuvidVsCatalinComponent />
+                <GuviduVsCatalinComponent />
             </IonContent>
         </IonPage>
     );

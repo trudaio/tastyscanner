@@ -1,863 +1,902 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import styled from 'styled-components';
+import React, { useEffect, useMemo, useState } from 'react';
+import styled, { keyframes } from 'styled-components';
+import {
+    IonSpinner, IonSegment, IonSegmentButton, IonLabel,
+    IonModal, IonButton, IonInput, IonItem, IonIcon,
+} from '@ionic/react';
+import { trophyOutline, lockClosedOutline, eyeOutline, flashOutline, sparklesOutline, closeCircleOutline } from 'ionicons/icons';
+import {
+    subscribeRoundsV2, submitUserPick, calculateDeadline, computeLeaderboard,
+    type ICompetitionRoundV2, type ICompetitionTradeV2,
+} from '../../services/competition/competition-v2.service';
 import { auth } from '../../firebase';
-import { getCompetitionRounds, ICompetitionRound } from '../../services/competition/competition.service';
 
-/* ─── Types ───────────────────────────────────── */
+/* ═══ Animations ═══════════════════════════════════════════ */
 
-export interface IChallengeTrade {
-    id: number;
-    date: string;
-    player: 'Guvidul' | 'Catalin';
-    ticker: string;
-    strategy: string;
-    entry: number;
-    exit: number | null;
-    pl: number | null;
-    status: 'open' | 'won' | 'lost' | 'draw';
-    notes?: string;
-}
+const pulse = keyframes`
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+`;
 
-interface IRound {
-    round: number;
-    date: string;
-    guvidTrade: IChallengeTrade;
-    catalinTrade: IChallengeTrade;
-    winner: 'Guvidul' | 'Catalin' | 'Draw' | 'Pending';
-}
+const shimmer = keyframes`
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+`;
 
-/* ─── Styled Components ───────────────────────── */
+/* ═══ Styled ═══════════════════════════════════════════════ */
 
 const Container = styled.div`
     padding: 20px;
     background: #0d0d1a;
     min-height: 100%;
+    color: #fff;
     @media (max-width: 480px) { padding: 12px; }
 `;
 
-const HeroSection = styled.div`
+const Hero = styled.div`
     text-align: center;
-    padding: 32px 20px;
-    margin-bottom: 24px;
+    padding: 24px 20px;
+    margin-bottom: 20px;
     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #1a1a2e 100%);
     border-radius: 12px;
     border: 1px solid #2a2a3e;
     position: relative;
     overflow: hidden;
-
-    &::before {
-        content: '';
-        position: absolute;
-        top: -50%;
-        left: -50%;
-        width: 200%;
-        height: 200%;
-        background: radial-gradient(circle, rgba(74, 158, 255, 0.03) 0%, transparent 70%);
-        animation: pulse 4s ease-in-out infinite;
-    }
-
-    @keyframes pulse {
-        0%, 100% { transform: scale(1); opacity: 0.5; }
-        50% { transform: scale(1.05); opacity: 1; }
-    }
 `;
 
-const VsTitle = styled.h1`
-    font-size: 2rem;
+const HeroTitle = styled.h1`
+    font-size: 28px;
     font-weight: 800;
-    margin: 0 0 8px 0;
-    position: relative;
-
-    @media (max-width: 480px) { font-size: 1.4rem; }
+    margin: 0 0 6px 0;
+    background: linear-gradient(90deg, #4a9eff, #4dff91, #ffaa00, #4a9eff);
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: ${shimmer} 4s linear infinite;
+    @media (max-width: 480px) { font-size: 22px; }
 `;
 
-const VsGuvid = styled.span`
+const HeroSub = styled.p`
+    color: #888;
+    font-size: 13px;
+    margin: 0 0 16px 0;
+`;
+
+const Countdown = styled.div`
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 18px;
+    background: rgba(74, 158, 255, 0.1);
+    border: 1px solid #4a9eff;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 600;
+`;
+
+const CountdownDays = styled.span`
+    font-size: 18px;
     color: #4a9eff;
+    font-weight: 800;
 `;
 
-const VsText = styled.span`
-    color: #888;
-    font-size: 1.4rem;
-    margin: 0 12px;
-    font-weight: 400;
-    @media (max-width: 480px) {
-        font-size: 1rem;
-        margin: 0 8px;
-    }
-`;
+/* Leaderboard */
 
-const VsCatalin = styled.span`
-    color: #ffaa00;
-`;
-
-const Subtitle = styled.p`
-    color: #888;
-    font-size: 0.9rem;
-    margin: 0;
-    position: relative;
-`;
-
-const ScoreboardGrid = styled.div`
+const LeaderboardRow = styled.div`
     display: grid;
     grid-template-columns: 1fr auto 1fr;
     gap: 16px;
-    margin-bottom: 24px;
-    align-items: stretch;
-
-    @media (max-width: 600px) {
+    margin-bottom: 20px;
+    @media (max-width: 480px) {
         grid-template-columns: 1fr;
-        gap: 12px;
     }
 `;
 
-const PlayerCard = styled.div<{ $color: string }>`
-    background: #1a1a2e;
-    border-radius: 10px;
-    padding: 24px;
-    border-top: 3px solid ${p => p.$color};
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
+const ScorePanel = styled.div<{ $color: string; $leading?: boolean }>`
+    background: ${p => p.$leading ? `linear-gradient(135deg, ${p.$color}22, ${p.$color}44)` : '#1a1a2e'};
+    border: 2px solid ${p => p.$leading ? p.$color : '#2a2a3e'};
+    border-radius: 12px;
+    padding: 18px 20px;
+    transition: all 0.3s;
+    position: relative;
 `;
 
-const PlayerAvatar = styled.div<{ $color: string }>`
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    background: ${p => p.$color}22;
-    border: 2px solid ${p => p.$color};
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 24px;
-    overflow: hidden;
-`;
-
-const AvatarImg = styled.img`
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-`;
-
-const PlayerName = styled.div<{ $color: string }>`
-    font-size: 1.1rem;
+const ScoreLabel = styled.div<{ $color: string }>`
+    font-size: 11px;
+    text-transform: uppercase;
     font-weight: 700;
     color: ${p => p.$color};
-`;
-
-const PlayerStats = styled.div`
-    display: flex;
-    gap: 20px;
-    margin-top: 4px;
-`;
-
-const StatItem = styled.div`
-    text-align: center;
-`;
-
-const StatValue = styled.div<{ $color?: string }>`
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: ${p => p.$color || '#fff'};
-`;
-
-const StatLabel = styled.div`
-    font-size: 0.7rem;
-    color: #888;
-    text-transform: uppercase;
     letter-spacing: 0.5px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+`;
+
+const ScoreName = styled.div`
+    font-size: 20px;
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 12px;
+`;
+
+const ScoreMetric = styled.div`
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: #888;
+    padding: 4px 0;
+
+    span.value { color: #fff; font-weight: 600; }
+    span.positive { color: #4dff91; font-weight: 700; }
+    span.negative { color: #ff4d6d; font-weight: 700; }
+`;
+
+const LeadBadge = styled.div<{ $color: string }>`
+    position: absolute;
+    top: -10px;
+    right: 12px;
+    background: ${p => p.$color};
+    color: #0d0d1a;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 3px 10px;
+    border-radius: 10px;
+    text-transform: uppercase;
 `;
 
 const VsDivider = styled.div`
     display: flex;
     align-items: center;
     justify-content: center;
-
-    @media (max-width: 600px) { display: none; }
+    font-size: 32px;
+    font-weight: 900;
+    color: #555;
+    @media (max-width: 480px) {
+        padding: 8px 0;
+    }
 `;
 
-const VsBadge = styled.div`
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    background: #2a2a3e;
-    border: 2px solid #4a9eff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.8rem;
-    font-weight: 800;
-    color: #4a9eff;
-`;
-
-const PLRow = styled.div`
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-    margin-bottom: 24px;
-
-    @media (max-width: 480px) { gap: 10px; }
-`;
-
-const PLCard = styled.div<{ $color: string }>`
-    background: #1a1a2e;
-    border-radius: 8px;
-    padding: 16px;
-    border-left: 4px solid ${p => p.$color};
-    text-align: center;
-`;
-
-const PLLabel = styled.div`
-    font-size: 0.75rem;
-    color: #888;
-    text-transform: uppercase;
-    margin-bottom: 4px;
-`;
-
-const PLValue = styled.div<{ $value: number }>`
-    font-size: 1.3rem;
-    font-weight: 700;
-    color: ${p => p.$value > 0 ? '#4dff91' : p.$value < 0 ? '#ff4d6d' : '#888'};
-`;
+/* Rounds */
 
 const SectionTitle = styled.h2`
-    font-size: 1rem;
+    font-size: 16px;
+    color: #ddd;
+    margin: 28px 0 14px 0;
     font-weight: 600;
-    color: #ccc;
-    margin: 0 0 12px 0;
     display: flex;
     align-items: center;
     gap: 8px;
 `;
 
-const TableWrap = styled.div`
-    background: #1a1a2e;
-    border-radius: 8px;
-    overflow-x: auto;
-    margin-bottom: 24px;
+const FilterRow = styled.div`
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
 `;
 
-const Table = styled.table`
-    width: 100%;
-    border-collapse: collapse;
-    min-width: 700px;
+const FilterPill = styled.button<{ $active?: boolean }>`
+    padding: 6px 14px;
+    background: ${p => p.$active ? '#4a9eff' : '#1a1a2e'};
+    border: 1px solid ${p => p.$active ? '#4a9eff' : '#333'};
+    border-radius: 999px;
+    color: #fff;
+    font-size: 12px;
+    font-weight: ${p => p.$active ? 600 : 400};
+    cursor: pointer;
+    &:hover { background: ${p => p.$active ? '#4a9eff' : '#2a2a3e'}; }
 `;
 
-const Th = styled.th<{ $align?: string }>`
-    padding: 10px 14px;
-    background: #2a2a3e;
+const RoundCard = styled.div<{ $status: 'pending' | 'decided' | 'ghost' }>`
+    background: ${p => p.$status === 'ghost' ? 'rgba(255,170,0,0.04)' : '#1a1a2e'};
+    border: 1px solid ${p => p.$status === 'ghost' ? 'rgba(255,170,0,0.3)' : '#2a2a3e'};
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 12px;
+`;
+
+const RoundHeader = styled.div`
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+`;
+
+const RoundMeta = styled.div`
+    font-size: 12px;
     color: #888;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    text-align: ${p => p.$align ?? 'left'};
-    letter-spacing: 0.5px;
-    white-space: nowrap;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
 `;
 
-const Td = styled.td<{ $align?: string }>`
-    padding: 10px 14px;
-    font-size: 13px;
-    color: #ddd;
-    text-align: ${p => p.$align ?? 'left'};
-    border-bottom: 1px solid #1e1e32;
-`;
-
-const PlayerBadge = styled.span<{ $player: 'Guvidul' | 'Catalin' }>`
-    display: inline-block;
-    font-size: 11px;
+const TickerBadge = styled.span<{ $ticker: string }>`
+    background: ${p => p.$ticker === 'SPX' ? 'rgba(74,158,255,0.15)' : 'rgba(77,255,145,0.15)'};
+    color: ${p => p.$ticker === 'SPX' ? '#4a9eff' : '#4dff91'};
     padding: 2px 10px;
-    border-radius: 4px;
-    font-weight: 600;
-    ${p => p.$player === 'Guvidul'
-        ? 'background: rgba(74,158,255,0.15); border: 1px solid #4a9eff; color: #4a9eff;'
-        : 'background: rgba(255,170,0,0.15); border: 1px solid #ffaa00; color: #ffaa00;'
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 11px;
+`;
+
+const StatusBadge = styled.span<{ $kind: 'pending' | 'user' | 'ai' | 'draw' | 'ghost' }>`
+    padding: 3px 10px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    ${p => {
+        switch (p.$kind) {
+            case 'pending': return 'background: rgba(255,170,0,0.15); border: 1px solid #ffaa00; color: #ffaa00;';
+            case 'user': return 'background: rgba(77,255,145,0.15); border: 1px solid #4dff91; color: #4dff91;';
+            case 'ai': return 'background: rgba(74,158,255,0.15); border: 1px solid #4a9eff; color: #4a9eff;';
+            case 'draw': return 'background: rgba(136,136,136,0.15); border: 1px solid #888; color: #888;';
+            case 'ghost': return 'background: rgba(255,170,0,0.1); border: 1px solid #ffaa00; color: #ffaa00;';
+        }
+    }}
+`;
+
+const RoundBody = styled.div`
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    @media (max-width: 768px) {
+        grid-template-columns: 1fr;
     }
 `;
 
-const WinnerBadge = styled.span<{ $winner: string }>`
-    display: inline-block;
-    font-size: 11px;
-    padding: 2px 10px;
-    border-radius: 4px;
-    font-weight: 600;
-    ${p => {
-        switch (p.$winner) {
-            case 'Guvidul': return 'background: rgba(74,158,255,0.15); border: 1px solid #4a9eff; color: #4a9eff;';
-            case 'Catalin': return 'background: rgba(255,170,0,0.15); border: 1px solid #ffaa00; color: #ffaa00;';
-            case 'Draw': return 'background: rgba(136,136,136,0.15); border: 1px solid #888; color: #888;';
-            default: return 'background: rgba(77,255,145,0.1); border: 1px solid #333; color: #666;';
-        }
-    }}
+const Side = styled.div<{ $side: 'user' | 'ai' }>`
+    border: 1px solid ${p => p.$side === 'user' ? 'rgba(77,255,145,0.3)' : 'rgba(74,158,255,0.3)'};
+    border-radius: 8px;
+    padding: 12px;
+    background: ${p => p.$side === 'user' ? 'rgba(77,255,145,0.03)' : 'rgba(74,158,255,0.03)'};
 `;
 
-const StatusBadge = styled.span<{ $status: string }>`
-    display: inline-block;
+const SideLabel = styled.div<{ $color: string }>`
+    color: ${p => p.$color};
     font-size: 10px;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-weight: 600;
-    ${p => {
-        switch (p.$status) {
-            case 'open': return 'background: rgba(74,158,255,0.15); border: 1px solid #4a9eff; color: #4a9eff;';
-            case 'won': return 'background: rgba(77,255,145,0.15); border: 1px solid #4dff91; color: #4dff91;';
-            case 'lost': return 'background: rgba(255,77,109,0.15); border: 1px solid #ff4d6d; color: #ff4d6d;';
-            case 'draw': return 'background: rgba(136,136,136,0.15); border: 1px solid #888; color: #888;';
-            default: return 'background: #2a2a3e; color: #888;';
-        }
-    }}
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 `;
 
-const TdPL = styled.td<{ $value: number | null; $align?: string }>`
-    padding: 10px 14px;
+const Strategy = styled.div`
     font-size: 13px;
-    font-weight: 600;
-    text-align: ${p => p.$align ?? 'right'};
-    border-bottom: 1px solid #1e1e32;
-    color: ${p => p.$value === null ? '#666' : p.$value > 0 ? '#4dff91' : p.$value < 0 ? '#ff4d6d' : '#888'};
+    color: #fff;
+    font-weight: 700;
+    margin-bottom: 8px;
+`;
+
+const MetricRow = styled.div`
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: #888;
+    padding: 2px 0;
+    span.val { color: #ddd; font-weight: 600; }
+    span.pos { color: #4dff91; font-weight: 700; }
+    span.neg { color: #ff4d6d; font-weight: 700; }
+`;
+
+const LockedPlaceholder = styled.div`
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 8px;
+    padding: 32px 16px;
+    color: #666;
+    font-size: 12px;
+    animation: ${pulse} 2s ease-in-out infinite;
+`;
+
+const Rationale = styled.div`
+    font-size: 11px;
+    color: #aaa;
+    font-style: italic;
+    padding: 8px 10px;
+    background: rgba(74,158,255,0.05);
+    border-left: 2px solid #4a9eff;
+    border-radius: 0 4px 4px 0;
+    margin: 8px 0;
+    line-height: 1.4;
+`;
+
+const ConfidenceBar = styled.div`
+    margin: 8px 0;
+    font-size: 10px;
+    color: #888;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+`;
+
+const ConfidenceTrack = styled.div`
+    flex: 1;
+    height: 4px;
+    background: #222;
+    border-radius: 2px;
+    overflow: hidden;
+`;
+
+const ConfidenceFill = styled.div<{ $pct: number }>`
+    height: 100%;
+    width: ${p => p.$pct}%;
+    background: linear-gradient(90deg, #ff4d6d 0%, #ffaa00 50%, #4dff91 100%);
+`;
+
+const RuleBadges = styled.div`
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+`;
+
+const RuleBadge = styled.span`
+    font-size: 9px;
+    background: #222;
+    border: 1px solid #333;
+    color: #888;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: monospace;
 `;
 
 const EmptyState = styled.div`
     text-align: center;
-    padding: 48px 20px;
-    background: #1a1a2e;
-    border-radius: 8px;
-    border: 1px dashed #2a2a3e;
-`;
-
-const EmptyIcon = styled.div`
-    font-size: 48px;
-    margin-bottom: 12px;
-    opacity: 0.6;
-`;
-
-const EmptyText = styled.div`
-    color: #888;
-    font-size: 0.9rem;
-    margin-bottom: 4px;
-`;
-
-const EmptySubtext = styled.div`
-    color: #555;
-    font-size: 0.8rem;
-`;
-
-const RulesCard = styled.div`
-    background: #1a1a2e;
-    border-radius: 8px;
-    padding: 20px;
-    border-left: 4px solid #4a9eff;
-`;
-
-const RulesTitle = styled.h3`
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: #4a9eff;
-    margin: 0 0 12px 0;
-`;
-
-const RulesList = styled.ul`
-    margin: 0;
-    padding-left: 20px;
-    list-style: none;
-`;
-
-const RuleItem = styled.li`
-    color: #aaa;
-    font-size: 0.82rem;
-    line-height: 1.7;
-    position: relative;
-    padding-left: 4px;
-
-    &::before {
-        content: '>';
-        position: absolute;
-        left: -16px;
-        color: #4a9eff;
-        font-weight: 700;
-    }
-`;
-
-/* ─── Sugestia Guvidului ──────────────────────── */
-
-import { StrategyProfileType, STRATEGY_PROFILES } from '../../models/strategy-profile';
-
-const SuggestionSection = styled.div`
-    margin-bottom: 24px;
-`;
-
-const TickerTabBar = styled.div`
-    display: flex;
-    gap: 8px;
-    margin-bottom: 16px;
-`;
-
-const TickerTab = styled.button<{ $active: boolean }>`
-    padding: 8px 24px;
-    border-radius: 6px;
-    border: 1.5px solid ${p => p.$active ? '#4a9eff' : '#2a2a3e'};
-    background: ${p => p.$active ? 'rgba(74, 158, 255, 0.15)' : '#1a1a2e'};
-    color: ${p => p.$active ? '#4a9eff' : '#888'};
+    padding: 40px 20px;
+    color: #666;
     font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.2s;
-    &:hover { border-color: #4a9eff; color: #4a9eff; }
 `;
 
-const StrategyBlock = styled.div<{ $color: string }>`
-    margin-bottom: 20px;
-    border-left: 3px solid ${p => p.$color};
-    padding-left: 16px;
-`;
-
-const StrategyBlockHeader = styled.div`
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 10px;
-`;
-
-const StrategyBadge = styled.span<{ $color: string }>`
-    font-size: 11px;
-    font-weight: 700;
-    padding: 3px 10px;
-    border-radius: 4px;
-    background: ${p => p.$color}22;
-    border: 1px solid ${p => p.$color};
-    color: ${p => p.$color};
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-`;
-
-const ExitLabel = styled.span`
-    font-size: 11px;
-    color: #666;
-`;
-
-const SuggestionGrid = styled.div`
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 10px;
-    @media (max-width: 480px) { grid-template-columns: 1fr; }
-`;
-
-const SuggestionCard = styled.div<{ $color: string; $isFirst: boolean }>`
-    background: #1a1a2e;
+const SubmitBtn = styled.button`
+    background: #4a9eff;
+    border: none;
+    color: #fff;
+    padding: 10px 20px;
     border-radius: 8px;
-    padding: 14px;
-    border-left: 4px solid ${p => p.$isFirst ? p.$color : '#3a3a5e'};
-    position: relative;
-    ${p => p.$isFirst ? `box-shadow: 0 0 15px ${p.$color}22;` : ''}
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    &:hover { background: #3a8eef; }
+    &:disabled { background: #333; cursor: not-allowed; }
 `;
 
-const SuggestionExpDate = styled.div`
-    font-size: 0.72rem;
+const ModalBody = styled.div`
+    padding: 20px;
+    background: #0d0d1a;
+    color: #fff;
+    min-height: 400px;
+`;
+
+const FormRow = styled.div`
+    margin-bottom: 14px;
+`;
+
+const FormLabel = styled.label`
+    display: block;
+    font-size: 11px;
     color: #888;
     margin-bottom: 4px;
+    text-transform: uppercase;
+    font-weight: 600;
 `;
 
-const SuggestionIC = styled.div`
-    font-size: 0.9rem;
-    font-weight: 700;
+const PostMortem = styled.div`
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: rgba(255,255,255,0.03);
+    border-left: 3px solid #4dff91;
+    border-radius: 0 6px 6px 0;
+    font-size: 11px;
     color: #ddd;
-    margin-bottom: 8px;
-    font-family: monospace;
+    line-height: 1.5;
 `;
 
-const SuggestionMetrics = styled.div`
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 4px;
-`;
-
-const SuggestionMetric = styled.div`
+const WinnerBanner = styled.div<{ $winner: string }>`
+    padding: 8px 12px;
     text-align: center;
-`;
-
-const SuggestionMetricValue = styled.div<{ $color?: string }>`
-    font-size: 0.82rem;
+    font-size: 12px;
     font-weight: 700;
-    color: ${p => p.$color || '#ccc'};
+    border-radius: 6px;
+    margin-bottom: 10px;
+    background: ${p => {
+        if (p.$winner === 'User') return 'rgba(77,255,145,0.15)';
+        if (p.$winner === 'AI') return 'rgba(74,158,255,0.15)';
+        if (p.$winner === 'Draw') return 'rgba(136,136,136,0.15)';
+        return 'rgba(255,170,0,0.1)';
+    }};
+    color: ${p => {
+        if (p.$winner === 'User') return '#4dff91';
+        if (p.$winner === 'AI') return '#4a9eff';
+        if (p.$winner === 'Draw') return '#888';
+        return '#ffaa00';
+    }};
 `;
 
-const SuggestionMetricLabel = styled.div`
-    font-size: 0.58rem;
-    color: #666;
-    text-transform: uppercase;
-`;
+/* ═══ Helpers ══════════════════════════════════════════════ */
 
-const BestBadge = styled.span<{ $color: string }>`
-    position: absolute;
-    top: 6px;
-    right: 6px;
-    font-size: 8px;
-    font-weight: 700;
-    text-transform: uppercase;
-    padding: 2px 6px;
-    border-radius: 3px;
-    background: ${p => p.$color}33;
-    color: ${p => p.$color};
-    letter-spacing: 0.5px;
-`;
-
-const EmptyProfileState = styled.div`
-    color: #555;
-    font-size: 0.8rem;
-    padding: 12px 0;
-`;
-
-interface ISuggestion {
-    expDate: string;
-    dte: number;
-    label: string;
-    ic: string;
-    pop: number;
-    ev: number;
-    alpha: number;
-    credit: number;
-    rr: number;
-    delta: string;
-    score: number;
-    wings: number;
-}
-
-type TickerSuggestions = Record<StrategyProfileType, ISuggestion[]>;
-
-const GUVID_SUGGESTIONS: Record<string, TickerSuggestions> = {
-    SPX: {
-        conservative: [
-            { expDate: '2026-05-15', dte: 35, label: 'Weekly', ic: '6370/6380p 7140/7150c', pop: 86, ev: 125, alpha: 17.01, credit: 265, rr: 3.77, delta: '15/15', score: 63.20, wings: 10 },
-            { expDate: '2026-05-15', dte: 35, label: 'Regular [AM]', ic: '6375/6385p 7130/7140c', pop: 86, ev: 125, alpha: 17.01, credit: 265, rr: 3.77, delta: '15/15', score: 63.20, wings: 10 },
-        ],
-        neutral: [
-            { expDate: '2026-04-30', dte: 20, label: 'End-Of-Month', ic: '6465/6475p 7065/7075c', pop: 87, ev: 120, alpha: 16, credit: 250, rr: 4, delta: '14/14', score: 56.20, wings: 10 },
-            { expDate: '2026-05-15', dte: 35, label: 'Weekly', ic: '6370/6380p 7140/7150c', pop: 86, ev: 125, alpha: 17.01, credit: 265, rr: 3.77, delta: '15/15', score: 55.60, wings: 10 },
-            { expDate: '2026-05-15', dte: 35, label: 'Regular [AM]', ic: '6375/6385p 7140/7150c', pop: 86, ev: 110, alpha: 14.67, credit: 250, rr: 4, delta: '15/14', score: 55.60, wings: 10 },
-            { expDate: '2026-05-01', dte: 21, label: 'Weekly', ic: '6495/6505p 7080/7090c', pop: 85, ev: 110, alpha: 14.86, credit: 260, rr: 3.85, delta: '16/14', score: 55.00, wings: 10 },
-            { expDate: '2026-04-29', dte: 19, label: 'Weekly', ic: '6630/6640p 6990/7000c', pop: 77, ev: 210, alpha: 37.5, credit: 440, rr: 2.27, delta: '24/24', score: 50.20, wings: 10 },
-        ],
-        aggressive: [
-            { expDate: '2026-04-30', dte: 20, label: 'End-Of-Month', ic: '6545/6550p 7035/7040c', pop: 83, ev: 85, alpha: 25.76, credit: 170, rr: 2.94, delta: '18/18', score: 27.65, wings: 5 },
-            { expDate: '2026-05-01', dte: 21, label: 'Weekly', ic: '6595/6600p 7025/7030c', pop: 79, ev: 100, alpha: 33.9, credit: 205, rr: 2.44, delta: '22/21', score: 27.25, wings: 5 },
-        ],
-    },
-    QQQ: {
-        conservative: [],
-        neutral: [
-            { expDate: '2026-05-15', dte: 35, label: 'Regular [PM]', ic: '565/575p 645/655c', pop: 81, ev: 71, alpha: 9.61, credit: 261, rr: 3.83, delta: '20/16', score: 51.82, wings: 10 },
-        ],
-        aggressive: [],
-    },
-};
-
-/* ─── Helpers ─────────────────────────────────── */
-
-const fmtCur = (v: number | null): string => {
-    if (v === null) return '—';
+const fmtCur = (v: number): string => {
     const abs = Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     return v >= 0 ? `$${abs}` : `-$${abs}`;
 };
 
-/* ─── Round Data ──────────────────────────────── */
+const fmtScore = (v: number | null): string => {
+    if (v === null) return '—';
+    return (v * 100).toFixed(1) + '%';
+};
 
-const INITIAL_ROUNDS: IRound[] = [
-    {
-        round: 1,
-        date: '2026-04-10',
-        guvidTrade: {
-            id: 1,
-            date: '2026-04-10',
-            player: 'Guvidul',
-            ticker: 'SPX',
-            strategy: 'IC 6365/6375p 7140/7150c (05-15 Weekly)',
-            entry: 2.55,
-            exit: null,
-            pl: null,
-            status: 'open',
-            notes: 'POP 86% | EV $115 | Alpha 15.44% | R/R 3.92 | Delta 15/14'
-        },
-        catalinTrade: {
-            id: 2,
-            date: '2026-04-10',
-            player: 'Catalin',
-            ticker: 'SPX',
-            strategy: 'IC 6375/6385p 7140/7150c (05-15 Weekly)',
-            entry: 2.55,
-            exit: null,
-            pl: null,
-            status: 'open',
-            notes: 'POP 85% | EV $105 | Alpha 14.09% | R/R 3.92 | Delta -0.51'
-        },
-        winner: 'Pending'
-    }
-];
+function isRoundLocked(round: ICompetitionRoundV2): boolean {
+    if (round.revealedAt) return false;
+    if (round.ghost) return false;
+    const now = new Date();
+    const et1100 = new Date(round.date + 'T15:00:00Z'); // 11 AM ET ≈ 15 UTC (EDT) or 16 UTC (EST)
+    return now < et1100;
+}
 
-/* ─── Component ───────────────────────────────── */
+/* ═══ Component ════════════════════════════════════════════ */
 
-export const GuvidVsCatalinComponent: React.FC = () => {
-    const [rounds, setRounds] = useState<IRound[]>(INITIAL_ROUNDS);
-    const [firestoreRounds, setFirestoreRounds] = useState<ICompetitionRound[]>([]);
-    const [selectedTicker, setSelectedTicker] = useState<'SPX' | 'QQQ'>('SPX');
-    const userEmail = auth.currentUser?.email || 'User';
-    const userName = userEmail.split('@')[0];
+export const GuviduVsCatalinComponent: React.FC = () => {
+    const [rounds, setRounds] = useState<ICompetitionRoundV2[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [tickerFilter, setTickerFilter] = useState<'ALL' | 'SPX' | 'QQQ'>('ALL');
+    const [showSubmit, setShowSubmit] = useState(false);
 
     useEffect(() => {
-        getCompetitionRounds().then(setFirestoreRounds).catch(() => {});
+        if (!auth.currentUser) return;
+        const unsub = subscribeRoundsV2((r) => {
+            setRounds(r);
+            setLoading(false);
+        });
+        return () => { unsub(); };
     }, []);
 
-    // Merge hardcoded rounds with Firestore rounds
-    const allRounds = useMemo(() => {
-        const fromFirestore: IRound[] = firestoreRounds.map(fr => ({
-            round: fr.round + INITIAL_ROUNDS.length,
-            date: fr.date,
-            guvidTrade: {
-                id: fr.round * 10,
-                date: fr.date,
-                player: 'Guvidul' as const,
-                ticker: fr.guvidTrade.ticker,
-                strategy: fr.guvidTrade.strategy,
-                entry: fr.guvidTrade.credit,
-                exit: fr.guvidTrade.exitPl !== null ? fr.guvidTrade.exitPl : null,
-                pl: fr.guvidTrade.exitPl,
-                status: fr.guvidTrade.status,
-                notes: `POP ${fr.guvidTrade.pop}% | EV $${fr.guvidTrade.ev} | Alpha ${fr.guvidTrade.alpha}% | R/R ${fr.guvidTrade.rr}`
-            },
-            catalinTrade: {
-                id: fr.round * 10 + 1,
-                date: fr.date,
-                player: 'Catalin' as const,
-                ticker: fr.userTrade.ticker,
-                strategy: fr.userTrade.strategy,
-                entry: fr.userTrade.credit,
-                exit: fr.userTrade.exitPl !== null ? fr.userTrade.exitPl : null,
-                pl: fr.userTrade.exitPl,
-                status: fr.userTrade.status,
-                notes: `POP ${fr.userTrade.pop}% | EV $${fr.userTrade.ev} | Alpha ${fr.userTrade.alpha}% | R/R ${fr.userTrade.rr}`
-            },
-            winner: fr.winner === 'User' ? 'Catalin' as const : fr.winner as any
-        }));
-        return [...INITIAL_ROUNDS, ...fromFirestore];
-    }, [firestoreRounds]);
+    const deadline = useMemo(() => calculateDeadline(), []);
+    const leaderboard = useMemo(() => computeLeaderboard(rounds), [rounds]);
 
-    const scores = useMemo(() => {
-        let guvid = 0;
-        let catalin = 0;
-        let draws = 0;
-        let guvidPL = 0;
-        let catalinPL = 0;
+    const filteredRounds = useMemo(() => {
+        if (tickerFilter === 'ALL') return rounds;
+        return rounds.filter((r) => r.ticker === tickerFilter);
+    }, [rounds, tickerFilter]);
 
-        for (const r of allRounds) {
-            if (r.winner === 'Guvidul') guvid++;
-            else if (r.winner === 'Catalin') catalin++;
-            else if (r.winner === 'Draw') draws++;
+    const userLeading = leaderboard.userCumulativeScore > leaderboard.aiCumulativeScore;
+    const aiLeading = leaderboard.aiCumulativeScore > leaderboard.userCumulativeScore;
 
-            if (r.guvidTrade.pl !== null) guvidPL += r.guvidTrade.pl;
-            if (r.catalinTrade.pl !== null) catalinPL += r.catalinTrade.pl;
-        }
-
-        return { guvid, catalin, draws, guvidPL, catalinPL, totalRounds: allRounds.length };
-    }, [allRounds]);
+    if (loading) {
+        return (
+            <Container>
+                <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}>
+                    <IonSpinner name="crescent" />
+                </div>
+            </Container>
+        );
+    }
 
     return (
         <Container>
-            {/* Hero */}
-            <HeroSection>
-                <VsTitle>
-                    <VsGuvid>Guvidul</VsGuvid>
-                    <VsText>vs</VsText>
-                    <VsCatalin>{userName}</VsCatalin>
-                </VsTitle>
-                <Subtitle>Cine alege pozitiile mai bune? Apasa Challenge pe orice IC si Guvidul alege automat cel mai bun IC pe aceeasi expirare.</Subtitle>
-            </HeroSection>
+            <Hero>
+                <HeroTitle>Guvidul vs Catalin</HeroTitle>
+                <HeroSub>Autonomous AI competition • Daily picks at 10:30 AM ET • Reveal at 11:00 AM</HeroSub>
+                <Countdown>
+                    <IonIcon icon={trophyOutline} style={{ fontSize: 18, color: '#4a9eff' }} />
+                    <span>Winner declared in</span>
+                    <CountdownDays>{deadline.daysRemaining}</CountdownDays>
+                    <span>days</span>
+                </Countdown>
+            </Hero>
 
-            {/* Scoreboard */}
-            <ScoreboardGrid>
-                <PlayerCard $color="#4a9eff">
-                    <PlayerAvatar $color="#4a9eff">
-                        <AvatarImg src="/guvid-robot.svg" alt="Guvidul Robot" />
-                    </PlayerAvatar>
-                    <PlayerName $color="#4a9eff">Guvidul</PlayerName>
-                    <PlayerStats>
-                        <StatItem>
-                            <StatValue $color="#4dff91">{scores.guvid}</StatValue>
-                            <StatLabel>Wins</StatLabel>
-                        </StatItem>
-                        <StatItem>
-                            <StatValue $color="#ff4d6d">{scores.totalRounds - scores.guvid - scores.draws}</StatValue>
-                            <StatLabel>Losses</StatLabel>
-                        </StatItem>
-                        <StatItem>
-                            <StatValue>{scores.draws}</StatValue>
-                            <StatLabel>Draws</StatLabel>
-                        </StatItem>
-                    </PlayerStats>
-                </PlayerCard>
+            <LeaderboardRow>
+                <ScorePanel $color="#4dff91" $leading={userLeading}>
+                    {userLeading && <LeadBadge $color="#4dff91">🏆 Leading</LeadBadge>}
+                    <ScoreLabel $color="#4dff91">
+                        <IonIcon icon={eyeOutline} /> You
+                    </ScoreLabel>
+                    <ScoreName>Catalin</ScoreName>
+                    <ScoreMetric>
+                        <span>Wins</span><span className="positive">{leaderboard.userWins}</span>
+                    </ScoreMetric>
+                    <ScoreMetric>
+                        <span>Losses</span><span className="negative">{leaderboard.aiWins}</span>
+                    </ScoreMetric>
+                    <ScoreMetric>
+                        <span>Draws</span><span className="value">{leaderboard.draws}</span>
+                    </ScoreMetric>
+                    <ScoreMetric>
+                        <span>Risk-adj P&L</span>
+                        <span className={leaderboard.userCumulativeScore >= 0 ? 'positive' : 'negative'}>
+                            {fmtScore(leaderboard.userCumulativeScore)}
+                        </span>
+                    </ScoreMetric>
+                </ScorePanel>
 
-                <VsDivider>
-                    <VsBadge>VS</VsBadge>
-                </VsDivider>
+                <VsDivider>VS</VsDivider>
 
-                <PlayerCard $color="#ffaa00">
-                    <PlayerAvatar $color="#ffaa00">{userName.charAt(0).toUpperCase()}</PlayerAvatar>
-                    <PlayerName $color="#ffaa00">{userName}</PlayerName>
-                    <PlayerStats>
-                        <StatItem>
-                            <StatValue $color="#4dff91">{scores.catalin}</StatValue>
-                            <StatLabel>Wins</StatLabel>
-                        </StatItem>
-                        <StatItem>
-                            <StatValue $color="#ff4d6d">{scores.totalRounds - scores.catalin - scores.draws}</StatValue>
-                            <StatLabel>Losses</StatLabel>
-                        </StatItem>
-                        <StatItem>
-                            <StatValue>{scores.draws}</StatValue>
-                            <StatLabel>Draws</StatLabel>
-                        </StatItem>
-                    </PlayerStats>
-                </PlayerCard>
-            </ScoreboardGrid>
+                <ScorePanel $color="#4a9eff" $leading={aiLeading}>
+                    {aiLeading && <LeadBadge $color="#4a9eff">🤖 Leading</LeadBadge>}
+                    <ScoreLabel $color="#4a9eff">
+                        <IonIcon icon={sparklesOutline} /> AI
+                    </ScoreLabel>
+                    <ScoreName>Guvidul</ScoreName>
+                    <ScoreMetric>
+                        <span>Wins</span><span className="positive">{leaderboard.aiWins}</span>
+                    </ScoreMetric>
+                    <ScoreMetric>
+                        <span>Losses</span><span className="negative">{leaderboard.userWins}</span>
+                    </ScoreMetric>
+                    <ScoreMetric>
+                        <span>Draws</span><span className="value">{leaderboard.draws}</span>
+                    </ScoreMetric>
+                    <ScoreMetric>
+                        <span>Risk-adj P&L</span>
+                        <span className={leaderboard.aiCumulativeScore >= 0 ? 'positive' : 'negative'}>
+                            {fmtScore(leaderboard.aiCumulativeScore)}
+                        </span>
+                    </ScoreMetric>
+                    <ScoreMetric>
+                        <span>Ghost rounds</span><span className="value">{leaderboard.ghostRounds}</span>
+                    </ScoreMetric>
+                </ScorePanel>
+            </LeaderboardRow>
 
-            {/* Total P&L */}
-            <PLRow>
-                <PLCard $color="#4a9eff">
-                    <PLLabel>Guvidul Total P&L</PLLabel>
-                    <PLValue $value={scores.guvidPL}>{fmtCur(scores.guvidPL)}</PLValue>
-                </PLCard>
-                <PLCard $color="#ffaa00">
-                    <PLLabel>{userName} Total P&L</PLLabel>
-                    <PLValue $value={scores.catalinPL}>{fmtCur(scores.catalinPL)}</PLValue>
-                </PLCard>
-            </PLRow>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 12 }}>
+                <SectionTitle style={{ margin: 0 }}>
+                    <IonIcon icon={flashOutline} /> Rounds
+                </SectionTitle>
+                <SubmitBtn onClick={() => setShowSubmit(true)}>
+                    + Submit your pick
+                </SubmitBtn>
+            </div>
 
-            {/* Sugestia Guvidului */}
-            <SuggestionSection>
-                <TickerTabBar>
-                    <TickerTab $active={selectedTicker === 'SPX'} onClick={() => setSelectedTicker('SPX')}>SPX</TickerTab>
-                    <TickerTab $active={selectedTicker === 'QQQ'} onClick={() => setSelectedTicker('QQQ')}>QQQ</TickerTab>
-                </TickerTabBar>
+            <FilterRow>
+                <FilterPill $active={tickerFilter === 'ALL'} onClick={() => setTickerFilter('ALL')}>
+                    ALL ({rounds.length})
+                </FilterPill>
+                <FilterPill $active={tickerFilter === 'SPX'} onClick={() => setTickerFilter('SPX')}>
+                    SPX ({rounds.filter((r) => r.ticker === 'SPX').length})
+                </FilterPill>
+                <FilterPill $active={tickerFilter === 'QQQ'} onClick={() => setTickerFilter('QQQ')}>
+                    QQQ ({rounds.filter((r) => r.ticker === 'QQQ').length})
+                </FilterPill>
+            </FilterRow>
 
-                {(['conservative', 'neutral', 'aggressive'] as StrategyProfileType[]).map(profileType => {
-                    const profile = STRATEGY_PROFILES[profileType];
-                    const suggestions = GUVID_SUGGESTIONS[selectedTicker]?.[profileType] || [];
-                    return (
-                        <StrategyBlock key={profileType} $color={profile.color}>
-                            <StrategyBlockHeader>
-                                <StrategyBadge $color={profile.color}>{profile.name}</StrategyBadge>
-                                <ExitLabel>Exit: {profile.exitProfitPercent}% profit | Wings ${profile.wings[0]} | Delta {profile.minDelta}-{profile.maxDelta}</ExitLabel>
-                            </StrategyBlockHeader>
-                            {suggestions.length === 0 ? (
-                                <EmptyProfileState>Nu exista IC-uri pentru {profile.name} pe {selectedTicker}</EmptyProfileState>
-                            ) : (
-                                <SuggestionGrid>
-                                    {suggestions.map((s, i) => (
-                                        <SuggestionCard key={s.expDate + s.label} $color={profile.color} $isFirst={i === 0}>
-                                            {i === 0 && <BestBadge $color={profile.color}>Top Pick</BestBadge>}
-                                            <SuggestionExpDate>{s.expDate} ({s.dte}d) — {s.label}</SuggestionExpDate>
-                                            <SuggestionIC>{s.ic}</SuggestionIC>
-                                            <SuggestionMetrics>
-                                                <SuggestionMetric>
-                                                    <SuggestionMetricValue $color={i === 0 ? profile.color : undefined}>{s.pop}%</SuggestionMetricValue>
-                                                    <SuggestionMetricLabel>POP</SuggestionMetricLabel>
-                                                </SuggestionMetric>
-                                                <SuggestionMetric>
-                                                    <SuggestionMetricValue>${s.ev}</SuggestionMetricValue>
-                                                    <SuggestionMetricLabel>EV</SuggestionMetricLabel>
-                                                </SuggestionMetric>
-                                                <SuggestionMetric>
-                                                    <SuggestionMetricValue>{s.alpha}%</SuggestionMetricValue>
-                                                    <SuggestionMetricLabel>Alpha</SuggestionMetricLabel>
-                                                </SuggestionMetric>
-                                                <SuggestionMetric>
-                                                    <SuggestionMetricValue>${s.credit}</SuggestionMetricValue>
-                                                    <SuggestionMetricLabel>Credit</SuggestionMetricLabel>
-                                                </SuggestionMetric>
-                                                <SuggestionMetric>
-                                                    <SuggestionMetricValue>{s.rr}</SuggestionMetricValue>
-                                                    <SuggestionMetricLabel>R/R</SuggestionMetricLabel>
-                                                </SuggestionMetric>
-                                                <SuggestionMetric>
-                                                    <SuggestionMetricValue>{s.delta}</SuggestionMetricValue>
-                                                    <SuggestionMetricLabel>Delta</SuggestionMetricLabel>
-                                                </SuggestionMetric>
-                                            </SuggestionMetrics>
-                                        </SuggestionCard>
-                                    ))}
-                                </SuggestionGrid>
-                            )}
-                        </StrategyBlock>
-                    );
-                })}
-            </SuggestionSection>
-
-            {/* Rounds Table */}
-            <SectionTitle>Runde</SectionTitle>
-            {allRounds.length === 0 ? (
+            {filteredRounds.length === 0 ? (
                 <EmptyState>
-                    <EmptyIcon>&#9876;</EmptyIcon>
-                    <EmptyText>Nicio runda inca</EmptyText>
-                    <EmptySubtext>Prima runda incepe cand ambii jucatori aleg o pozitie</EmptySubtext>
+                    <div style={{ fontSize: 48, marginBottom: 12 }}>🎲</div>
+                    <div>No rounds yet. Submit your first pick above — the AI will respond at 10:30 AM ET on the next weekday.</div>
                 </EmptyState>
             ) : (
-                <TableWrap>
-                    <Table>
-                        <thead>
-                            <tr>
-                                <Th>#</Th>
-                                <Th>Data</Th>
-                                <Th>Jucator</Th>
-                                <Th>Ticker</Th>
-                                <Th>Strategie</Th>
-                                <Th $align="right">Entry</Th>
-                                <Th $align="right">Exit</Th>
-                                <Th $align="right">P&L</Th>
-                                <Th $align="center">Status</Th>
-                                <Th $align="center">Castigator</Th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {allRounds.map(r => (
-                                <React.Fragment key={r.round}>
-                                    <tr>
-                                        <Td rowSpan={2}>{r.round}</Td>
-                                        <Td rowSpan={2}>{r.date}</Td>
-                                        <Td><PlayerBadge $player="Guvidul">Guvidul</PlayerBadge></Td>
-                                        <Td>{r.guvidTrade.ticker}</Td>
-                                        <Td>{r.guvidTrade.strategy}</Td>
-                                        <Td $align="right">{fmtCur(r.guvidTrade.entry)}</Td>
-                                        <Td $align="right">{fmtCur(r.guvidTrade.exit)}</Td>
-                                        <TdPL $value={r.guvidTrade.pl} $align="right">{fmtCur(r.guvidTrade.pl)}</TdPL>
-                                        <Td $align="center"><StatusBadge $status={r.guvidTrade.status}>{r.guvidTrade.status}</StatusBadge></Td>
-                                        <Td $align="center" rowSpan={2}><WinnerBadge $winner={r.winner}>{r.winner}</WinnerBadge></Td>
-                                    </tr>
-                                    <tr>
-                                        <Td><PlayerBadge $player="Catalin">Catalin</PlayerBadge></Td>
-                                        <Td>{r.catalinTrade.ticker}</Td>
-                                        <Td>{r.catalinTrade.strategy}</Td>
-                                        <Td $align="right">{fmtCur(r.catalinTrade.entry)}</Td>
-                                        <Td $align="right">{fmtCur(r.catalinTrade.exit)}</Td>
-                                        <TdPL $value={r.catalinTrade.pl} $align="right">{fmtCur(r.catalinTrade.pl)}</TdPL>
-                                        <Td $align="center"><StatusBadge $status={r.catalinTrade.status}>{r.catalinTrade.status}</StatusBadge></Td>
-                                    </tr>
-                                </React.Fragment>
-                            ))}
-                        </tbody>
-                    </Table>
-                </TableWrap>
+                filteredRounds.map((r) => <RoundCardComponent key={r.id} round={r} />)
             )}
 
-            {/* Rules */}
-            <RulesCard>
-                <RulesTitle>Regulile Competitiei</RulesTitle>
-                <RulesList>
-                    <RuleItem>Fiecare runda, ambii jucatori aleg cate o pozitie (Iron Condor, Credit Spread, etc.)</RuleItem>
-                    <RuleItem>Pozitiile se deschid in acelasi timp pe acelasi underlying sau pe underlyings diferite</RuleItem>
-                    <RuleItem>Castigatorul rundei e cel cu P&L mai mare la inchidere</RuleItem>
-                    <RuleItem>Draw daca diferenta de P&L e sub $5</RuleItem>
-                    <RuleItem>Scorul final: cel cu cele mai multe runde castigate</RuleItem>
-                </RulesList>
-            </RulesCard>
+            <SubmitModal
+                isOpen={showSubmit}
+                onClose={() => setShowSubmit(false)}
+                onSubmitted={() => setShowSubmit(false)}
+            />
         </Container>
+    );
+};
+
+/* ═══ Round Card ═══════════════════════════════════════════ */
+
+const RoundCardComponent: React.FC<{ round: ICompetitionRoundV2 }> = ({ round }) => {
+    const locked = isRoundLocked(round);
+    const status: 'pending' | 'decided' | 'ghost' =
+        round.ghost ? 'ghost' : (round.winner === 'Pending' ? 'pending' : 'decided');
+
+    const badge = round.ghost ? 'ghost' :
+        round.winner === 'Pending' ? 'pending' :
+        round.winner === 'User' ? 'user' :
+        round.winner === 'AI' ? 'ai' : 'draw';
+
+    return (
+        <RoundCard $status={status}>
+            <RoundHeader>
+                <RoundMeta>
+                    <TickerBadge $ticker={round.ticker}>{round.ticker}</TickerBadge>
+                    <span>Exp: {round.expirationDate}</span>
+                    <span>Date: {round.date}</span>
+                    {round.marketContext && <span>VIX: {round.marketContext.vix.toFixed(1)}</span>}
+                </RoundMeta>
+                <StatusBadge $kind={badge as 'pending' | 'user' | 'ai' | 'draw' | 'ghost'}>
+                    {round.ghost ? '👻 Ghost' :
+                        round.winner === 'Pending' ? '⏳ Pending' :
+                        round.winner === 'User' ? '🏆 You won' :
+                        round.winner === 'AI' ? '🤖 AI won' :
+                        round.winner === 'Draw' ? '🤝 Draw' : round.winner}
+                </StatusBadge>
+            </RoundHeader>
+
+            {round.winner && round.winner !== 'Pending' && !round.ghost && (
+                <WinnerBanner $winner={round.winner}>
+                    {round.winner === 'User' ? '🏆 Catalin won this round' :
+                     round.winner === 'AI' ? '🤖 Guvidul won this round' :
+                     '🤝 Draw'}
+                    {' • User: '}{fmtScore(round.userScore)}{' vs AI: '}{fmtScore(round.aiScore)}
+                </WinnerBanner>
+            )}
+
+            <RoundBody>
+                {/* User side */}
+                {round.userTrade && !round.ghost ? (
+                    <UserSide trade={round.userTrade} />
+                ) : round.ghost ? (
+                    <Side $side="user">
+                        <SideLabel $color="#888">You · Did not play</SideLabel>
+                        <LockedPlaceholder>
+                            <IonIcon icon={closeCircleOutline} style={{ fontSize: 28 }} />
+                            <span>Ghost round (AI solo)</span>
+                        </LockedPlaceholder>
+                    </Side>
+                ) : null}
+
+                {/* AI side */}
+                {locked ? (
+                    <Side $side="ai">
+                        <SideLabel $color="#4a9eff">
+                            <span>AI · Guvidul</span>
+                            <IonIcon icon={lockClosedOutline} />
+                        </SideLabel>
+                        <LockedPlaceholder>
+                            <div style={{ fontSize: 42 }}>🂠</div>
+                            <span>Locked until 11:00 AM ET</span>
+                        </LockedPlaceholder>
+                    </Side>
+                ) : (
+                    <AiSide trade={round.aiTrade} />
+                )}
+            </RoundBody>
+        </RoundCard>
+    );
+};
+
+const UserSide: React.FC<{ trade: ICompetitionTradeV2 }> = ({ trade }) => {
+    const pl = trade.exitPl;
+    return (
+        <Side $side="user">
+            <SideLabel $color="#4dff91">Catalin</SideLabel>
+            <Strategy>{trade.strategy}</Strategy>
+            <MetricRow><span>Credit</span><span className="val">{fmtCur(trade.credit)}</span></MetricRow>
+            <MetricRow><span>Qty</span><span className="val">{trade.quantity}</span></MetricRow>
+            <MetricRow><span>POP</span><span className="val">{trade.pop.toFixed(1)}%</span></MetricRow>
+            <MetricRow><span>R/R</span><span className="val">{trade.rr.toFixed(2)}:1</span></MetricRow>
+            {pl !== null && (
+                <MetricRow>
+                    <span>Exit P&L</span>
+                    <span className={pl >= 0 ? 'pos' : 'neg'}>{fmtCur(pl)}</span>
+                </MetricRow>
+            )}
+            <MetricRow><span>Status</span><span className="val">{trade.status}</span></MetricRow>
+        </Side>
+    );
+};
+
+const AiSide: React.FC<{ trade: import('../../services/competition/competition-v2.service').IAiCompetitionTrade }> = ({ trade }) => {
+    const pl = trade.exitPl;
+    const isPlaceholder = trade.strategy === 'PENDING';
+
+    if (isPlaceholder) {
+        return (
+            <Side $side="ai">
+                <SideLabel $color="#4a9eff">AI · Guvidul</SideLabel>
+                <LockedPlaceholder>
+                    <div style={{ fontSize: 32 }}>⏳</div>
+                    <span>Waiting for 10:30 AM ET submit window</span>
+                </LockedPlaceholder>
+            </Side>
+        );
+    }
+
+    return (
+        <Side $side="ai">
+            <SideLabel $color="#4a9eff">
+                <span>AI · Guvidul</span>
+                {trade.experimentVariant && <span style={{ fontSize: 9, color: '#ffaa00' }}>🧪 EXPERIMENT</span>}
+            </SideLabel>
+            <Strategy>{trade.strategy}</Strategy>
+            <MetricRow><span>Credit</span><span className="val">{fmtCur(trade.credit)}</span></MetricRow>
+            <MetricRow><span>Qty</span><span className="val">{trade.quantity}</span></MetricRow>
+            <MetricRow><span>Wings</span><span className="val">${trade.wings}</span></MetricRow>
+            <MetricRow><span>POP</span><span className="val">{trade.pop.toFixed(1)}%</span></MetricRow>
+            <MetricRow><span>R/R</span><span className="val">{trade.rr.toFixed(2)}:1</span></MetricRow>
+            {pl !== null && (
+                <MetricRow>
+                    <span>Exit P&L</span>
+                    <span className={pl >= 0 ? 'pos' : 'neg'}>{fmtCur(pl)}</span>
+                </MetricRow>
+            )}
+            {trade.closedBy && (
+                <MetricRow>
+                    <span>Closed by</span><span className="val">{trade.closedBy}</span>
+                </MetricRow>
+            )}
+
+            {trade.rationale && trade.rationale !== 'AI has not picked yet — will be submitted at 10:30 AM ET' && (
+                <Rationale>💡 {trade.rationale}</Rationale>
+            )}
+
+            {trade.confidenceScore > 0 && (
+                <ConfidenceBar>
+                    <span>Confidence:</span>
+                    <ConfidenceTrack><ConfidenceFill $pct={trade.confidenceScore} /></ConfidenceTrack>
+                    <span style={{ fontWeight: 700, color: '#ddd' }}>{trade.confidenceScore}%</span>
+                </ConfidenceBar>
+            )}
+
+            {trade.rulesApplied && trade.rulesApplied.length > 0 && (
+                <RuleBadges>
+                    {trade.rulesApplied.slice(0, 6).map((r) => (
+                        <RuleBadge key={r}>{r}</RuleBadge>
+                    ))}
+                </RuleBadges>
+            )}
+        </Side>
+    );
+};
+
+/* ═══ Submit Modal ═════════════════════════════════════════ */
+
+const SubmitModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    onSubmitted: () => void;
+}> = ({ isOpen, onClose, onSubmitted }) => {
+    const [ticker, setTicker] = useState<'SPX' | 'QQQ'>('SPX');
+    const [expirationDate, setExpirationDate] = useState('');
+    const [strategy, setStrategy] = useState('');
+    const [credit, setCredit] = useState('');
+    const [quantity, setQuantity] = useState('1');
+    const [wings, setWings] = useState('10');
+    const [putBuy, setPutBuy] = useState('');
+    const [putSell, setPutSell] = useState('');
+    const [callSell, setCallSell] = useState('');
+    const [callBuy, setCallBuy] = useState('');
+    const [pop, setPop] = useState('70');
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const handleSubmit = async () => {
+        setError(null);
+        setSubmitting(true);
+        try {
+            if (!auth.currentUser) throw new Error('Not authenticated');
+            if (!expirationDate || !putBuy || !putSell || !callSell || !callBuy) {
+                throw new Error('Fill in all strikes and expiration');
+            }
+            const creditNum = parseFloat(credit);
+            const qtyNum = parseInt(quantity, 10);
+            const wingsNum = parseFloat(wings);
+            const popNum = parseFloat(pop);
+            if (isNaN(creditNum) || creditNum <= 0) throw new Error('Invalid credit');
+
+            const legs = [
+                { type: 'BTO', optionType: 'P', strike: parseFloat(putBuy) },
+                { type: 'STO', optionType: 'P', strike: parseFloat(putSell) },
+                { type: 'STO', optionType: 'C', strike: parseFloat(callSell) },
+                { type: 'BTO', optionType: 'C', strike: parseFloat(callBuy) },
+            ];
+            const strategyStr = strategy || `IC ${putBuy}/${putSell}p ${callSell}/${callBuy}c`;
+
+            const maxProfit = creditNum * 100 * qtyNum;
+            const maxLoss = (wingsNum - creditNum) * 100 * qtyNum;
+            const ev = (popNum / 100) * maxProfit - (1 - popNum / 100) * maxLoss;
+
+            const userTrade: ICompetitionTradeV2 = {
+                ticker, strategy: strategyStr, expiration: expirationDate, legs,
+                credit: creditNum, quantity: qtyNum, wings: wingsNum,
+                maxProfit, maxLoss,
+                pop: popNum, ev, alpha: maxLoss > 0 ? (ev / maxLoss) * 100 : 0, rr: wingsNum / creditNum,
+                delta: 0, theta: 0,
+                exitPl: null, exitDate: null, closedBy: null, status: 'open',
+            };
+
+            const date = new Date().toISOString().split('T')[0];
+
+            await submitUserPick({
+                roundNumber: 0,
+                date, expirationDate, ticker,
+                userEmail: auth.currentUser.email ?? '',
+                userTrade,
+                winner: 'Pending',
+                ghost: false,
+                marketContext: { underlyingPrice: 0, vix: 0, ivRank: 0 },
+                userScore: null, aiScore: null, winnerDecidedAt: null,
+            });
+
+            onSubmitted();
+            // Reset
+            setExpirationDate(''); setStrategy(''); setCredit('');
+            setPutBuy(''); setPutSell(''); setCallSell(''); setCallBuy('');
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Unknown error');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    return (
+        <IonModal isOpen={isOpen} onDidDismiss={onClose}>
+            <ModalBody>
+                <h2 style={{ margin: '0 0 16px 0' }}>Submit your IC pick</h2>
+                <p style={{ color: '#888', fontSize: 12, marginBottom: 20 }}>
+                    AI will respond on the same expiration at 10:30 AM ET on the next weekday.
+                </p>
+
+                <FormRow>
+                    <FormLabel>Ticker</FormLabel>
+                    <IonSegment value={ticker} onIonChange={(e) => setTicker(e.detail.value as 'SPX' | 'QQQ')}>
+                        <IonSegmentButton value="SPX"><IonLabel>SPX</IonLabel></IonSegmentButton>
+                        <IonSegmentButton value="QQQ"><IonLabel>QQQ</IonLabel></IonSegmentButton>
+                    </IonSegment>
+                </FormRow>
+
+                <FormRow>
+                    <FormLabel>Expiration Date (YYYY-MM-DD)</FormLabel>
+                    <IonItem><IonInput value={expirationDate} onIonInput={(e) => setExpirationDate(e.detail.value ?? '')} placeholder="2026-05-15" /></IonItem>
+                </FormRow>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <FormRow>
+                        <FormLabel>Long Put</FormLabel>
+                        <IonItem><IonInput type="number" value={putBuy} onIonInput={(e) => setPutBuy(e.detail.value ?? '')} placeholder="6200" /></IonItem>
+                    </FormRow>
+                    <FormRow>
+                        <FormLabel>Short Put</FormLabel>
+                        <IonItem><IonInput type="number" value={putSell} onIonInput={(e) => setPutSell(e.detail.value ?? '')} placeholder="6210" /></IonItem>
+                    </FormRow>
+                    <FormRow>
+                        <FormLabel>Short Call</FormLabel>
+                        <IonItem><IonInput type="number" value={callSell} onIonInput={(e) => setCallSell(e.detail.value ?? '')} placeholder="7100" /></IonItem>
+                    </FormRow>
+                    <FormRow>
+                        <FormLabel>Long Call</FormLabel>
+                        <IonItem><IonInput type="number" value={callBuy} onIonInput={(e) => setCallBuy(e.detail.value ?? '')} placeholder="7110" /></IonItem>
+                    </FormRow>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
+                    <FormRow>
+                        <FormLabel>Credit ($)</FormLabel>
+                        <IonItem><IonInput type="number" value={credit} onIonInput={(e) => setCredit(e.detail.value ?? '')} placeholder="2.50" /></IonItem>
+                    </FormRow>
+                    <FormRow>
+                        <FormLabel>Qty</FormLabel>
+                        <IonItem><IonInput type="number" value={quantity} onIonInput={(e) => setQuantity(e.detail.value ?? '')} /></IonItem>
+                    </FormRow>
+                    <FormRow>
+                        <FormLabel>Wings ($)</FormLabel>
+                        <IonItem><IonInput type="number" value={wings} onIonInput={(e) => setWings(e.detail.value ?? '')} /></IonItem>
+                    </FormRow>
+                    <FormRow>
+                        <FormLabel>POP (%)</FormLabel>
+                        <IonItem><IonInput type="number" value={pop} onIonInput={(e) => setPop(e.detail.value ?? '')} /></IonItem>
+                    </FormRow>
+                </div>
+
+                {error && (
+                    <div style={{ color: '#ff4d6d', fontSize: 12, padding: 10, background: 'rgba(255,77,109,0.1)', borderRadius: 6, marginBottom: 12 }}>
+                        {error}
+                    </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
+                    <IonButton fill="outline" onClick={onClose}>Cancel</IonButton>
+                    <IonButton onClick={handleSubmit} disabled={submitting}>
+                        {submitting ? 'Submitting...' : 'Submit Pick'}
+                    </IonButton>
+                </div>
+            </ModalBody>
+        </IonModal>
     );
 };

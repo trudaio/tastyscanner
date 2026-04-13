@@ -199,7 +199,7 @@ const Menu: React.FC = observer(() => {
 
 <IonItem button routerLink="/guide" routerDirection="forward" lines="none">
           <IonIcon slot="start" icon={bookOutline} />
-          <IonLabel>Greeks Guide</IonLabel>
+          <IonLabel>Guvid Guide</IonLabel>
         </IonItem>
 
         <IonItem button routerLink="/account" routerDirection="forward" lines="none">

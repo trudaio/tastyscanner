@@ -680,3 +680,9 @@ export { aiDailySubmit } from './aiDailySubmit';
 export { closeCheck } from './closeCheck';
 export { aiLearning } from './aiLearning';
 export { weeklyReflect } from './weeklyReflect';
+
+// ─── Technical Indicators (RSI / Bollinger Bands / ATR) ─────────────────────
+// Scheduler writes marketTechnicals/{SPX,QQQ} daily after close.
+// Callable returns on-demand computation for other tickers.
+export { computeTechnicals } from './computeTechnicals';
+export { getTechnicalsOnDemand } from './getTechnicalsOnDemand';

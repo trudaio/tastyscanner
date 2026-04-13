@@ -60,6 +60,8 @@ graph TB
         FN_CLOSE[closeCheck\n4:00 PM ET]
         FN_LEARN[aiLearning\nFirestore trigger]
         FN_REFLECT[weeklyReflect\nSun 8 PM ET]
+        FN_TECH[computeTechnicals\n4:15 PM ET]
+        FN_TECH_OD[getTechnicalsOnDemand\nCallable]
     end
 
     subgraph External["External Services"]
@@ -86,7 +88,24 @@ graph TB
     FN_LEARN -->|Read/Write| FS
     FN_REFLECT -->|Strategy memo| CLAUDE
     FN_REFLECT -->|Write memos| FS
+    FN_TECH -->|Fetch bars| POLY
+    FN_TECH -->|Write indicators| FS
+    FN_TECH_OD -->|Fetch bars| POLY
+    FN_DAILY -->|Read technicals| FS
 ```
+
+### Technical Indicators (RSI / Bollinger Bands / ATR)
+
+The `computeTechnicals` scheduler runs at 4:15 PM ET on weekdays for SPX and QQQ:
+
+1. Fetch 120 daily bars from Polygon.io (buffer for Wilder warmup)
+2. Compute RSI(14), Bollinger Bands(20, 2σ), ATR(14) in `functions/src/shared/technicals.ts` (pure compute)
+3. Write trailing 90 bars + indicator values + verdicts to `marketTechnicals/{ticker}`
+4. On fetch failure: keep previous doc, set `stale: true`
+
+The `getTechnicalsOnDemand` callable Function serves the same computation for any other ticker the user searches — auth-gated, rate-limited 10/min/user. The browser `TechnicalsService` subscribes to Firestore for SPX/QQQ (instant), calls the Function for other tickers (on-demand, in-session cached).
+
+The `aiDailySubmit` scheduler reads `marketTechnicals/{ticker}` before invoking the Picker, attaches the latest indicators to `marketContext.technicals`, and the Picker prompt instructs Claude to interpret them as *risk* signals (not mechanical triggers). Stale data (> 48h) is treated as null.
 
 ## Multi-Agent Flow (aiDailySubmit)
 

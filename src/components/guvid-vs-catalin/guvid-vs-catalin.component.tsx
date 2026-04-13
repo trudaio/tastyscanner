@@ -498,6 +498,22 @@ const VetoBadge = styled.div`
     color: #ff4d6d;
 `;
 
+const RiskVerdictBadge = styled.div<{ $verdict: 'APPROVE' | 'MODIFY' | 'REJECT' }>`
+    margin-top: 8px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    border-left: 3px solid ${p =>
+        p.$verdict === 'APPROVE' ? '#4dff91' :
+        p.$verdict === 'MODIFY' ? '#ffaa00' : '#ff4d6d'};
+    background: ${p =>
+        p.$verdict === 'APPROVE' ? 'rgba(77,255,145,0.06)' :
+        p.$verdict === 'MODIFY' ? 'rgba(255,170,0,0.06)' : 'rgba(255,77,109,0.06)'};
+    color: ${p =>
+        p.$verdict === 'APPROVE' ? '#4dff91' :
+        p.$verdict === 'MODIFY' ? '#ffaa00' : '#ff4d6d'};
+`;
+
 const WinnerBanner = styled.div<{ $winner: string }>`
     padding: 8px 12px;
     text-align: center;
@@ -970,6 +986,20 @@ const AiSide: React.FC<{
                         <RuleBadge key={r}>{r}</RuleBadge>
                     ))}
                 </RuleBadges>
+            )}
+
+            {trade.riskVerdict && (
+                <RiskVerdictBadge $verdict={trade.riskVerdict}>
+                    🛡️ Risk Manager ({trade.riskVerdict}) · conf {trade.riskConfidence}%
+                    <div style={{ marginTop: 4, fontSize: 10, fontStyle: 'italic', opacity: 0.9 }}>
+                        "{trade.riskReason}"
+                    </div>
+                    {trade.riskConcerns && trade.riskConcerns.length > 0 && (
+                        <div style={{ marginTop: 4, fontSize: 10, opacity: 0.85 }}>
+                            Concerns: {trade.riskConcerns.join('; ')}
+                        </div>
+                    )}
+                </RiskVerdictBadge>
             )}
 
             {round.userVeto && (

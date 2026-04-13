@@ -4,6 +4,7 @@
 import { callClaude, extractJson, BudgetExceededError } from './llm-client';
 import { PICK_SYSTEM_PROMPT, buildPickUserPrompt, type PickPromptInput } from './prompts';
 import { candidateToTrade, type IcCandidate, type CandidatesResult } from './ic-picker';
+import { reviewPick, type RiskReviewResult } from './risk-manager';
 import type { IAiCompetitionTrade, IAiState, ICompetitionTradeV2, IMarketContext } from './types';
 
 interface ClaudePickResponse {
@@ -27,8 +28,9 @@ interface ClaudePickResponse {
 export interface LlmPickResult {
     trade: IAiCompetitionTrade | null;
     reason: string;
-    fallback: 'none' | 'rule_based' | 'budget_exceeded' | 'no_candidates';
+    fallback: 'none' | 'rule_based' | 'budget_exceeded' | 'no_candidates' | 'risk_rejected';
     auditLogId?: string;
+    riskReview?: RiskReviewResult;
 }
 
 /**
@@ -75,8 +77,15 @@ export async function pickWithLlm(
             uid,
             function: 'aiDailySubmit',
             purpose: 'round_pick',
+            agent: 'picker',
             metadata: { ticker, expirationDate, dte },
-        }, { maxTokens: 1500, temperature: 0.3 });
+        }, {
+            model: 'claude-opus-4-6',
+            maxTokens: 2500,
+            temperature: 0.3,
+            enableWebSearch: true,
+            webSearchMaxUses: 2,
+        });
         claudeResponse = { text: result.text, auditLogId: result.auditLogId };
     } catch (e) {
         if (e instanceof BudgetExceededError) {
@@ -128,7 +137,7 @@ export async function pickWithLlm(
     }
 
     const baseTrade = candidateToTrade(chosen, ticker, expirationDate);
-    const trade: IAiCompetitionTrade = {
+    let trade: IAiCompetitionTrade = {
         ...baseTrade,
         rationale: parsed.rationale || `Claude selected option ${parsed.selection}`,
         confidenceScore: Math.max(30, Math.min(95, Math.round(parsed.confidenceScore))),
@@ -144,11 +153,64 @@ export async function pickWithLlm(
         customStrategy: isCustom,
     };
 
+    // ─── Phase 2: Risk Manager review ───────────────────────────
+    const riskReview = await reviewPick(uid, trade, marketContext, aiState, bpePercentage, candidatesResult.topN);
+
+    // Append risk verdict to trade rationale + rules + structured fields
+    trade = {
+        ...trade,
+        rationale: `${trade.rationale}\n\n[Risk Manager — ${riskReview.verdict}]: ${riskReview.reason}`,
+        rulesApplied: [...trade.rulesApplied, `risk_verdict_${riskReview.verdict.toLowerCase()}`],
+        riskVerdict: riskReview.verdict,
+        riskReason: riskReview.reason,
+        riskConcerns: riskReview.concerns,
+        riskConfidence: riskReview.confidence,
+        riskAuditLogId: riskReview.auditLogId,
+    };
+
+    if (riskReview.verdict === 'REJECT') {
+        // Risk vetoed — fall back to rule-based top candidate (still log Claude's choice for audit)
+        console.warn(`[llm-picker] Risk REJECTED Picker's choice. Reason: ${riskReview.reason}`);
+        return {
+            trade: null,
+            reason: `Risk Manager rejected: ${riskReview.reason}`,
+            fallback: 'risk_rejected',
+            auditLogId: claudeResponse.auditLogId,
+            riskReview,
+        };
+    }
+
+    if (riskReview.verdict === 'MODIFY' && riskReview.modifySuggestion) {
+        // Apply modification: lower quantity or swap to alternative candidate
+        const mod = riskReview.modifySuggestion;
+        if (mod.alternativeIndex && mod.alternativeIndex >= 1 && mod.alternativeIndex <= candidatesResult.topN.length) {
+            const altCand = candidatesResult.topN[mod.alternativeIndex - 1];
+            const altBase = candidateToTrade(altCand, ticker, expirationDate);
+            trade = {
+                ...trade,
+                ...altBase,
+                rationale: trade.rationale + ` Risk swapped to candidate #${mod.alternativeIndex}.`,
+            };
+        }
+        if (mod.quantity && mod.quantity > 0 && mod.quantity < trade.quantity) {
+            const oldQty = trade.quantity;
+            const ratio = mod.quantity / oldQty;
+            trade = {
+                ...trade,
+                quantity: mod.quantity,
+                maxProfit: Math.round(trade.maxProfit * ratio * 100) / 100,
+                maxLoss: Math.round(trade.maxLoss * ratio * 100) / 100,
+                rationale: trade.rationale + ` Risk reduced qty ${oldQty}→${mod.quantity}.`,
+            };
+        }
+    }
+
     return {
         trade,
-        reason: `Claude picked ${isCustom ? 'custom' : `option ${parsed.selection}`} with confidence ${trade.confidenceScore}`,
+        reason: `Picker→Risk: ${isCustom ? 'custom' : `option ${parsed.selection}`} ${riskReview.verdict} (Picker conf ${trade.confidenceScore}, Risk conf ${riskReview.confidence})`,
         fallback: 'none',
         auditLogId: claudeResponse.auditLogId,
+        riskReview,
     };
 }
 

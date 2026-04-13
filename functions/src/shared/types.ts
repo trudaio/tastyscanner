@@ -51,6 +51,12 @@ export interface IAiCompetitionTrade extends ICompetitionTradeV2 {
     approvalStatus?: 'pending' | 'approved' | 'rejected';
     approvedAt?: string | null;
     customStrategy?: boolean;     // true if Claude proposed variant outside rule-picker candidates
+    // Phase 2 multi-agent additions:
+    riskVerdict?: 'APPROVE' | 'MODIFY' | 'REJECT';
+    riskReason?: string;
+    riskConcerns?: string[];
+    riskConfidence?: number;
+    riskAuditLogId?: string;
 }
 
 export interface IUserFeedback {

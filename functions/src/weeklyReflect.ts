@@ -67,8 +67,9 @@ export const weeklyReflect = onSchedule(
                 uid,
                 function: 'weeklyReflect',
                 purpose: 'weekly_memo',
+                agent: 'learner',
                 metadata: { weekId, roundsAnalyzed: rounds.length },
-            }, { maxTokens: 1500, temperature: 0.4 });
+            }, { model: 'claude-opus-4-6', maxTokens: 1500, temperature: 0.4 });
             memoText = result.text;
             auditLogId = result.auditLogId;
         } catch (e) {

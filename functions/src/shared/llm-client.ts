@@ -6,17 +6,22 @@
 import * as admin from 'firebase-admin';
 import Anthropic from '@anthropic-ai/sdk';
 
-const MODEL = 'claude-opus-4-6';
+export type ModelName = 'claude-opus-4-6' | 'claude-sonnet-4-6';
+export type AgentRole = 'picker' | 'risk' | 'learner' | 'manual';
 
-// Anthropic Opus pricing (Apr 2026): $15 per 1M input tokens, $75 per 1M output tokens
-const COST_INPUT_PER_TOKEN = 15 / 1_000_000;
-const COST_OUTPUT_PER_TOKEN = 75 / 1_000_000;
-const DEFAULT_DAILY_BUDGET_USD = 5.0;
+// Pricing per model (Apr 2026): per 1M tokens
+const MODEL_PRICING: Record<ModelName, { input: number; output: number }> = {
+    'claude-opus-4-6': { input: 15, output: 75 },
+    'claude-sonnet-4-6': { input: 3, output: 15 },
+};
+
+const DEFAULT_DAILY_BUDGET_USD = 10.0;
 
 export interface LlmCallContext {
     uid: string;
     function: 'aiDailySubmit' | 'weeklyReflect' | 'manual';
-    purpose: 'round_pick' | 'weekly_memo' | 'test';
+    purpose: 'round_pick' | 'risk_review' | 'weekly_memo' | 'test';
+    agent: AgentRole;
     metadata?: Record<string, unknown>;
 }
 
@@ -68,18 +73,28 @@ async function getDailyBudget(uid: string): Promise<number> {
 
 /**
  * Call Claude with retries + budget enforcement + audit log.
+ * Supports per-call model selection and optional web search tool use.
  * @throws BudgetExceededError if daily cap reached
  */
 export async function callClaude(
     systemPrompt: string,
     userPrompt: string,
     ctx: LlmCallContext,
-    opts: { maxTokens?: number; temperature?: number } = {},
+    opts: {
+        model?: ModelName;
+        maxTokens?: number;
+        temperature?: number;
+        enableWebSearch?: boolean;
+        webSearchMaxUses?: number;
+    } = {},
 ): Promise<LlmCallResult> {
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
         throw new Error('ANTHROPIC_API_KEY not set in environment');
     }
+
+    const model: ModelName = opts.model ?? 'claude-opus-4-6';
+    const pricing = MODEL_PRICING[model];
 
     // Budget check
     const [spent, budget] = await Promise.all([
@@ -92,23 +107,41 @@ export async function callClaude(
 
     const client = new Anthropic({ apiKey });
 
+    // Build request — add web_search tool if enabled
+    const tools: Array<{ type: string; name: string; max_uses?: number }> = [];
+    if (opts.enableWebSearch) {
+        tools.push({
+            type: 'web_search_20250305',
+            name: 'web_search',
+            max_uses: opts.webSearchMaxUses ?? 3,
+        });
+    }
+
     let lastError: Error | undefined;
     for (let attempt = 0; attempt < 3; attempt++) {
         try {
             const response = await client.messages.create({
-                model: MODEL,
+                model,
                 max_tokens: opts.maxTokens ?? 4000,
                 temperature: opts.temperature ?? 0.3,
                 system: systemPrompt,
                 messages: [{ role: 'user', content: userPrompt }],
+                ...(tools.length > 0 ? { tools: tools as Anthropic.Messages.Tool[] } : {}),
             });
 
-            const textBlock = response.content.find((b) => b.type === 'text');
-            const text = textBlock && textBlock.type === 'text' ? textBlock.text : '';
+            // Extract text from all text blocks (web_search results may insert tool_use blocks between)
+            const textParts: string[] = [];
+            for (const block of response.content) {
+                if (block.type === 'text') textParts.push(block.text);
+            }
+            const text = textParts.join('\n');
 
             const inputTokens = response.usage.input_tokens;
             const outputTokens = response.usage.output_tokens;
-            const costUsd = inputTokens * COST_INPUT_PER_TOKEN + outputTokens * COST_OUTPUT_PER_TOKEN;
+            // Web search: $10 per 1k searches = $0.01 per search
+            const webSearchCalls = response.content.filter((b) => b.type === 'server_tool_use').length;
+            const webSearchCost = webSearchCalls * 0.01;
+            const costUsd = inputTokens * (pricing.input / 1_000_000) + outputTokens * (pricing.output / 1_000_000) + webSearchCost;
 
             // Write audit log
             const auditEntry = {
@@ -116,11 +149,13 @@ export async function callClaude(
                 timestamp: new Date().toISOString(),
                 function: ctx.function,
                 purpose: ctx.purpose,
-                model: MODEL,
+                agent: ctx.agent,
+                model,
                 inputTokens,
                 outputTokens,
+                webSearchCalls,
                 costUsd: Math.round(costUsd * 1_000_000) / 1_000_000,
-                rawSystemPrompt: systemPrompt.substring(0, 8000), // truncate huge prompts
+                rawSystemPrompt: systemPrompt.substring(0, 8000),
                 rawUserPrompt: userPrompt.substring(0, 8000),
                 rawResponse: text.substring(0, 8000),
                 metadata: ctx.metadata ?? {},
@@ -140,9 +175,8 @@ export async function callClaude(
         } catch (e) {
             lastError = e instanceof Error ? e : new Error(String(e));
             const msg = lastError.message;
-            // Retry on transient errors only
             if (msg.includes('429') || msg.includes('overloaded') || msg.includes('timeout')) {
-                const wait = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
+                const wait = Math.pow(2, attempt) * 1000;
                 console.warn(`[llm-client] Attempt ${attempt + 1} failed (${msg}), retrying in ${wait}ms`);
                 await new Promise((r) => setTimeout(r, wait));
                 continue;

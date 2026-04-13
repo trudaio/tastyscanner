@@ -53,6 +53,11 @@ export interface IAiCompetitionTrade extends ICompetitionTradeV2 {
     approvalStatus?: 'pending' | 'approved' | 'rejected';
     approvedAt?: string | null;
     customStrategy?: boolean;
+    riskVerdict?: 'APPROVE' | 'MODIFY' | 'REJECT';
+    riskReason?: string;
+    riskConcerns?: string[];
+    riskConfidence?: number;
+    riskAuditLogId?: string;
 }
 
 export interface IUserFeedback {

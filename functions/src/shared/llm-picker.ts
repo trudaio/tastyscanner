@@ -44,6 +44,7 @@ export async function pickWithLlm(
     candidatesResult: CandidatesResult,
     weeklyMemo: string | null,
     catalinSubmission: ICompetitionTradeV2 | null,
+    bpePercentage?: number,
 ): Promise<LlmPickResult> {
     if (candidatesResult.topN.length === 0) {
         return { trade: null, reason: candidatesResult.reason, fallback: 'no_candidates' };
@@ -64,6 +65,7 @@ export async function pickWithLlm(
             credit: catalinSubmission.credit,
             wings: catalinSubmission.wings,
         } : null,
+        bpePercentage,
     };
     const userPrompt = buildPickUserPrompt(pickInput);
 

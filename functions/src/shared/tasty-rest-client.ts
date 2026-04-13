@@ -251,6 +251,43 @@ export async function getPositions(token: string, accountNumber: string): Promis
         }));
 }
 
+export interface IAccountBalances {
+    netLiquidatingValue: number;
+    derivativeBuyingPower: number;
+    derivativeBuyingPowerPercentage: number; // 0-100, percentage of net liq used by derivatives
+    cashBalance: number;
+    maintenanceRequirement: number;
+}
+
+/** Fetch account balances for BPE check */
+export async function getAccountBalances(token: string, accountNumber: string): Promise<IAccountBalances | null> {
+    try {
+        const resp = await request<{
+            data: {
+                'net-liquidating-value': string;
+                'derivative-buying-power': string;
+                'cash-balance': string;
+                'maintenance-requirement': string;
+            };
+        }>('GET', `/accounts/${accountNumber}/balances`, token);
+        const d = resp.data;
+        const netLiq = parseFloat(d['net-liquidating-value'] || '0');
+        const dbp = parseFloat(d['derivative-buying-power'] || '0');
+        const maint = parseFloat(d['maintenance-requirement'] || '0');
+        const dbpPct = netLiq > 0 ? (maint / netLiq) * 100 : 0;
+        return {
+            netLiquidatingValue: netLiq,
+            derivativeBuyingPower: dbp,
+            derivativeBuyingPowerPercentage: Math.round(dbpPct * 100) / 100,
+            cashBalance: parseFloat(d['cash-balance'] || '0'),
+            maintenanceRequirement: maint,
+        };
+    } catch (e) {
+        console.error('[tasty] getAccountBalances failed:', e);
+        return null;
+    }
+}
+
 /** Fetch transactions for an account within a date range */
 export async function getTransactions(
     token: string,

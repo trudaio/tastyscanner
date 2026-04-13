@@ -7,7 +7,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { defineSecret } from 'firebase-functions/params';
 import { getCredentialsForUser, findActiveTastyUser } from './shared/credentials';
 import {
-    getAccessToken, getAccounts, getOptionsChain, getMarketDataSnapshot, getUnderlyingPrice,
+    getAccessToken, getAccounts, getOptionsChain, getMarketDataSnapshot, getUnderlyingPrice, getAccountBalances,
 } from './shared/tasty-rest-client';
 import { getTopCandidates, type ChainInput } from './shared/ic-picker';
 import { pickWithLlm } from './shared/llm-picker';
@@ -92,6 +92,17 @@ export const aiDailySubmit = onSchedule(
         const accountNumber = accounts[0]['account-number'];
         console.log(`[aiDailySubmit] Using account ${accountNumber}`);
 
+        // 4b. BPE gate — fetch current buying power usage
+        const balances = await getAccountBalances(token, accountNumber);
+        const bpePct = balances?.derivativeBuyingPowerPercentage ?? 0;
+        console.log(`[aiDailySubmit] Current BPE: ${bpePct.toFixed(1)}% of net liq`);
+
+        // Hard cap 80%, soft cap 50% (or 70% with VIX>22 + 16-delta exception)
+        if (bpePct >= 80) {
+            console.warn(`[aiDailySubmit] BPE ${bpePct}% >= 80% hard cap — skipping all picks today`);
+            return;
+        }
+
         // 5. For each ticker, fetch chain + underlying price + market data, pick ICs
         for (const ticker of TICKERS) {
             try {
@@ -123,6 +134,14 @@ export const aiDailySubmit = onSchedule(
                     vix,
                     ivRank: 0, // TODO: fetch IV rank via /instruments/cryptocurrencies or /market-metrics
                 };
+
+                // BPE gate per-ticker (re-checked since BPE could change between tickers)
+                // 50% standard cap; 70% allowed only if VIX > 22 (Catalin's documented exception)
+                const bpeCap = vix > 22 ? 70 : 50;
+                if (bpePct >= bpeCap) {
+                    console.warn(`[aiDailySubmit] ${ticker}: BPE ${bpePct.toFixed(1)}% >= ${bpeCap}% cap (VIX=${vix.toFixed(1)}) — skipping ticker`);
+                    continue;
+                }
 
                 for (const expDate of targetExps) {
                     const exp = firstChain.expirations.find((e) => e['expiration-date'] === expDate);
@@ -173,6 +192,7 @@ export const aiDailySubmit = onSchedule(
                         marketContext, aiState, candidates,
                         memoText,
                         existingUserRound?.userTrade ?? null,
+                        bpePct,
                     );
 
                     if (!llmResult.trade) {

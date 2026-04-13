@@ -13,6 +13,7 @@ export interface PickPromptInput {
     candidates: IcCandidate[];
     weeklyMemo: string | null;
     catalinSubmission: { strategy: string; pop: number; credit: number; wings: number } | null;
+    bpePercentage?: number;     // current account BPE % (0-100)
 }
 
 export const PICK_SYSTEM_PROMPT = `You are Guvidul, an autonomous AI Iron Condor trader competing against your developer Catalin in a 2-month head-to-head competition (deadline 2026-06-13).
@@ -52,13 +53,17 @@ export function buildPickUserPrompt(input: PickPromptInput): string {
         ? `Catalin already submitted: ${catalinSubmission.strategy}, POP ${catalinSubmission.pop}%, credit $${catalinSubmission.credit.toFixed(2)}, wings $${catalinSubmission.wings}.`
         : `Catalin has NOT submitted yet for this expiration (or this is a ghost round — you play solo).`;
 
+    const bpeStr = input.bpePercentage !== undefined
+        ? `\n- Account BPE used: ${input.bpePercentage.toFixed(1)}% of net liquidity (cap: 50% standard, 70% if VIX>22 + 16-delta picks)`
+        : '';
+
     return `# Today's Round
 - Date: ${new Date().toISOString().split('T')[0]}
 - Ticker: ${ticker}
 - Expiration: ${expirationDate} (${dte} DTE)
 - Underlying price: $${marketContext.underlyingPrice.toFixed(2)}
 - VIX: ${marketContext.vix.toFixed(2)}
-- IV Rank: ${marketContext.ivRank.toFixed(0)}
+- IV Rank: ${marketContext.ivRank.toFixed(0)}${bpeStr}
 
 # Catalin's Move
 ${catalinStr}

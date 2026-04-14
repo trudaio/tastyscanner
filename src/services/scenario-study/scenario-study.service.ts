@@ -100,7 +100,7 @@ export class ScenarioStudyService implements IScenarioStudyService {
             const from = '2025-01-01'; // YTD start
             const to = new Date().toISOString().split('T')[0];
             const resp = await fetch(
-                `https://api-awasrjiqfq-uc.a.run.app/api/polygon/stock-bars?symbol=${polygonTicker}&from=${from}&to=${to}`,
+                `https://api-awasrjiqfq-uc.a.run.app/polygon/stock-bars?symbol=${polygonTicker}&from=${from}&to=${to}`,
                 { headers: { Authorization: `Bearer ${token}` } },
             );
             if (!resp.ok) return [];

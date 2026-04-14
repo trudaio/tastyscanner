@@ -97,16 +97,17 @@ export function computeExpireScenario(
     trade: IIronCondorTrade,
     underlyingAtExpiry: number | null,
 ): IScenarioOutcome {
-    const credit = trade.openCredit;
+    // openCredit is in TOTAL DOLLARS (per-share × qty × 100 multiplier)
+    // Convert to per-share for comparison with intrinsic (which is per-share)
     const qty = trade.quantity;
-    const wings = trade.putSellStrike - trade.putBuyStrike;
-    const maxProfit = credit;
+    const multiplier = qty * 100;
+    const creditPerShare = trade.openCredit / multiplier;
     const daysHeld = daysBetween(trade.openDate, trade.expirationDate);
 
     if (underlyingAtExpiry === null) {
         // No data — assume expired worthless (OTM) as fallback
         return {
-            label: 'expire', profit: credit * qty, profitPct: 100,
+            label: 'expire', profit: trade.openCredit, profitPct: 100,
             daysHeld, targetReached: true, hitDate: null,
         };
     }
@@ -115,11 +116,12 @@ export function computeExpireScenario(
         underlyingAtExpiry, trade.putBuyStrike, trade.putSellStrike,
         trade.callSellStrike, trade.callBuyStrike,
     );
-    const profit = (credit - intrinsic) * qty;
-    const profitPct = maxProfit > 0 ? (profit / qty) / maxProfit * 100 : 0;
+    // P&L per share = credit per share - intrinsic, then scale back to total dollars
+    const profitTotal = (creditPerShare - intrinsic) * multiplier;
+    const profitPct = creditPerShare > 0 ? ((creditPerShare - intrinsic) / creditPerShare) * 100 : 0;
     return {
         label: 'expire',
-        profit: Math.round(profit * 100) / 100,
+        profit: Math.round(profitTotal * 100) / 100,
         profitPct: Math.round(profitPct * 100) / 100,
         daysHeld,
         targetReached: true, // expire always "reaches" — it's a terminal state
@@ -128,9 +130,9 @@ export function computeExpireScenario(
 }
 
 export function computeActualScenario(trade: IIronCondorTrade): IScenarioOutcome {
-    const maxProfit = trade.openCredit;
-    const profit = trade.profit; // already = openCredit - closeDebit
-    const profitPct = maxProfit > 0 ? (profit / trade.quantity) / maxProfit * 100 : 0;
+    // Both profit and openCredit are in total dollars — profitPct is simply their ratio
+    const profit = trade.profit; // already = openCredit - closeDebit (total dollars)
+    const profitPct = trade.openCredit > 0 ? (profit / trade.openCredit) * 100 : 0;
     const daysHeld = trade.closeDate
         ? daysBetween(trade.openDate, trade.closeDate)
         : daysBetween(trade.openDate, trade.expirationDate);
@@ -150,9 +152,10 @@ export function findTargetScenario(
     targetPct: number,
     label: ScenarioLabel,
 ): IScenarioOutcome {
-    const credit = trade.openCredit;
+    // openCredit is in TOTAL DOLLARS — normalize to per-share
     const qty = trade.quantity;
-    const maxProfit = credit;
+    const multiplier = qty * 100;
+    const creditPerShare = trade.openCredit / multiplier;
     const totalDte = daysBetween(trade.openDate, trade.expirationDate);
     if (totalDte <= 0) {
         return { label, profit: 0, profitPct: 0, daysHeld: 0, targetReached: false, hitDate: null };
@@ -167,21 +170,21 @@ export function findTargetScenario(
         const dteFraction = clamp(1 - daysElapsed / totalDte, 0, 1);
 
         const estValue = estimateICValue(
-            credit, bar.close,
+            creditPerShare, bar.close,
             trade.putBuyStrike, trade.putSellStrike,
             trade.callSellStrike, trade.callBuyStrike,
             dteFraction,
         );
 
-        const estProfit = credit - estValue;
-        const estProfitPct = maxProfit > 0 ? (estProfit / maxProfit) * 100 : 0;
+        const estProfitPerShare = creditPerShare - estValue;
+        const estProfitPct = creditPerShare > 0 ? (estProfitPerShare / creditPerShare) * 100 : 0;
 
         if (estProfitPct >= targetPct) {
-            // Target hit — close here
-            const profit = estProfit * qty;
+            // Target hit — scale back to total dollars
+            const profitTotal = estProfitPerShare * multiplier;
             return {
                 label,
-                profit: Math.round(profit * 100) / 100,
+                profit: Math.round(profitTotal * 100) / 100,
                 profitPct: Math.round(estProfitPct * 100) / 100,
                 daysHeld: daysElapsed,
                 targetReached: true,
@@ -190,20 +193,23 @@ export function findTargetScenario(
         }
     }
 
-    // Target never hit — position held to expiration or actual close
+    // Target never hit — position held to expiration
     const lastBar = bars.find((b) => b.date >= trade.expirationDate)
         ?? bars[bars.length - 1];
-    const expireProfit = lastBar
-        ? (credit - computeICIntrinsic(
+    const expireIntrinsic = lastBar
+        ? computeICIntrinsic(
             lastBar.close, trade.putBuyStrike, trade.putSellStrike,
             trade.callSellStrike, trade.callBuyStrike,
-        )) * qty
-        : trade.profit;
+        )
+        : 0;
+    const expireProfitPerShare = creditPerShare - expireIntrinsic;
+    const expireProfitTotal = expireProfitPerShare * multiplier;
+    const expirePct = creditPerShare > 0 ? (expireProfitPerShare / creditPerShare) * 100 : 0;
 
     return {
         label,
-        profit: Math.round(expireProfit * 100) / 100,
-        profitPct: Math.round((maxProfit > 0 ? (expireProfit / qty) / maxProfit * 100 : 0) * 100) / 100,
+        profit: Math.round(expireProfitTotal * 100) / 100,
+        profitPct: Math.round(expirePct * 100) / 100,
         daysHeld: daysBetween(trade.openDate, trade.expirationDate),
         targetReached: false,
         hitDate: null,
@@ -217,8 +223,11 @@ export function computeAllScenarios(
     bars: IUnderlyingBar[],
 ): ITradeScenarioResult {
     const wings = trade.putSellStrike - trade.putBuyStrike;
-    const maxProfit = trade.openCredit * trade.quantity;
-    const maxLoss = (wings - trade.openCredit) * 100 * trade.quantity;
+    const multiplier = trade.quantity * 100;
+    // openCredit is already total dollars — it IS maxProfit
+    const maxProfit = trade.openCredit;
+    const creditPerShare = trade.openCredit / multiplier;
+    const maxLoss = (wings - creditPerShare) * multiplier;
 
     // Find underlying at expiration
     const expiryBar = bars.find((b) => b.date >= trade.expirationDate);

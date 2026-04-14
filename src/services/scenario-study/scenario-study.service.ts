@@ -49,18 +49,18 @@ export class ScenarioStudyService implements IScenarioStudyService {
                 barsByTicker.set(ticker, bars);
             }
 
+            // 2b. Scale SPY bars → SPX level (marketTechnicals + Polygon both store SPY prices)
+            if (barsByTicker.has('SPX')) {
+                const spyBars = barsByTicker.get('SPX')!;
+                barsByTicker.set('SPX', spyBars.map((b) => ({ ...b, close: b.close * SPY_TO_SPX_RATIO })));
+            }
+
             // 3. Compute scenarios per trade
             const results: ITradeScenarioResult[] = [];
             for (const trade of closed) {
                 const bars = barsByTicker.get(trade.ticker) ?? [];
                 if (bars.length === 0) continue;
-
-                // For SPX trades, scale SPY bars to SPX level
-                const scaledBars = trade.ticker === 'SPX'
-                    ? bars.map((b) => ({ ...b, close: b.close * SPY_TO_SPX_RATIO }))
-                    : bars;
-
-                results.push(computeAllScenarios(trade, scaledBars));
+                results.push(computeAllScenarios(trade, bars));
             }
 
             const summary = computeSummary(results);

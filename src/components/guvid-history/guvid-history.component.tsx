@@ -380,7 +380,7 @@ export const GuvidHistoryComponent: React.FC = observer(() => {
 
     /* Per-ticker P&L/day + avg duration */
     const tickerExtraStats = useMemo(() => {
-        const map = new Map<string, { plPerDay: number; avgDuration: number }>();
+        const map = new Map<string, { plPerDay: number; avgDuration: number; ev: number }>();
         if (!summary) return map;
         for (const [ticker, ts] of summary.byTicker.entries()) {
             const closed = summary.trades.filter(
@@ -398,7 +398,14 @@ export const GuvidHistoryComponent: React.FC = observer(() => {
                 }
                 avgDuration = tot / closed.length;
             }
-            map.set(ticker, { plPerDay, avgDuration });
+            // EV per trade for this ticker
+            const profitable = closed.filter(t => t.isProfitable);
+            const losing = closed.filter(t => !t.isProfitable);
+            const avgW = profitable.length > 0 ? profitable.reduce((s, t) => s + t.profit, 0) / profitable.length : 0;
+            const avgL = losing.length > 0 ? Math.abs(losing.reduce((s, t) => s + t.profit, 0)) / losing.length : 0;
+            const wr = closed.length > 0 ? profitable.length / closed.length : 0;
+            const ev = wr * avgW - (1 - wr) * avgL;
+            map.set(ticker, { plPerDay, avgDuration, ev });
         }
         return map;
     }, [summary]);
@@ -556,6 +563,11 @@ export const GuvidHistoryComponent: React.FC = observer(() => {
     const tradingDays = summary.dailyPL.length;
     const plPerDay = tradingDays > 0 ? realizedPL / tradingDays : 0;
 
+    // Expected Value per trade: EV = (winRate × avgWin) - (lossRate × avgLoss)
+    const avgWin = ytd.profitableTrades > 0 ? ytd.totalWins / ytd.profitableTrades : 0;
+    const avgLoss = ytd.losingTrades > 0 ? Math.abs(ytd.totalLosses) / ytd.losingTrades : 0;
+    const evPerTrade = (ytd.winRate / 100) * avgWin - ((1 - ytd.winRate / 100) * avgLoss);
+
     // Average day duration — mean calendar days from openDate to closeDate for closed trades
     const closedForDuration = summary.trades.filter(
         t => t.status !== 'open' && t.openDate && (t.closeDate || t.expirationDate),
@@ -618,6 +630,12 @@ export const GuvidHistoryComponent: React.FC = observer(() => {
                         {avgDaysHeld.toFixed(1)}d
                     </MetricValue>
                 </MetricCard>
+                <MetricCard $color={evPerTrade >= 0 ? '#4dff91' : '#ff4d6d'}>
+                    <MetricLabel>Expected Value</MetricLabel>
+                    <MetricValue $color={evPerTrade >= 0 ? '#4dff91' : '#ff4d6d'}>
+                        {fmtCur(evPerTrade)}
+                    </MetricValue>
+                </MetricCard>
             </MetricsRow>
 
             {/* ─── Section 2: Trades by Ticker ──────────────────── */}
@@ -633,6 +651,7 @@ export const GuvidHistoryComponent: React.FC = observer(() => {
                             <Th $align="right">Win Rate</Th>
                             <Th $align="right">Total P&L</Th>
                             <Th $align="right">P&L / Day</Th>
+                            <Th $align="right">EV / Trade</Th>
                             <Th $align="right">Avg Duration</Th>
                         </tr>
                     </thead>
@@ -648,6 +667,7 @@ export const GuvidHistoryComponent: React.FC = observer(() => {
                                     <Td $align="right"><WinRateValue $pct={ts.winRate}>{ts.winRate.toFixed(1)}%</WinRateValue></Td>
                                     <Td $align="right"><PLValue $value={ts.totalProfit}>{fmtCur(ts.totalProfit)}</PLValue></Td>
                                     <Td $align="right"><PLValue $value={extra?.plPerDay ?? 0}>{fmtCur(extra?.plPerDay ?? 0)}</PLValue></Td>
+                                    <Td $align="right"><PLValue $value={extra?.ev ?? 0}>{fmtCur(extra?.ev ?? 0)}</PLValue></Td>
                                     <Td $align="right">{(extra?.avgDuration ?? 0).toFixed(1)}d</Td>
                                 </tr>
                             );

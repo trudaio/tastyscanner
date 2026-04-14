@@ -7,7 +7,9 @@ import * as https from 'https';
 import type { OHLC } from './technicals';
 
 function mapTicker(ticker: string): string {
-    if (ticker === 'SPX') return 'I:SPX';
+    // SPX is an index — Polygon requires Indices add-on for I:SPX.
+    // Use SPY (ETF that tracks SPX) as proxy — RSI/BB/ATR are nearly identical.
+    if (ticker === 'SPX') return 'SPY';
     return ticker;
 }
 

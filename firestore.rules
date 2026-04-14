@@ -10,6 +10,13 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
+    // Technical indicators (RSI/BB/ATR) — read-only for authenticated users
+    // Written by computeTechnicals Cloud Function (admin SDK bypasses rules)
+    match /marketTechnicals/{ticker} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
     // Deny everything else
     match /{document=**} {
       allow read, write: if false;

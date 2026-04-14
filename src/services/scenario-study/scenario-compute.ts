@@ -73,8 +73,11 @@ export function estimateICValue(
     }
 
     // Extrinsic value: decays with time, but inflates near short strikes
-    // Base extrinsic = remaining portion of credit
-    const baseExtrinsic = credit * clamp(dteFraction, 0, 1);
+    // Theta decay is NON-LINEAR: slow early (first 2/3 of DTE), accelerates in last 1/3.
+    // Model: extrinsic ∝ sqrt(dteFraction) — at 50% DTE remaining, ~71% extrinsic remains
+    // (vs 50% with linear). At 25% DTE remaining, ~50% remains. At 10%, ~32%.
+    const thetaDecay = Math.sqrt(clamp(dteFraction, 0, 1));
+    const baseExtrinsic = credit * thetaDecay;
 
     // Proximity penalty: as we get closer to short strike, extrinsic balloons
     // minDist > 1 means safe (far from strikes), < 0.5 means danger zone

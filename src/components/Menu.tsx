@@ -21,7 +21,7 @@ import {WatchListsComponent} from "./watch-lists.component";
 import {TickerMenuItemComponent} from "./ticker-menu-item.component";
 import {BrokerAccountsComponent} from "./broker-accounts.component";
 import {AccountInfoComponent} from "./account-info.component";
-import {alertCircleOutline, analyticsOutline, bookOutline, filterOutline, personCircleOutline, keyOutline, trophyOutline, layersOutline, barChartOutline, warningOutline, notificationsOutline, timerOutline, flaskOutline, eyeOutline} from "ionicons/icons";
+import {alertCircleOutline, analyticsOutline, bookOutline, filterOutline, personCircleOutline, keyOutline, trophyOutline, layersOutline, barChartOutline, warningOutline, notificationsOutline, timerOutline, flaskOutline, eyeOutline, statsChartOutline} from "ionicons/icons";
 import {useHistory} from "react-router-dom";
 import { auth } from '../firebase';
 
@@ -200,6 +200,11 @@ const Menu: React.FC = observer(() => {
 <IonItem button routerLink="/guide" routerDirection="forward" lines="none">
           <IonIcon slot="start" icon={bookOutline} />
           <IonLabel>Guvid Guide</IonLabel>
+        </IonItem>
+
+        <IonItem button routerLink="/scenario-study" routerDirection="forward" lines="none">
+          <IonIcon slot="start" icon={statsChartOutline} />
+          <IonLabel>Scenario Study</IonLabel>
         </IonItem>
 
         <IonItem button routerLink="/account" routerDirection="forward" lines="none">

@@ -16,6 +16,7 @@ import type { IBrokerCredentialsService } from './credentials/broker-credentials
 import type { BrokerType, IBrokerCredentials } from './broker-provider/broker-provider.interface';
 import type { IDeltaAlertService } from './delta-alert/delta-alert.interface';
 import type { ITechnicalsService } from './technicals/technicals.service.interface';
+import type { IScenarioStudyService } from './scenario-study/scenario-study.interface';
 
 export interface IServiceFactory {
     readonly tickers: ITickersService;
@@ -36,6 +37,7 @@ export interface IServiceFactory {
     readonly brokerCredentials: IBrokerCredentialsService;
     readonly deltaAlert: IDeltaAlertService;
     readonly technicals: ITechnicalsService;
+    readonly scenarioStudy: IScenarioStudyService;
     readonly isInitialized: boolean;
     /** Initialize with a broker credentials object (multi-broker). */
     initialize(credentials: IBrokerCredentials): void;

@@ -14,14 +14,15 @@ const require = createRequire(import.meta.url);
 // ── Proxy setup ───────────────────────────────────────────────────────────────
 const { HttpsProxyAgent } = require('https-proxy-agent');
 const proxyUrl = process.env.HTTPS_PROXY || process.env.https_proxy;
-if (!proxyUrl) throw new Error('No HTTPS_PROXY env var found');
-const httpsAgent = new HttpsProxyAgent(proxyUrl);
+const httpsAgent = proxyUrl ? new HttpsProxyAgent(proxyUrl) : null;
+if (proxyUrl) console.log('Using proxy:', proxyUrl);
+else console.log('No proxy configured — using direct connections.');
 
 // Monkey-patch global WebSocket to use ws + proxy agent
 const WsLib = require('ws');
 class ProxiedWebSocket {
   constructor(url, protocols) {
-    const opts = { agent: httpsAgent };
+    const opts = httpsAgent ? { agent: httpsAgent } : {};
     this._ws = protocols ? new WsLib(url, protocols, opts) : new WsLib(url, opts);
     this.readyState = 0;
     this._listeners = {};
@@ -61,7 +62,7 @@ const db = admin.firestore();
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const axios = require('axios');
-const axiosCfg = { httpsAgent, proxy: false, maxRedirects: 5 };
+const axiosCfg = { ...(httpsAgent ? { httpsAgent, proxy: false } : {}), maxRedirects: 5 };
 const TASTY_BASE = 'https://api.tastyworks.com';
 function round2(n) { return Math.round(n * 100) / 100; }
 function mid(bid, ask) {

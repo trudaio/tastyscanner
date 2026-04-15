@@ -1,0 +1,21 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "economicEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "country", "order": "ASCENDING" },
+        { "fieldPath": "scheduledUtc", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "economicEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "gatesLadderingPause", "order": "ASCENDING" },
+        { "fieldPath": "scheduledUtc", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

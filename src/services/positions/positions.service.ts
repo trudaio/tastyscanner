@@ -47,6 +47,10 @@ export class PositionsService extends ServiceBase implements IPositionsService {
                     expirationDate: pos.expirationDate
                 }));
             });
+
+            // Reconcile any pending journal entries against the freshly-loaded positions.
+            // Fire-and-forget — position-loading must not block on journal reconciliation.
+            void this.services.tradeJournal.promotePending(this.positions);
         } catch (error) {
             console.error('Failed to load positions:', error);
             runInAction(() => {

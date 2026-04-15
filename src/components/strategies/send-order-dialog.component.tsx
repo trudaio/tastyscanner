@@ -405,7 +405,8 @@ export const SendOrderDialogComponent: React.FC<SendOrderDialogComponentProps> =
         const orderParams: IOptionsStrategySendOrderParams = {
             quantity: quantity,
             orderType: orderType,
-            timeInForce: timeInForce
+            timeInForce: timeInForce,
+            ticker: props.symbol,
         }
 
         const resolvedPrice = limitPrice ? parseFloat(limitPrice) : props.strategy.credit;

@@ -51,6 +51,43 @@ export class IronCondorModel implements IIronCondorViewModel {
 
     }
 
+    /**
+     * Net position delta for a short IC.
+     * Short leg contributes -option.delta; long leg contributes +option.delta.
+     */
+    get netDelta(): number {
+        return this.btoPut.delta + this.btoCall.delta - this.stoPut.delta - this.stoCall.delta;
+    }
+
+    /**
+     * Net position theta. For a short IC with realistic raw option thetas
+     * (all negative per convention), this returns a POSITIVE value — theta
+     * is being collected. Long legs keep sign; short legs flip.
+     */
+    get netTheta(): number {
+        return this.btoPut.theta + this.btoCall.theta - this.stoPut.theta - this.stoCall.theta;
+    }
+
+    /** Net position gamma (negative for short IC — we're short gamma). */
+    get netGamma(): number {
+        return this.btoPut.gamma + this.btoCall.gamma - this.stoPut.gamma - this.stoCall.gamma;
+    }
+
+    /** Net position vega (negative for short IC — we benefit from IV crush). */
+    get netVega(): number {
+        return this.btoPut.vega + this.btoCall.vega - this.stoPut.vega - this.stoCall.vega;
+    }
+
+    /** Mean of IV across the two short strikes (the ones that define the credit). */
+    get avgShortIV(): number {
+        return (this.stoPut.iv + this.stoCall.iv) / 2;
+    }
+
+    /** Underlying spot price at the time of IC construction. */
+    get underlyingPrice(): number {
+        return this.btoPut.strike.ticker.currentPrice;
+    }
+
     get legs(): OptionsStrategyLegModel[] {
         return [
             new OptionsStrategyLegModel(this.btoPut, "BTO"),
@@ -63,42 +100,34 @@ export class IronCondorModel implements IIronCondorViewModel {
     async sendOrder(orderParams: IOptionsStrategySendOrderParams): Promise<void> {
         const account = this.services.brokerAccount.currentAccount;
         //TODO show error
-        if(!account) {
+        if (!account) {
             return;
         }
 
-        await account.sendOrder({
-            price: orderParams.price ?? this.credit,
-            priceEffect: "Credit",
-            timeInForce: orderParams.timeInForce,
-            orderType: orderParams.orderType,
-            legs: [
-                {
-                    instrumentType: "Equity Option",
-                    action: "Buy to Open",
-                    quantity: orderParams.quantity,
-                    symbol: this.btoPut.id
-                },
-                {
-                    instrumentType: "Equity Option",
-                    action: "Sell to Open",
-                    quantity: orderParams.quantity,
-                    symbol: this.stoPut.id
-                },
-                {
-                    instrumentType: "Equity Option",
-                    action: "Sell to Open",
-                    quantity: orderParams.quantity,
-                    symbol: this.stoCall.id
-                },
-                {
-                    instrumentType: "Equity Option",
-                    action: "Buy to Open",
-                    quantity: orderParams.quantity,
-                    symbol: this.btoCall.id
-                }
-            ]
-        });
+        const tradeId = crypto.randomUUID();
+        if (orderParams.ticker) {
+            await this.services.tradeJournal.captureEntry(this, orderParams.ticker, tradeId);
+        }
+
+        try {
+            await account.sendOrder({
+                price: orderParams.price ?? this.credit,
+                priceEffect: "Credit",
+                timeInForce: orderParams.timeInForce,
+                orderType: orderParams.orderType,
+                legs: [
+                    { instrumentType: "Equity Option", action: "Buy to Open",  quantity: orderParams.quantity, symbol: this.btoPut.id  },
+                    { instrumentType: "Equity Option", action: "Sell to Open", quantity: orderParams.quantity, symbol: this.stoPut.id  },
+                    { instrumentType: "Equity Option", action: "Sell to Open", quantity: orderParams.quantity, symbol: this.stoCall.id },
+                    { instrumentType: "Equity Option", action: "Buy to Open",  quantity: orderParams.quantity, symbol: this.btoCall.id },
+                ],
+            });
+        } catch (err) {
+            if (orderParams.ticker) {
+                await this.services.tradeJournal.markOrphan(tradeId);
+            }
+            throw err;
+        }
     }
 
     get maxProfit(): number {

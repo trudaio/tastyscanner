@@ -10,6 +10,8 @@ import {
     ITickerSummary,
     IMonthSummary,
 } from '../../services/iron-condor-analytics/iron-condor-analytics.interface';
+import { JournalDrawer } from './journal-drawer.component';
+import type { ITradeJournalEntry } from '../../services/trade-journal/trade-journal.service.interface';
 
 /* ─── Types ──────────────────────────────────────────────── */
 
@@ -330,6 +332,13 @@ export const GuvidHistoryComponent: React.FC = observer(() => {
     const [sortKey, setSortKey] = useState<SortKey>('openDate');
     const [sortDir, setSortDir] = useState<SortDir>('desc');
     const [page, setPage] = useState(1);
+    const [journalEntries, setJournalEntries] = useState<ITradeJournalEntry[]>([]);
+    const [selectedEntry, setSelectedEntry] = useState<ITradeJournalEntry | null>(null);
+    const [drawerOpen, setDrawerOpen] = useState(false);
+
+    useEffect(() => {
+        services.tradeJournal.getAll().then(setJournalEntries).catch(() => setJournalEntries([]));
+    }, [services.tradeJournal]);
 
     const fetchHistory = async () => {
         if (!services.brokerAccount.currentAccount) return;
@@ -524,6 +533,17 @@ export const GuvidHistoryComponent: React.FC = observer(() => {
     const sortArrow = (key: SortKey) => {
         if (sortKey !== key) return ' \u21C5';
         return sortDir === 'asc' ? ' \u25B2' : ' \u25BC';
+    };
+
+    const findJournalForTrade = (t: IIronCondorTrade): ITradeJournalEntry | null => {
+        return journalEntries.find(e =>
+            e.ticker === t.ticker &&
+            e.expirationDate === t.expirationDate &&
+            e.strikes.putLong === t.putBuyStrike &&
+            e.strikes.putShort === t.putSellStrike &&
+            e.strikes.callShort === t.callSellStrike &&
+            e.strikes.callLong === t.callBuyStrike
+        ) ?? null;
     };
 
     if (loading && !summary) {
@@ -784,6 +804,10 @@ export const GuvidHistoryComponent: React.FC = observer(() => {
                             <Th>Put Spread</Th>
                             <Th>Call Spread</Th>
                             <Th $align="right">Credit</Th>
+                            <Th $align="right">Δ</Th>
+                            <Th $align="right">IV Rank</Th>
+                            <Th $align="right">VIX</Th>
+                            <Th $align="right">DTE</Th>
                             <Th $align="right">Debit / Current</Th>
                             <SortableTh $align="right" $active={sortKey === 'profit'} onClick={() => toggleSort('profit')}>
                                 P&L{sortArrow('profit')}
@@ -796,7 +820,7 @@ export const GuvidHistoryComponent: React.FC = observer(() => {
                     <tbody>
                         {pagedTrades.length === 0 ? (
                             <tr>
-                                <Td colSpan={11} $align="center" style={{ color: '#444', padding: '24px' }}>
+                                <Td colSpan={15} $align="center" style={{ color: '#444', padding: '24px' }}>
                                     {tickerFilter ? `No IC trades for ${tickerFilter}` : 'No IC trades found'}
                                 </Td>
                             </tr>
@@ -824,6 +848,22 @@ export const GuvidHistoryComponent: React.FC = observer(() => {
                                     <Td>{trade.putBuyStrike}/{trade.putSellStrike}</Td>
                                     <Td>{trade.callSellStrike}/{trade.callBuyStrike}</Td>
                                     <Td $align="right">{fmtCur(trade.openCredit)}</Td>
+                                    {(() => {
+                                        const j = findJournalForTrade(trade);
+                                        const placeholder = <span style={{ color: '#444' }}>—</span>;
+                                        return (
+                                            <>
+                                                <Td $align="right"
+                                                    onClick={() => { if (j) { setSelectedEntry(j); setDrawerOpen(true); } }}
+                                                    style={{ cursor: j ? 'pointer' : 'default' }}>
+                                                    {j ? j.entry.delta.toFixed(2) : placeholder}
+                                                </Td>
+                                                <Td $align="right">{j ? `${j.entry.ivRank.toFixed(0)}%` : placeholder}</Td>
+                                                <Td $align="right">{j ? (j.entry.vix == null ? placeholder : j.entry.vix.toFixed(1)) : placeholder}</Td>
+                                                <Td $align="right">{j ? j.entry.dte : placeholder}</Td>
+                                            </>
+                                        );
+                                    })()}
                                     <Td $align="right">{debitOrCurrent}</Td>
                                     <Td $align="right"><PLValue $value={pl}>{fmtCur(pl)}</PLValue></Td>
                                     <Td $align="center">
@@ -860,6 +900,12 @@ export const GuvidHistoryComponent: React.FC = observer(() => {
                     <span>Refreshing data...</span>
                 </div>
             )}
+
+            <JournalDrawer
+                entry={selectedEntry}
+                isOpen={drawerOpen}
+                onClose={() => setDrawerOpen(false)}
+            />
         </Container>
     );
 });

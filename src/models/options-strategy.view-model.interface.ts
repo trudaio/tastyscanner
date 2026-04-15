@@ -38,4 +38,6 @@ export interface IOptionsStrategySendOrderParams {
     price?: number;
     timeInForce: TimeInForce;
     orderType: OrderType;
+    /** Ticker used for Trade Journal snapshot (optional; journal skipped if absent). */
+    ticker?: string;
 }

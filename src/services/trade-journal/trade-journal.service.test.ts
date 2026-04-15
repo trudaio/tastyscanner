@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
 
 const setDocMock = mocks.setDoc;
 const docMock = mocks.doc;
+const getDocsMock = mocks.getDocs;
+const updateDocMock = mocks.updateDoc;
 
 vi.mock('firebase/firestore', () => ({
     doc: mocks.doc,
@@ -112,5 +114,56 @@ describe('TradeJournalService.captureEntry', () => {
 
         // Must resolve without throwing so sendOrder isn't blocked
         await expect(service.captureEntry(mockIC(), 'SPX', 'uuid-3')).resolves.toBeUndefined();
+    });
+});
+
+describe('TradeJournalService.getAll', () => {
+    beforeEach(() => {
+        getDocsMock.mockReset();
+    });
+
+    it('returns all entries for the current user', async () => {
+        getDocsMock.mockResolvedValueOnce({
+            docs: [
+                { data: () => ({ tradeId: 't1', status: 'confirmed', ticker: 'SPX' }) },
+                { data: () => ({ tradeId: 't2', status: 'pending', ticker: 'QQQ' }) },
+            ],
+        });
+        const service = new TradeJournalService(mockServices());
+
+        const entries = await service.getAll();
+
+        expect(entries).toHaveLength(2);
+        expect(entries[0].tradeId).toBe('t1');
+        expect(entries[1].tradeId).toBe('t2');
+    });
+
+    it('returns [] when user is not authenticated', async () => {
+        const authMock = await import('../../firebase');
+        const original = authMock.auth.currentUser;
+        (authMock.auth as unknown as { currentUser: null }).currentUser = null;
+
+        const service = new TradeJournalService(mockServices());
+        const entries = await service.getAll();
+        expect(entries).toEqual([]);
+
+        (authMock.auth as unknown as { currentUser: typeof original }).currentUser = original;
+    });
+});
+
+describe('TradeJournalService.markOrphan', () => {
+    beforeEach(() => {
+        updateDocMock.mockReset();
+    });
+
+    it('updates status to orphan', async () => {
+        updateDocMock.mockResolvedValueOnce(undefined);
+        const service = new TradeJournalService(mockServices());
+
+        await service.markOrphan('uuid-x');
+
+        expect(updateDocMock).toHaveBeenCalledOnce();
+        const [, payload] = updateDocMock.mock.calls[0];
+        expect(payload).toEqual({ status: 'orphan' });
     });
 });

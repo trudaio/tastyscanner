@@ -20,7 +20,7 @@ const StatusText = styled.div`
     color: #ccc;
 `;
 
-const FUNCTIONS_BASE = import.meta.env.VITE_FUNCTIONS_URL ?? 'https://api-4jy4u5mpaa-uc.a.run.app';
+const FUNCTIONS_BASE = import.meta.env.VITE_FUNCTIONS_BASE_URL;
 const IBKR_CONSUMER_KEY = import.meta.env.VITE_IBKR_CONSUMER_KEY ?? '';
 
 /**

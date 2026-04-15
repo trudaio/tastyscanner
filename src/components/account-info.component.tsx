@@ -242,6 +242,10 @@ export const AccountInfoComponent: React.FC = observer(() => {
     const [kellyData, setKellyData] = useState<{
         kelly: number; halfKelly: number; winRate: number; wlRatio: number; maxBet: number;
     } | null>(null);
+    const [ytdPnl, setYtdPnl] = useState<{
+        realized: number; fees: number; net: number; winRate: number; trades: number;
+    } | null>(null);
+    const [ytdLoading, setYtdLoading] = useState(false);
 
     // ── Broker switcher ─────────────────────────────────────────
     const [brokerAccounts, setBrokerAccounts] = useState<IBrokerAccount[]>([]);
@@ -302,6 +306,29 @@ export const AccountInfoComponent: React.FC = observer(() => {
         }).catch(() => { /* silently ignore if analytics not available */ });
         return () => { cancelled = true; };
     }, [services.ironCondorAnalytics, account]);
+
+    // Load YTD P&L from trading dashboard
+    const hasBalances = !!account?.balances;
+    useEffect(() => {
+        if (!hasBalances) return;
+        let cancelled = false;
+        setYtdLoading(true);
+        services.tradingDashboard.fetchTrades().then(summary => {
+            if (cancelled) return;
+            setYtdPnl({
+                realized: summary.realizedGain,
+                fees: summary.commissions + summary.fees,
+                net: summary.plYTDWithFees,
+                winRate: summary.winRate,
+                trades: summary.totalClosedPositions,
+            });
+        }).catch((err) => {
+            console.error('[AccountInfo] Failed to load YTD P&L:', err);
+        }).finally(() => {
+            if (!cancelled) setYtdLoading(false);
+        });
+        return () => { cancelled = true; };
+    }, [services.tradingDashboard, hasBalances]);
 
     const fmt = (v: number) =>
         new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(v);
@@ -373,6 +400,41 @@ export const AccountInfoComponent: React.FC = observer(() => {
                 <Label>Maintenance</Label>
                 <Value>{fmt(balances.maintenanceRequirement)}</Value>
             </InfoRow>
+
+            {/* ── P&L YTD ────────────────────────────── */}
+            <SectionTitle>P&L Year-to-Date</SectionTitle>
+            {ytdLoading ? (
+                <LoadingText>Loading P&L…</LoadingText>
+            ) : ytdPnl ? (
+                <>
+                    <InfoRow>
+                        <Label>Realized</Label>
+                        <Value $positive={ytdPnl.realized > 0} $negative={ytdPnl.realized < 0}>
+                            {fmt(ytdPnl.realized)}
+                        </Value>
+                    </InfoRow>
+                    <InfoRow>
+                        <Label>Fees</Label>
+                        <Value $negative>{fmt(ytdPnl.fees)}</Value>
+                    </InfoRow>
+                    <InfoRow>
+                        <Label>Net P&L</Label>
+                        <Value $positive={ytdPnl.net > 0} $negative={ytdPnl.net < 0}>
+                            {fmt(ytdPnl.net)}
+                        </Value>
+                    </InfoRow>
+                    <InfoRow>
+                        <Label>Win Rate</Label>
+                        <Value $positive={ytdPnl.winRate >= 60} $negative={ytdPnl.winRate < 50}>
+                            {ytdPnl.winRate.toFixed(1)}%
+                        </Value>
+                    </InfoRow>
+                    <InfoRow>
+                        <Label>Closed</Label>
+                        <Value>{ytdPnl.trades}</Value>
+                    </InfoRow>
+                </>
+            ) : null}
 
             {/* ── Portfolio Greeks ───────────────────── */}
             <SectionTitle>Portfolio Greeks</SectionTitle>

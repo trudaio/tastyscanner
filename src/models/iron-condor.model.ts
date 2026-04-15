@@ -83,6 +83,11 @@ export class IronCondorModel implements IIronCondorViewModel {
         return (this.stoPut.iv + this.stoCall.iv) / 2;
     }
 
+    /** Underlying spot price at the time of IC construction. */
+    get underlyingPrice(): number {
+        return this.btoPut.strike.ticker.currentPrice;
+    }
+
     get legs(): OptionsStrategyLegModel[] {
         return [
             new OptionsStrategyLegModel(this.btoPut, "BTO"),

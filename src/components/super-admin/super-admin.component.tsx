@@ -326,7 +326,7 @@ export const SuperAdminComponent: React.FC = () => {
         try {
             // 1. Fetch all user UIDs from backend
             const headers = await getAuthHeaders();
-            const uidsRes = await fetch(`${FUNCTIONS_BASE}/api/admin/users`, { headers });
+            const uidsRes = await fetch(`${FUNCTIONS_BASE}/admin/users`, { headers });
             if (!uidsRes.ok) {
                 const errData = await uidsRes.json().catch(() => ({ error: 'Unknown' }));
                 throw new Error(errData.error || `HTTP ${uidsRes.status}`);
@@ -346,7 +346,7 @@ export const SuperAdminComponent: React.FC = () => {
                 const uid = userList[i].uid;
                 try {
                     // Fetch credentials via superadmin endpoint
-                    const credsRes = await fetch(`${FUNCTIONS_BASE}/api/credentials?uid=${uid}`, { headers });
+                    const credsRes = await fetch(`${FUNCTIONS_BASE}/credentials?uid=${uid}`, { headers });
                     if (!credsRes.ok) {
                         setUsers(prev => prev.map(u =>
                             u.uid === uid ? { ...u, status: 'error', error: `Creds: HTTP ${credsRes.status}` } : u

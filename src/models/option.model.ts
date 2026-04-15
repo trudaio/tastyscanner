@@ -87,6 +87,11 @@ export abstract class OptionModel implements IOptionViewModel {
         return ((this.askPrice - this.bidPrice) / this.bidPrice) * 100;
     }
 
+    /** Raw delta from greeks data (signed: negative for puts, positive for calls). */
+    get delta(): number {
+        return this.greeksData?.delta ?? 0;
+    }
+
     get rawDelta(): number {
         return this.greeksData?.delta ?? 0;
 
@@ -110,6 +115,19 @@ export abstract class OptionModel implements IOptionViewModel {
 
     get theta(): number {
         return this.greeksData?.theta ?? 0;
+    }
+
+    get gamma(): number {
+        return this.greeksData?.gamma ?? 0;
+    }
+
+    get vega(): number {
+        return this.greeksData?.vega ?? 0;
+    }
+
+    /** Implied volatility — alias for greeksData.volatility. */
+    get iv(): number {
+        return this.greeksData?.volatility ?? 0;
     }
 
     get volatility(): number {

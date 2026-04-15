@@ -9,6 +9,8 @@ import type {
     ITradeJournalEntrySnapshot,
 } from './trade-journal.service.interface';
 
+const ORPHAN_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24 hours
+
 export class TradeJournalService implements ITradeJournalService {
     constructor(private readonly services: IServiceFactory) {}
 
@@ -72,8 +74,45 @@ export class TradeJournalService implements ITradeJournalService {
         }
     }
 
-    async promotePending(_positions: IPositionViewModel[]): Promise<void> {
-        // Implemented in Task 5.
+    async promotePending(positions: IPositionViewModel[]): Promise<void> {
+        try {
+            const uid = auth.currentUser?.uid;
+            if (!uid) return;
+
+            const snap = await getDocs(collection(db, 'users', uid, 'tradeJournal'));
+            const now = Date.now();
+
+            for (const d of snap.docs) {
+                const entry = d.data() as ITradeJournalEntry;
+                if (entry.status !== 'pending') continue;
+
+                const hasMatch = positions.some(p =>
+                    p.underlyingSymbol === entry.ticker &&
+                    p.expirationDate === entry.expirationDate &&
+                    (p.strikePrice === entry.strikes.putLong
+                     || p.strikePrice === entry.strikes.putShort
+                     || p.strikePrice === entry.strikes.callShort
+                     || p.strikePrice === entry.strikes.callLong)
+                );
+
+                if (hasMatch) {
+                    await updateDoc(doc(db, 'users', uid, 'tradeJournal', entry.tradeId), {
+                        status: 'confirmed',
+                        confirmedAt: serverTimestamp(),
+                    });
+                    continue;
+                }
+
+                const ageMs = now - (entry.createdAt?.toMillis?.() ?? now);
+                if (ageMs > ORPHAN_TIMEOUT_MS) {
+                    await updateDoc(doc(db, 'users', uid, 'tradeJournal', entry.tradeId), {
+                        status: 'orphan',
+                    });
+                }
+            }
+        } catch (err) {
+            this.services.logger.warning('[TradeJournal] promotePending failed', err);
+        }
     }
 
     async getAll(): Promise<ITradeJournalEntry[]> {

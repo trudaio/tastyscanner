@@ -167,3 +167,76 @@ describe('TradeJournalService.markOrphan', () => {
         expect(payload).toEqual({ status: 'orphan' });
     });
 });
+
+describe('TradeJournalService.promotePending', () => {
+    const pendingEntry = {
+        tradeId: 'uuid-pending',
+        status: 'pending' as const,
+        createdAt: { toMillis: () => Date.now() - 60_000 }, // 1 min ago
+        confirmedAt: null,
+        ticker: 'SPX',
+        expirationDate: '2026-05-15',
+        strikes: { putLong: 6365, putShort: 6375, callShort: 7140, callLong: 7150 },
+        entry: {} as ITradeJournalEntrySnapshot,
+    };
+
+    const orphanCandidate = {
+        ...pendingEntry,
+        tradeId: 'uuid-old',
+        createdAt: { toMillis: () => Date.now() - 25 * 60 * 60 * 1000 }, // 25h ago
+    };
+
+    beforeEach(() => {
+        getDocsMock.mockReset();
+        updateDocMock.mockReset();
+    });
+
+    it('promotes a pending entry when a matching position is found', async () => {
+        getDocsMock.mockResolvedValueOnce({ docs: [{ data: () => pendingEntry }] });
+        const service = new TradeJournalService(mockServices());
+
+        const positions: IPositionViewModel[] = [{
+            symbol: 'SPX   260515P06375000', underlyingSymbol: 'SPX',
+            expirationDate: '2026-05-15', strikePrice: 6375, optionType: 'put',
+            quantity: 1, quantityDirection: 'Short',
+        }] as unknown as IPositionViewModel[];
+
+        await service.promotePending(positions);
+
+        expect(updateDocMock).toHaveBeenCalledOnce();
+        const [, payload] = updateDocMock.mock.calls[0];
+        expect(payload).toMatchObject({ status: 'confirmed' });
+        expect(payload.confirmedAt).toBe('SERVER_TS');
+    });
+
+    it('does nothing for a pending entry with no matching position (and within 24h)', async () => {
+        getDocsMock.mockResolvedValueOnce({ docs: [{ data: () => pendingEntry }] });
+        const service = new TradeJournalService(mockServices());
+
+        await service.promotePending([] as IPositionViewModel[]);
+
+        expect(updateDocMock).not.toHaveBeenCalled();
+    });
+
+    it('marks a pending entry as orphan after 24h with no matching position', async () => {
+        getDocsMock.mockResolvedValueOnce({ docs: [{ data: () => orphanCandidate }] });
+        const service = new TradeJournalService(mockServices());
+
+        await service.promotePending([] as IPositionViewModel[]);
+
+        expect(updateDocMock).toHaveBeenCalledOnce();
+        const [, payload] = updateDocMock.mock.calls[0];
+        expect(payload).toEqual({ status: 'orphan' });
+    });
+
+    it('ignores non-pending entries', async () => {
+        getDocsMock.mockResolvedValueOnce({
+            docs: [{ data: () => ({ ...pendingEntry, status: 'confirmed' }) }],
+        });
+        const service = new TradeJournalService(mockServices());
+
+        await service.promotePending([] as IPositionViewModel[]);
+
+        expect(updateDocMock).not.toHaveBeenCalled();
+    });
+});

@@ -19,6 +19,8 @@ import styled, {css} from 'styled-components';
 import {SymbolSearchDropDownComponent} from "../components/symbol-search-drop-down.component";
 import {TickerChartComponent} from "../components/ticker-chart.component";
 import {PositionsVisualizationComponent, BreakEvenPoint} from "../components/positions-visualization/positions-visualization.component";
+import {TechnicalsBadgesComponent} from "../components/technicals/technicals-badges.component";
+import {TechnicalsPanelComponent} from "../components/technicals/technicals-panel.component";
 import {Check} from "../utils/type-checking";
 import {IIronCondorTrade} from "../services/iron-condor-analytics/iron-condor-analytics.interface";
 
@@ -170,6 +172,7 @@ const Page: React.FC = observer(() => {
                                 <span>Beta:</span>
                                 <span>{ticker?.beta?.toFixed(2)}</span>
                             </HeaderBetaGroup>
+                            {ticker?.symbol && <TechnicalsBadgesComponent ticker={ticker.symbol} />}
                             <TickerDescriptionBox>
                                 {ticker?.description}
                             </TickerDescriptionBox>
@@ -180,6 +183,7 @@ const Page: React.FC = observer(() => {
             </IonHeader>
 
             <IonContent fullscreen>
+                {ticker?.symbol && <TechnicalsPanelComponent ticker={ticker.symbol} />}
                 <TickerChartComponent ticker={ticker}/>
 
                 {/* Positions Visualization - desktop only */}

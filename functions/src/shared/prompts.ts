@@ -68,13 +68,29 @@ export function buildPickUserPrompt(input: PickPromptInput): string {
         ? `\n- Account BPE used: ${input.bpePercentage.toFixed(1)}% of net liquidity (cap: 50% standard, 70% if VIX>22 + 16-delta picks)`
         : '';
 
+    const tech = marketContext.technicals;
+    const techStr = tech
+        ? `
+# Technical Context (daily close yesterday)
+- RSI(14): ${tech.rsi.toFixed(1)} — ${tech.rsiVerdict.replace(/_/g, ' ')}
+- BB position: ${tech.bbDistance >= 0 ? '+' : ''}${tech.bbDistance.toFixed(2)}σ from 20-day mid (${tech.bbVerdict.replace(/_/g, ' ')})
+- ATR(14): ${tech.atr.toFixed(2)} — ${tech.atrVerdict}
+
+Interpret these as RISK signals, NOT mechanical triggers.
+- Elevated RSI (>70) + near upper band = reversal risk on CALL side → consider pulling calls slightly tighter
+- Oversold RSI (<30) + near lower band = bounce risk on PUT side → consider pulling puts slightly tighter
+- Elevated ATR = realized volatility high → consider wider wings (e.g. $15 instead of $10 on SPX)
+Do NOT override structural rules (symmetric delta, credit-to-wing, min POP) unless a signal
+is extreme (RSI >75 or <25, or |distanceσ| >2).`
+        : `\n# Technical Context\n(no daily indicators available for this ticker — rely on structural rules)`;
+
     return `# Today's Round
 - Date: ${new Date().toISOString().split('T')[0]}
 - Ticker: ${ticker}
 - Expiration: ${expirationDate} (${dte} DTE)
 - Underlying price: $${marketContext.underlyingPrice.toFixed(2)}
 - VIX: ${marketContext.vix.toFixed(2)}
-- IV Rank: ${marketContext.ivRank.toFixed(0)}${bpeStr}
+- IV Rank: ${marketContext.ivRank.toFixed(0)}${bpeStr}${techStr}
 
 # Catalin's Move
 ${catalinStr}

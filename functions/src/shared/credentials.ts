@@ -6,7 +6,7 @@ import * as admin from 'firebase-admin';
 import type { TastyCredentials } from './tasty-rest-client';
 
 interface IBrokerAccountDoc {
-    brokerType: 'TastyTrade' | 'IBKR' | string;
+    brokerType: 'tastytrade' | 'TastyTrade' | 'IBKR' | string;
     label: string;
     isActive: boolean;
     credentials: {
@@ -28,7 +28,7 @@ export async function findActiveTastyUser(): Promise<string | null> {
             .get();
         for (const s of subs.docs) {
             const d = s.data();
-            if (d['brokerType'] === 'TastyTrade' && d['credentials']?.refreshToken) {
+            if (d['brokerType']?.toLowerCase() === 'tastytrade' && d['credentials']?.refreshToken) {
                 return u.id;
             }
         }
@@ -46,7 +46,7 @@ export async function getCredentialsForUser(uid: string): Promise<TastyCredentia
 
     for (const d of snap.docs) {
         const data = d.data() as IBrokerAccountDoc;
-        if (data.brokerType === 'TastyTrade' && data.credentials?.clientSecret && data.credentials?.refreshToken) {
+        if (data.brokerType?.toLowerCase() === 'tastytrade' && data.credentials?.clientSecret && data.credentials?.refreshToken) {
             return {
                 clientSecret: data.credentials.clientSecret,
                 refreshToken: data.credentials.refreshToken,

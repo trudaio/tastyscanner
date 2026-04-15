@@ -36,6 +36,10 @@ import { BrokerCredentialsService } from './credentials/broker-credentials.servi
 import { BrokerType, type IBrokerCredentials } from './broker-provider/broker-provider.interface';
 import type { IDeltaAlertService } from './delta-alert/delta-alert.interface';
 import { DeltaAlertService } from './delta-alert/delta-alert.service';
+import type { ITechnicalsService } from './technicals/technicals.service.interface';
+import { TechnicalsService } from './technicals/technicals.service';
+import type { IScenarioStudyService } from './scenario-study/scenario-study.interface';
+import { ScenarioStudyService } from './scenario-study/scenario-study.service';
 
 export class ServiceFactory implements IServiceFactory {
 
@@ -190,6 +194,16 @@ export class ServiceFactory implements IServiceFactory {
     private _deltaAlert: Lazy<IDeltaAlertService> = new Lazy<IDeltaAlertService>(() => new DeltaAlertService(this));
     get deltaAlert(): IDeltaAlertService {
         return this._deltaAlert.value;
+    }
+
+    private _technicals: Lazy<ITechnicalsService> = new Lazy<ITechnicalsService>(() => new TechnicalsService());
+    get technicals(): ITechnicalsService {
+        return this._technicals.value;
+    }
+
+    private _scenarioStudy: Lazy<IScenarioStudyService> = new Lazy<IScenarioStudyService>(() => new ScenarioStudyService(this));
+    get scenarioStudy(): IScenarioStudyService {
+        return this._scenarioStudy.value;
     }
 
 }

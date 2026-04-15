@@ -20,7 +20,7 @@ const StatusText = styled.div`
     color: #ccc;
 `;
 
-const FUNCTIONS_BASE = import.meta.env.VITE_FUNCTIONS_URL ?? 'https://api-4jy4u5mpaa-uc.a.run.app';
+const FUNCTIONS_BASE = import.meta.env.VITE_FUNCTIONS_BASE_URL;
 const IBKR_CONSUMER_KEY = import.meta.env.VITE_IBKR_CONSUMER_KEY ?? '';
 
 /**
@@ -63,7 +63,7 @@ export const IbkrCallbackPage: React.FC = () => {
                 const idToken = await user.getIdToken();
                 const redirectUri = `${window.location.origin}/ibkr-callback`;
 
-                const resp = await fetch(`${FUNCTIONS_BASE}/api/ibkr/oauth/token`, {
+                const resp = await fetch(`${FUNCTIONS_BASE}/ibkr/oauth/token`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

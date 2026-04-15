@@ -42,6 +42,7 @@ TastyScanner automates the scanning and filtering. The AI competition ("Guvidul 
 - **Risk Exposer** -- Max win/loss visualization with breakeven point mapping
 - **Guvid History** -- YTD performance: win rate, average win/loss, P&L by ticker and month (364+ closed trades tracked)
 - **Position Visualization** -- IC positions plotted on price-axis SVG charts per ticker
+- **Technical Indicators** -- RSI(14), Bollinger Bands(20, 2σ), and ATR(14) shown in ticker header with color-coded verdicts. Collapsible 90-day chart panel with line + BB overlay + RSI strip. Computed daily at 4:15 PM ET for SPX/QQQ (Firestore-cached), on-demand via callable Function for other tickers. Indicators are passed to the autonomous Picker as informational context (not mechanical triggers).
 
 ### AI Agent ("Guvidul")
 - **Daily IC Picker** (Cloud Scheduler, 10:30 AM ET) -- Multi-agent pipeline:
@@ -54,7 +55,7 @@ TastyScanner automates the scanning and filtering. The AI competition ("Guvidul 
 - **Audit Trail** -- Every Claude API call logged to `users/{uid}/aiAuditLog` with model, tokens, cost. Daily budget cap ($10/day default)
 
 ### Education & Onboarding
-- **Greeks Guide** -- Interactive reference for delta, theta, gamma, vega
+- **Guvid Guide** -- Interactive reference for Greeks (delta, theta, gamma, vega), strategy metrics (POP, EV, α, R/R), the Strategia Guvidul itself, and technical indicators (RSI/BB/ATR) with formulas, interpretations, and caveats
 - **Onboarding Flow** -- Step-by-step TastyTrade credential setup with video tutorials
 - **Landing Page** -- Public-facing overview with embedded YouTube playlist
 
@@ -75,6 +76,7 @@ TastyScanner automates the scanning and filtering. The AI competition ("Guvidul 
 - Position Visualization (SVG price-axis charts)
 - IBKR OAuth in Cloud Functions
 - Polygon.io proxy for historical data
+- Technical Indicators panel (RSI/BB/ATR) — header badges + collapsible chart + Picker wiring
 
 ### Near-Term (from `tasks/todo.md`)
 - **Code-splitting** -- Bundle is 2.3MB (608KB gzip); lazy-load heavy pages with `React.lazy()` + `Suspense`

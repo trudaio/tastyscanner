@@ -12,7 +12,7 @@ import {
 import { getTopCandidates, hasStrikeOverlap, type ChainInput } from './shared/ic-picker';
 import { pickWithLlm } from './shared/llm-picker';
 import type {
-    IAiState, ICompetitionRoundV2, IMarketContext, IWeeklyMemo,
+    IAiState, ICompetitionRoundV2, IMarketContext, ITechnicalsContext, IWeeklyMemo,
 } from './shared/types';
 import { DEFAULT_AI_STATE } from './shared/types';
 
@@ -138,10 +138,45 @@ export const aiDailySubmit = onSchedule(
 
                 // Market context
                 const vix = await getUnderlyingPrice(token, 'VIX') ?? 20;
+
+                // Pull latest technical indicators (RSI/BB/ATR) for this ticker
+                let technicals: ITechnicalsContext | null = null;
+                try {
+                    const techDoc = await admin.firestore().collection('marketTechnicals').doc(ticker).get();
+                    if (techDoc.exists) {
+                        const d = techDoc.data() as {
+                            rsi: { value: number; verdict: string };
+                            bb: { distanceSigma: number; verdict: string };
+                            atr: { value: number; verdict: string };
+                            computedAt: string;
+                            stale?: boolean;
+                        };
+                        const ageHours = (Date.now() - new Date(d.computedAt).getTime()) / 3_600_000;
+                        const isStale = !!d.stale || ageHours > 48;
+                        technicals = {
+                            rsi: d.rsi.value,
+                            rsiVerdict: d.rsi.verdict,
+                            bbDistance: d.bb.distanceSigma,
+                            bbVerdict: d.bb.verdict,
+                            atr: d.atr.value,
+                            atrVerdict: d.atr.verdict,
+                            computedAt: d.computedAt,
+                            stale: isStale,
+                        };
+                        if (isStale) {
+                            console.warn(`[aiDailySubmit] ${ticker}: technicals stale (${ageHours.toFixed(1)}h old) — treating as null`);
+                            technicals = null;
+                        }
+                    }
+                } catch (e) {
+                    console.warn(`[aiDailySubmit] ${ticker}: failed to load technicals:`, e);
+                }
+
                 const marketContext: IMarketContext = {
                     underlyingPrice,
                     vix,
                     ivRank: 0, // TODO: fetch IV rank via /instruments/cryptocurrencies or /market-metrics
+                    technicals,
                 };
 
                 // BPE gate per-ticker (re-checked since BPE could change between tickers)

@@ -14,6 +14,7 @@ const FUNCTIONS_BASE = import.meta.env.VITE_FUNCTIONS_BASE_URL;
 
 interface IUserAccountData {
     uid: string;
+    email?: string;
     status: 'loading' | 'loaded' | 'error' | 'loading-greeks';
     error?: string;
     accountNumber?: string;
@@ -21,8 +22,104 @@ interface IUserAccountData {
     optionBuyingPower?: number;
     delta?: number;
     theta?: number;
-    vega?: number;
     gamma?: number;
+    vega?: number;
+    ytdPnl?: number;
+    ytdWinRate?: number;
+    ytdTrades?: number;
+    ytdLoading?: boolean;
+}
+
+/* ─── Simplified YTD P&L from raw transactions ──────────── */
+
+interface IRawTx {
+    'transaction-type': string;
+    action?: string;
+    symbol?: string;
+    'underlying-symbol'?: string;
+    quantity?: string;
+    value?: string;
+    'value-effect'?: string;
+    'executed-at'?: string;
+    commission?: string;
+    'clearing-fees'?: string;
+    'regulatory-fees'?: string;
+    'proprietary-index-option-fees'?: string;
+}
+
+function calculateYtdPnl(transactions: IRawTx[]): { pnl: number; winRate: number; closedCount: number } {
+    const now = new Date();
+    const ytdStart = new Date(now.getFullYear(), 0, 1);
+
+    const ledgers = new Map<string, {
+        openQty: number; openValue: number;
+        closeQty: number; closeValue: number;
+        hasYtdClose: boolean;
+    }>();
+
+    let totalCommissions = 0;
+    let totalFees = 0;
+
+    for (const tx of transactions) {
+        const txType = tx['transaction-type'];
+        if (txType !== 'Trade' && txType !== 'Receive Deliver') continue;
+
+        const sym = tx.symbol;
+        if (!sym) continue;
+
+        const action = tx.action || '';
+        const qty = parseInt(tx.quantity || '0') || 0;
+        const rawVal = parseFloat(tx.value || '0') || 0;
+        const signed = tx['value-effect'] === 'Credit' ? rawVal : -rawVal;
+        const execAt = tx['executed-at'] ? new Date(tx['executed-at']) : null;
+        if (!execAt || isNaN(execAt.getTime())) continue;
+
+        const isOpen = action.includes('Open');
+        const isClose = action.includes('Close') || txType === 'Receive Deliver';
+        const isYtd = execAt >= ytdStart;
+
+        if (!ledgers.has(sym)) {
+            ledgers.set(sym, { openQty: 0, openValue: 0, closeQty: 0, closeValue: 0, hasYtdClose: false });
+        }
+        const l = ledgers.get(sym)!;
+
+        if (isOpen) { l.openQty += qty; l.openValue += signed; }
+        if (isClose) { l.closeQty += qty; l.closeValue += signed; if (isYtd) l.hasYtdClose = true; }
+
+        if (isYtd) {
+            totalCommissions += -Math.abs(parseFloat(tx.commission || '0'));
+            totalFees += -(
+                Math.abs(parseFloat(tx['clearing-fees'] || '0')) +
+                Math.abs(parseFloat(tx['regulatory-fees'] || '0')) +
+                Math.abs(parseFloat(tx['proprietary-index-option-fees'] || '0'))
+            );
+        }
+    }
+
+    let totalRealized = 0;
+    let winners = 0;
+    let losers = 0;
+
+    for (const [, l] of ledgers) {
+        if (!l.hasYtdClose) continue;
+        const matched = Math.min(l.openQty, l.closeQty);
+        if (matched <= 0) continue;
+
+        const openR = l.openQty > 0 ? matched / l.openQty : 0;
+        const closeR = l.closeQty > 0 ? matched / l.closeQty : 0;
+        const pl = (l.openValue * openR) + (l.closeValue * closeR);
+
+        totalRealized += pl;
+        if (pl > 0) winners++;
+        else if (pl < 0) losers++;
+    }
+
+    const closed = winners + losers;
+    return {
+        pnl: totalRealized + totalCommissions + totalFees,
+        winRate: closed > 0 ? (winners / closed) * 100 : 0,
+        closedCount: closed
+    };
 }
 
 /* ─── Styled Components ──────────────────────────────────── */
@@ -229,24 +326,27 @@ export const SuperAdminComponent: React.FC = () => {
         try {
             // 1. Fetch all user UIDs from backend
             const headers = await getAuthHeaders();
-            const uidsRes = await fetch(`${FUNCTIONS_BASE}/api/admin/users`, { headers });
+            const uidsRes = await fetch(`${FUNCTIONS_BASE}/admin/users`, { headers });
             if (!uidsRes.ok) {
                 const errData = await uidsRes.json().catch(() => ({ error: 'Unknown' }));
                 throw new Error(errData.error || `HTTP ${uidsRes.status}`);
             }
-            const { uids } = await uidsRes.json() as { uids: string[] };
+            const data = await uidsRes.json();
+            // Handle both old { uids: string[] } and new { users: { uid, email }[] } API formats
+            const userList: { uid: string; email: string | null }[] = data.users
+                || (data.uids || []).map((uid: string) => ({ uid, email: null }));
 
             // Initialize all users as loading
-            const initial: IUserAccountData[] = uids.map(uid => ({ uid, status: 'loading' as const }));
+            const initial: IUserAccountData[] = userList.map(u => ({ uid: u.uid, email: u.email || undefined, status: 'loading' as const }));
             setUsers(initial);
             setIsLoading(false);
 
             // 2. For each user, load data sequentially (to avoid overwhelming API)
-            for (let i = 0; i < uids.length; i++) {
-                const uid = uids[i];
+            for (let i = 0; i < userList.length; i++) {
+                const uid = userList[i].uid;
                 try {
                     // Fetch credentials via superadmin endpoint
-                    const credsRes = await fetch(`${FUNCTIONS_BASE}/api/credentials?uid=${uid}`, { headers });
+                    const credsRes = await fetch(`${FUNCTIONS_BASE}/credentials?uid=${uid}`, { headers });
                     if (!credsRes.ok) {
                         setUsers(prev => prev.map(u =>
                             u.uid === uid ? { ...u, status: 'error', error: `Creds: HTTP ${credsRes.status}` } : u
@@ -287,6 +387,9 @@ export const SuperAdminComponent: React.FC = () => {
 
                     // Get positions + Greeks (WebSocket — slower)
                     loadGreeksForUser(client, uid, accountNumber);
+
+                    // Get YTD P&L (REST — async, runs in parallel with greeks)
+                    loadYtdPnlForUser(client, uid, accountNumber);
 
                 } catch (err) {
                     const msg = err instanceof Error ? err.message : 'Unknown error';
@@ -405,6 +508,52 @@ export const SuperAdminComponent: React.FC = () => {
         }
     };
 
+    const loadYtdPnlForUser = async (client: TastyTradeClient, uid: string, accountNumber: string) => {
+        try {
+            setUsers(prev => prev.map(u =>
+                u.uid === uid ? { ...u, ytdLoading: true } : u
+            ));
+
+            const now = new Date();
+            const ytdStart = new Date(now.getFullYear(), 0, 1);
+            const fetchStart = new Date(ytdStart);
+            fetchStart.setDate(fetchStart.getDate() - 90);
+
+            // Paginate transactions
+            const allTx: IRawTx[] = [];
+            let hasMore = true;
+            let page = 0;
+
+            while (hasMore) {
+                const txs: any[] = await client.transactionsService.getAccountTransactions(accountNumber, {
+                    'start-date': fetchStart.toISOString().split('T')[0],
+                    'end-date': now.toISOString().split('T')[0],
+                    'per-page': 250,
+                    'page-offset': page
+                });
+                if (Array.isArray(txs) && txs.length > 0) {
+                    allTx.push(...txs);
+                    page++;
+                    hasMore = txs.length === 250;
+                } else {
+                    hasMore = false;
+                }
+            }
+
+            const result = calculateYtdPnl(allTx);
+            setUsers(prev => prev.map(u =>
+                u.uid === uid
+                    ? { ...u, ytdPnl: result.pnl, ytdWinRate: result.winRate, ytdTrades: result.closedCount, ytdLoading: false }
+                    : u
+            ));
+        } catch (err) {
+            console.error(`[SuperAdmin] YTD P&L error for ${uid}:`, err);
+            setUsers(prev => prev.map(u =>
+                u.uid === uid ? { ...u, ytdLoading: false } : u
+            ));
+        }
+    };
+
     // Auto-load on mount
     useEffect(() => {
         if (isSuperadmin) {
@@ -426,6 +575,7 @@ export const SuperAdminComponent: React.FC = () => {
     const totalTheta = loadedUsers.filter(u => u.theta !== undefined).reduce((sum, u) => sum + (u.theta || 0), 0);
     const totalDelta = loadedUsers.filter(u => u.delta !== undefined).reduce((sum, u) => sum + (u.delta || 0), 0);
     const totalVega = loadedUsers.filter(u => u.vega !== undefined).reduce((sum, u) => sum + (u.vega || 0), 0);
+    const totalYtdPnl = loadedUsers.filter(u => u.ytdPnl !== undefined).reduce((sum, u) => sum + (u.ytdPnl || 0), 0);
 
     return (
         <Container>
@@ -471,6 +621,10 @@ export const SuperAdminComponent: React.FC = () => {
                                 <SummaryLabel>Total Vega</SummaryLabel>
                                 <SummaryValue $color={plColor(totalVega)}>{formatGreek(totalVega)}</SummaryValue>
                             </SummaryCard>
+                            <SummaryCard $color={totalYtdPnl >= 0 ? '#4dff91' : '#ff4d6d'}>
+                                <SummaryLabel>P&L YTD</SummaryLabel>
+                                <SummaryValue $color={plColor(totalYtdPnl)}>{formatCurrency(totalYtdPnl)}</SummaryValue>
+                            </SummaryCard>
                         </SummaryRow>
                     )}
 
@@ -481,6 +635,8 @@ export const SuperAdminComponent: React.FC = () => {
                                 <Th>Account</Th>
                                 <Th>Net Liquidity</Th>
                                 <Th>Option BP</Th>
+                                <Th>P&L YTD</Th>
+                                <Th>Win Rate</Th>
                                 <Th>Delta</Th>
                                 <Th>Theta</Th>
                                 <Th>Vega</Th>
@@ -498,6 +654,12 @@ export const SuperAdminComponent: React.FC = () => {
                                     </Td>
                                     <Td>
                                         {u.status === 'loading' ? '—' : formatCurrency(u.optionBuyingPower)}
+                                    </Td>
+                                    <Td $color={plColor(u.ytdPnl)}>
+                                        {u.ytdLoading ? <IonSpinner name="dots" style={{ width: 16, height: 16 }} /> : formatCurrency(u.ytdPnl)}
+                                    </Td>
+                                    <Td $color={u.ytdWinRate !== undefined ? (u.ytdWinRate >= 60 ? '#4dff91' : u.ytdWinRate < 50 ? '#ff4d6d' : '#e0e0e0') : '#8888aa'}>
+                                        {u.ytdLoading ? <IonSpinner name="dots" style={{ width: 16, height: 16 }} /> : u.ytdWinRate !== undefined ? `${u.ytdWinRate.toFixed(1)}%` : '—'}
                                     </Td>
                                     <Td $color={plColor(u.delta)}>
                                         {u.status === 'loading-greeks' ? <IonSpinner name="dots" style={{ width: 16, height: 16 }} /> : formatGreek(u.delta)}
@@ -520,7 +682,7 @@ export const SuperAdminComponent: React.FC = () => {
                             ))}
                             {users.length === 0 && !isLoading && (
                                 <tr>
-                                    <Td colSpan={7} style={{ textAlign: 'center', color: '#8888aa', padding: '40px' }}>
+                                    <Td colSpan={9} style={{ textAlign: 'center', color: '#8888aa', padding: '40px' }}>
                                         No accounts found
                                     </Td>
                                 </tr>

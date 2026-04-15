@@ -51,6 +51,38 @@ export class IronCondorModel implements IIronCondorViewModel {
 
     }
 
+    /**
+     * Net position delta for a short IC.
+     * Short leg contributes -option.delta; long leg contributes +option.delta.
+     */
+    get netDelta(): number {
+        return this.btoPut.delta + this.btoCall.delta - this.stoPut.delta - this.stoCall.delta;
+    }
+
+    /**
+     * Net position theta. For a short IC with realistic raw option thetas
+     * (all negative per convention), this returns a POSITIVE value — theta
+     * is being collected. Long legs keep sign; short legs flip.
+     */
+    get netTheta(): number {
+        return this.btoPut.theta + this.btoCall.theta - this.stoPut.theta - this.stoCall.theta;
+    }
+
+    /** Net position gamma (negative for short IC — we're short gamma). */
+    get netGamma(): number {
+        return this.btoPut.gamma + this.btoCall.gamma - this.stoPut.gamma - this.stoCall.gamma;
+    }
+
+    /** Net position vega (negative for short IC — we benefit from IV crush). */
+    get netVega(): number {
+        return this.btoPut.vega + this.btoCall.vega - this.stoPut.vega - this.stoCall.vega;
+    }
+
+    /** Mean of IV across the two short strikes (the ones that define the credit). */
+    get avgShortIV(): number {
+        return (this.stoPut.iv + this.stoCall.iv) / 2;
+    }
+
     get legs(): OptionsStrategyLegModel[] {
         return [
             new OptionsStrategyLegModel(this.btoPut, "BTO"),

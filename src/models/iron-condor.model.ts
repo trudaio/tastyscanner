@@ -100,42 +100,34 @@ export class IronCondorModel implements IIronCondorViewModel {
     async sendOrder(orderParams: IOptionsStrategySendOrderParams): Promise<void> {
         const account = this.services.brokerAccount.currentAccount;
         //TODO show error
-        if(!account) {
+        if (!account) {
             return;
         }
 
-        await account.sendOrder({
-            price: orderParams.price ?? this.credit,
-            priceEffect: "Credit",
-            timeInForce: orderParams.timeInForce,
-            orderType: orderParams.orderType,
-            legs: [
-                {
-                    instrumentType: "Equity Option",
-                    action: "Buy to Open",
-                    quantity: orderParams.quantity,
-                    symbol: this.btoPut.id
-                },
-                {
-                    instrumentType: "Equity Option",
-                    action: "Sell to Open",
-                    quantity: orderParams.quantity,
-                    symbol: this.stoPut.id
-                },
-                {
-                    instrumentType: "Equity Option",
-                    action: "Sell to Open",
-                    quantity: orderParams.quantity,
-                    symbol: this.stoCall.id
-                },
-                {
-                    instrumentType: "Equity Option",
-                    action: "Buy to Open",
-                    quantity: orderParams.quantity,
-                    symbol: this.btoCall.id
-                }
-            ]
-        });
+        const tradeId = crypto.randomUUID();
+        if (orderParams.ticker) {
+            await this.services.tradeJournal.captureEntry(this, orderParams.ticker, tradeId);
+        }
+
+        try {
+            await account.sendOrder({
+                price: orderParams.price ?? this.credit,
+                priceEffect: "Credit",
+                timeInForce: orderParams.timeInForce,
+                orderType: orderParams.orderType,
+                legs: [
+                    { instrumentType: "Equity Option", action: "Buy to Open",  quantity: orderParams.quantity, symbol: this.btoPut.id  },
+                    { instrumentType: "Equity Option", action: "Sell to Open", quantity: orderParams.quantity, symbol: this.stoPut.id  },
+                    { instrumentType: "Equity Option", action: "Sell to Open", quantity: orderParams.quantity, symbol: this.stoCall.id },
+                    { instrumentType: "Equity Option", action: "Buy to Open",  quantity: orderParams.quantity, symbol: this.btoCall.id },
+                ],
+            });
+        } catch (err) {
+            if (orderParams.ticker) {
+                await this.services.tradeJournal.markOrphan(tradeId);
+            }
+            throw err;
+        }
     }
 
     get maxProfit(): number {

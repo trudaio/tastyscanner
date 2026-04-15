@@ -63,7 +63,7 @@ export const IbkrCallbackPage: React.FC = () => {
                 const idToken = await user.getIdToken();
                 const redirectUri = `${window.location.origin}/ibkr-callback`;
 
-                const resp = await fetch(`${FUNCTIONS_BASE}/api/ibkr/oauth/token`, {
+                const resp = await fetch(`${FUNCTIONS_BASE}/ibkr/oauth/token`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

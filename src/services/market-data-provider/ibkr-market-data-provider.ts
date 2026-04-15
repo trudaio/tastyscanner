@@ -643,7 +643,7 @@ export class IBKRMarketDataProvider implements IMarketDataProviderService {
         if (!user) throw new Error('Not authenticated');
         const idToken = await user.getIdToken();
         const resp = await fetch(
-            `${IBKRMarketDataProvider.FUNCTIONS_BASE}/api/ibkr/oauth/refresh`,
+            `${IBKRMarketDataProvider.FUNCTIONS_BASE}/ibkr/oauth/refresh`,
             {
                 method: 'POST',
                 headers: {

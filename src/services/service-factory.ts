@@ -40,6 +40,8 @@ import type { ITechnicalsService } from './technicals/technicals.service.interfa
 import { TechnicalsService } from './technicals/technicals.service';
 import type { IScenarioStudyService } from './scenario-study/scenario-study.interface';
 import { ScenarioStudyService } from './scenario-study/scenario-study.service';
+import type { ITradeJournalService } from './trade-journal/trade-journal.service.interface';
+import { TradeJournalService } from './trade-journal/trade-journal.service';
 
 export class ServiceFactory implements IServiceFactory {
 
@@ -204,6 +206,11 @@ export class ServiceFactory implements IServiceFactory {
     private _scenarioStudy: Lazy<IScenarioStudyService> = new Lazy<IScenarioStudyService>(() => new ScenarioStudyService(this));
     get scenarioStudy(): IScenarioStudyService {
         return this._scenarioStudy.value;
+    }
+
+    private _tradeJournal: Lazy<ITradeJournalService> = new Lazy<ITradeJournalService>(() => new TradeJournalService(this));
+    get tradeJournal(): ITradeJournalService {
+        return this._tradeJournal.value;
     }
 
 }

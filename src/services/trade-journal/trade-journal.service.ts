@@ -1,4 +1,4 @@
-import { doc, setDoc, getDocs, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, collection, getDocs, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../../firebase';
 import type { IronCondorModel } from '../../models/iron-condor.model';
 import type { IPositionViewModel } from '../positions/positions.service.interface';
@@ -77,8 +77,10 @@ export class TradeJournalService implements ITradeJournalService {
     }
 
     async getAll(): Promise<ITradeJournalEntry[]> {
-        // Implemented in Task 4.
-        return [];
+        const uid = auth.currentUser?.uid;
+        if (!uid) return [];
+        const snap = await getDocs(collection(db, 'users', uid, 'tradeJournal'));
+        return snap.docs.map(d => d.data() as ITradeJournalEntry);
     }
 }
 

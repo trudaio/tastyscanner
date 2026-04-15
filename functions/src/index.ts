@@ -100,8 +100,8 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// POST /api/credentials — save (or update) TastyTrade credentials for the caller
-app.post('/api/credentials', async (req: express.Request, res: express.Response) => {
+// POST /credentials — save (or update) TastyTrade credentials for the caller
+app.post('/credentials', async (req: express.Request, res: express.Response) => {
   try {
     const { uid } = await getAuthContext(req);
     const body = req.body as ICredentialsRequest;
@@ -135,16 +135,16 @@ app.post('/api/credentials', async (req: express.Request, res: express.Response)
   }
 });
 
-// GET /api/credentials — retrieve decrypted credentials
+// GET /credentials — retrieve credentials for a user
 // Superadmin can request any user's credentials via ?uid=<targetUid>
-app.get('/api/credentials', async (req: express.Request, res: express.Response) => {
+app.get('/credentials', async (req: express.Request, res: express.Response) => {
   try {
     const { uid, isSuperadmin } = await getAuthContext(req);
     const targetUid =
       isSuperadmin && typeof req.query['uid'] === 'string'
         ? req.query['uid']
         : uid;
-    // Try encrypted credentials first, then fall back to plaintext in 'users' collection
+    // 1. Try encrypted credentials collection (backend-stored)
     const credDoc = await db.collection('credentials').doc(targetUid).get();
     if (credDoc.exists) {
       const data = credDoc.data() as IStoredCredentials;
@@ -155,7 +155,27 @@ app.get('/api/credentials', async (req: express.Request, res: express.Response) 
       res.json({ clientSecret, refreshToken } as ICredentialsResponse);
       return;
     }
-    // Plaintext fallback removed for security — credentials must be encrypted
+    // 2. Fallback: read from users/{uid}/brokerAccounts subcollection (frontend-stored)
+    const brokerSnap = await db.collection('users').doc(targetUid).collection('brokerAccounts').get();
+    for (const brokerDoc of brokerSnap.docs) {
+      const data = brokerDoc.data();
+      if (data['isActive'] && data['credentials']) {
+        const creds = data['credentials'] as Record<string, string>;
+        if (creds['clientSecret'] && creds['refreshToken']) {
+          res.json({ clientSecret: creds['clientSecret'], refreshToken: creds['refreshToken'] } as ICredentialsResponse);
+          return;
+        }
+      }
+    }
+    // 3. Fallback: read plaintext credentials directly from user doc (legacy schema)
+    const userDoc = await db.collection('users').doc(targetUid).get();
+    if (userDoc.exists) {
+      const data = userDoc.data()!;
+      if (data['clientSecret'] && data['refreshToken']) {
+        res.json({ clientSecret: data['clientSecret'] as string, refreshToken: data['refreshToken'] as string } as ICredentialsResponse);
+        return;
+      }
+    }
     res.status(404).json({ error: 'No credentials found' });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
@@ -168,18 +188,27 @@ app.get('/api/credentials', async (req: express.Request, res: express.Response) 
   }
 });
 
-// GET /api/admin/users — list all user UIDs that have stored credentials (superadmin only)
-app.get('/api/admin/users', async (req: express.Request, res: express.Response) => {
+// GET /admin/users — list all user UIDs that have stored credentials (superadmin only)
+app.get('/admin/users', async (req: express.Request, res: express.Response) => {
   try {
     const { isSuperadmin } = await getAuthContext(req);
     if (!isSuperadmin) {
       res.status(403).json({ error: 'Forbidden — superadmin only' });
       return;
     }
-    // Only check encrypted credentials collection
-    const credsSnap = await db.collection('credentials').get();
-    const uids = credsSnap.docs.map((d: admin.firestore.QueryDocumentSnapshot) => d.id);
-    res.json({ uids });
+    // Return all users with their emails from Firebase Auth
+    const usersSnap = await db.collection('users').get();
+    const users = await Promise.all(
+      usersSnap.docs.map(async (d: admin.firestore.QueryDocumentSnapshot) => {
+        let email: string | null = null;
+        try {
+          const userRecord = await admin.auth().getUser(d.id);
+          email = userRecord.email || null;
+        } catch { /* user may not exist in Auth */ }
+        return { uid: d.id, email };
+      })
+    );
+    res.json({ users });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     if (message === 'UNAUTHENTICATED') {
@@ -191,8 +220,8 @@ app.get('/api/admin/users', async (req: express.Request, res: express.Response) 
   }
 });
 
-// POST /api/validate-credentials — check credentials format
-app.post('/api/validate-credentials', async (req: express.Request, res: express.Response) => {
+// POST /validate-credentials — check credentials format
+app.post('/validate-credentials', async (req: express.Request, res: express.Response) => {
   try {
     await getAuthContext(req);
     const body = req.body as ICredentialsRequest;
@@ -226,8 +255,8 @@ function getIbkrConsumerSecret(): string {
   return key;
 }
 
-// POST /api/ibkr/oauth/token — exchange authorization code for access + refresh tokens
-app.post('/api/ibkr/oauth/token', async (req: express.Request, res: express.Response) => {
+// POST /ibkr/oauth/token — exchange authorization code for access + refresh tokens
+app.post('/ibkr/oauth/token', async (req: express.Request, res: express.Response) => {
   try {
     const { uid } = await getAuthContext(req);
     const { code, redirectUri, consumerKey } = req.body as {
@@ -309,8 +338,8 @@ app.post('/api/ibkr/oauth/token', async (req: express.Request, res: express.Resp
   }
 });
 
-// POST /api/ibkr/oauth/refresh — use stored refresh token to get a new access token
-app.post('/api/ibkr/oauth/refresh', async (req: express.Request, res: express.Response) => {
+// POST /ibkr/oauth/refresh — use stored refresh token to get a new access token
+app.post('/ibkr/oauth/refresh', async (req: express.Request, res: express.Response) => {
   try {
     const { uid } = await getAuthContext(req);
 
@@ -465,8 +494,8 @@ function msToDateStr(ms: number): string {
   return new Date(ms).toISOString().split('T')[0];
 }
 
-// GET /api/polygon/stock-bars — daily OHLCV for an underlying stock
-app.get('/api/polygon/stock-bars', async (req: express.Request, res: express.Response) => {
+// GET /polygon/stock-bars — daily OHLCV for an underlying stock
+app.get('/polygon/stock-bars', async (req: express.Request, res: express.Response) => {
   try {
     await getAuthContext(req);
     const symbol = req.query['symbol'] as string;
@@ -503,8 +532,8 @@ app.get('/api/polygon/stock-bars', async (req: express.Request, res: express.Res
   }
 });
 
-// GET /api/polygon/options-contracts — list option contracts for an underlying
-app.get('/api/polygon/options-contracts', async (req: express.Request, res: express.Response) => {
+// GET /polygon/options-contracts — list option contracts for an underlying
+app.get('/polygon/options-contracts', async (req: express.Request, res: express.Response) => {
   try {
     await getAuthContext(req);
     const underlying = req.query['underlying'] as string;
@@ -573,8 +602,8 @@ app.get('/api/polygon/options-contracts', async (req: express.Request, res: expr
   }
 });
 
-// GET /api/polygon/option-bars — daily OHLCV for a specific option contract
-app.get('/api/polygon/option-bars', async (req: express.Request, res: express.Response) => {
+// GET /polygon/option-bars — daily OHLCV for a specific option contract
+app.get('/polygon/option-bars', async (req: express.Request, res: express.Response) => {
   try {
     await getAuthContext(req);
     const ticker = req.query['ticker'] as string;
@@ -611,10 +640,10 @@ app.get('/api/polygon/option-bars', async (req: express.Request, res: express.Re
   }
 });
 
-// POST /api/polygon/option-bars-batch — fetch bars for multiple option contracts at once
+// POST /polygon/option-bars-batch — fetch bars for multiple option contracts at once
 // Body: { tickers: string[], from: string, to: string }
 // Returns: { results: { [ticker: string]: bar[] } }
-app.post('/api/polygon/option-bars-batch', async (req: express.Request, res: express.Response) => {
+app.post('/polygon/option-bars-batch', async (req: express.Request, res: express.Response) => {
   try {
     await getAuthContext(req);
     const { tickers, from, to } = req.body as { tickers: string[]; from: string; to: string };

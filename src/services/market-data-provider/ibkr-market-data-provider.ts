@@ -658,7 +658,6 @@ export class IBKRMarketDataProvider implements IMarketDataProviderService {
         return data.accessToken;
     }
 
-    /** Base URL for Firebase Functions — set at build time or default to production */
-    private static FUNCTIONS_BASE =
-        import.meta.env.VITE_FUNCTIONS_URL ?? 'https://api-4jy4u5mpaa-uc.a.run.app';
+    /** Base URL for Firebase Functions — set at build time */
+    private static FUNCTIONS_BASE = import.meta.env.VITE_FUNCTIONS_BASE_URL;
 }

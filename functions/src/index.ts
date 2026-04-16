@@ -715,3 +715,6 @@ export { weeklyReflect } from './weeklyReflect';
 // Callable returns on-demand computation for other tickers.
 export { computeTechnicals } from './computeTechnicals';
 export { getTechnicalsOnDemand } from './getTechnicalsOnDemand';
+
+// --- Economic Calendar ---
+export { seedEconomicEvents } from './seedEconomicEvents';

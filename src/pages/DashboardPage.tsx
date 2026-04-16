@@ -9,6 +9,7 @@ import {
     IonToolbar
 } from '@ionic/react';
 import { DashboardComponent } from '../components/dashboard/dashboard.component';
+import { EventBanner } from '../components/event-banner/event-banner.component';
 
 export const DashboardPage: React.FC = () => {
     return (
@@ -22,6 +23,7 @@ export const DashboardPage: React.FC = () => {
                 </IonToolbar>
             </IonHeader>
             <IonContent fullscreen>
+                <EventBanner />
                 <DashboardComponent />
             </IonContent>
         </IonPage>

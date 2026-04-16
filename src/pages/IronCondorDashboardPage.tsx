@@ -9,6 +9,7 @@ import {
     IonToolbar
 } from '@ionic/react';
 import { IronCondorDashboardComponent } from '../components/iron-condor-dashboard/iron-condor-dashboard.component';
+import { EventBanner } from '../components/event-banner/event-banner.component';
 
 export const IronCondorDashboardPage: React.FC = () => {
     return (
@@ -23,6 +24,7 @@ export const IronCondorDashboardPage: React.FC = () => {
             </IonHeader>
 
             <IonContent fullscreen>
+                <EventBanner />
                 <IronCondorDashboardComponent />
             </IonContent>
         </IonPage>

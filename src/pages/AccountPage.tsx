@@ -17,6 +17,7 @@ import { checkmarkCircleOutline, closeCircleOutline, eyeOutline, eyeOffOutline }
 import { observer } from 'mobx-react-lite';
 import { BrokerType } from '../services/broker-provider/broker-provider.interface';
 import { BrokerAccountListComponent } from '../components/broker-manager/broker-account-list.component';
+import { EventBanner } from '../components/event-banner/event-banner.component';
 
 const PageBox = styled.div`
     max-width: 600px;
@@ -236,6 +237,7 @@ export const AccountPage: React.FC = observer(() => {
     return (
         <IonPage>
             <IonContent>
+                <EventBanner />
                 <PageBox>
 
                     {/* ── Informatii cont ────────────────────────────────── */}

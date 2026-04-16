@@ -10,6 +10,7 @@ import {
 } from '@ionic/react';
 import { auth } from '../firebase';
 import { SuperAdminComponent } from '../components/super-admin/super-admin.component';
+import { EconomicCalendarAdminComponent } from '../components/super-admin/economic-calendar-admin.component';
 
 const ALLOWED_EMAIL = 'macovei17@gmail.com';
 
@@ -37,6 +38,7 @@ export const SuperAdminPage: React.FC = () => {
             </IonHeader>
             <IonContent fullscreen>
                 <SuperAdminComponent />
+                <EconomicCalendarAdminComponent />
             </IonContent>
         </IonPage>
     );

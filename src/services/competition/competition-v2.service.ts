@@ -38,6 +38,8 @@ export interface ICompetitionTradeV2 {
     exitDate: string | null;
     closedBy: 'target' | 'dte' | 'user' | null;
     status: 'open' | 'closed';
+    profileType?: 'conservative' | 'neutral' | 'aggressive';
+    exitTarget?: number;
 }
 
 export interface IAiCompetitionTrade extends ICompetitionTradeV2 {

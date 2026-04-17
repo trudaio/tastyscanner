@@ -48,6 +48,10 @@ export interface ICompetitionTradeV2 {
     exitDate: string | null;     // ISO date
     closedBy: 'target' | 'dte' | 'user' | null;
     status: 'open' | 'closed';
+    /** Strategy profile used for this trade. Used by closeCheck for exit target. */
+    profileType?: StrategyProfileType;
+    /** Exit profit target (%) at time of entry. Stored so closeCheck doesn't need profile lookup. */
+    exitTarget?: number;
 }
 
 export interface IAiCompetitionTrade extends ICompetitionTradeV2 {

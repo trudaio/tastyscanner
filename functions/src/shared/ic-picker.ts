@@ -179,7 +179,6 @@ export function buildCandidates(
         maxRRRatio: number;                      // e.g. 5 (wings:credit)
         minCredit: number;                       // e.g. 1.0 per share for $5 wings
         minPOP: number;                          // default POP threshold (e.g. 70)
-        minPOPForWings5?: number;                // POP exception ONLY for $5 wings (VIX-crunch scenario)
     },
 ): IcCandidate[] {
     const candidates: IcCandidate[] = [];
@@ -212,9 +211,7 @@ export function buildCandidates(
             if (credit <= 0) continue;
 
             const pop = calcPOP(deltas.sp, deltas.sc);
-            // POP threshold: default minPOP for most wings; relaxed threshold only for $5 wings (Catalin's VIX-crunch exception)
-            const popThreshold = wings === 5 && rules.minPOPForWings5 !== undefined ? rules.minPOPForWings5 : rules.minPOP;
-            if (pop < popThreshold) continue;
+            if (pop < rules.minPOP) continue;
 
             const rr = wings / credit;
             if (rr > rules.maxRRRatio) continue;
@@ -324,18 +321,18 @@ export function getTopCandidates(
         return {
             candidates: [], topN: [],
             reason: `VIX ${marketCtx.vix} < 18 — gate closed`,
-            rules: { minPOP: 70, maxRRRatio: 5, minCredit: 1.0, wingWidths: [5, 10, 15, 20] },
+            rules: { minPOP: 70, maxRRRatio: 5, minCredit: 2.5, wingWidths: [10] },
         };
     }
 
-    // POP rules: default 70% for all wings; VIX-crunch exception (VIX 18-22) allows 60% ONLY for $5 wings
+    // Best-practices update (2026-04-17): wings $10 only, credit = 1/4 wing width
+    // Source: 14 YouTube studies, 71K+ trades. $5 wings unprofitable per 12-yr TastyTrade study.
     const rules = {
-        wingWidths: [5, 10, 15, 20],
+        wingWidths: [10],
         targetDeltaSymmetric: [16, 20] as [number, number],
         maxRRRatio: 5,
-        minCredit: 1.0,
+        minCredit: 2.5,    // 1/4 wing width ($10/4) — was $1 flat
         minPOP: 70,
-        minPOPForWings5: marketCtx.vix < 22 ? 60 : 70, // only relaxes for $5 wings during VIX crunch
     };
 
     const candidates = buildCandidates(input, rules);
@@ -359,20 +356,17 @@ export function pickBestIC(
     state: IAiState,
     marketCtx: IMarketContext,
 ): PickResult {
-    // VIX gate — AI inherits from Catalin seed (adjustable via learning)
     if (marketCtx.vix < 18) {
         return { pick: null, reason: `VIX ${marketCtx.vix} < 18 — skip (seed rule)`, candidatesEvaluated: 0 };
     }
 
-    // Seed rules (copy of Catalin's as starting point)
-    // POP exception: VIX-crunch (18-22) allows 60% POP ONLY on $5 wings
+    // Best-practices update (2026-04-17): wings $10 only, proportional credit
     const rules = {
-        wingWidths: [5, 10, 15, 20],
+        wingWidths: [10],
         targetDeltaSymmetric: [16, 20] as [number, number],
         maxRRRatio: 5,
-        minCredit: 1.0,
+        minCredit: 2.5,
         minPOP: 70,
-        minPOPForWings5: marketCtx.vix < 22 ? 60 : 70,
     };
 
     const candidates = buildCandidates(input, rules);
@@ -441,6 +435,8 @@ export function pickBestIC(
             `seed_symmetric_delta_16_20`,
             `seed_max_rr_${rules.maxRRRatio}to1`,
             `seed_min_pop_${rules.minPOP}`,
+            `bp_wings_10_only`,
+            `bp_min_credit_quarter_wing`,
         ],
         experimentVariant,
     };

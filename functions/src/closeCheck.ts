@@ -1,5 +1,5 @@
 // closeCheck — Cloud Scheduler daily 4:00 PM ET (21:00 UTC)
-// For each open AI virtual position: check current price, close if 75% profit or 10 DTE
+// For each open AI virtual position: check current price, close if exit target hit or DTE<=14
 // For each open user position: scan transactions to detect actual close
 // When BOTH sides closed: set winner
 
@@ -40,9 +40,11 @@ function setWinner(round: ICompetitionRoundV2): { winner: ICompetitionRoundV2['w
     return { winner: userScore > aiScore ? 'User' : 'AI', userScore, aiScore };
 }
 
-/** Check AI virtual trade — close if 75% profit or DTE<=10 */
+/** Check AI virtual trade — close if exit target hit or DTE<=14 */
 async function maybeCloseAiTrade(trade: IAiCompetitionTrade, quotes: Map<string, import('./shared/tasty-rest-client').IOptionQuote>, streamerSymLookup: (strike: number, type: 'P' | 'C') => string | null): Promise<IAiCompetitionTrade | null> {
     const dte = daysUntil(trade.expiration);
+    // Exit target: use per-trade exitTarget if set, otherwise default to 75% (neutral profile)
+    const exitTarget = trade.exitTarget ?? 75;
 
     // Compute current close price from snapshots if we have them
     let currentClose: number | null = null;
@@ -62,7 +64,7 @@ async function maybeCloseAiTrade(trade: IAiCompetitionTrade, quotes: Map<string,
     // Profit % = (credit - currentClose) / credit * 100
     if (currentClose !== null && trade.credit > 0) {
         const profitPct = ((trade.credit - currentClose) / trade.credit) * 100;
-        if (profitPct >= 75) {
+        if (profitPct >= exitTarget) {
             return {
                 ...trade,
                 status: 'closed',
@@ -73,7 +75,8 @@ async function maybeCloseAiTrade(trade: IAiCompetitionTrade, quotes: Map<string,
         }
     }
 
-    if (dte <= 10) {
+    // DTE management: 14 days (was 10). Best-practices update 2026-04-17.
+    if (dte <= 14) {
         return {
             ...trade,
             status: 'closed',

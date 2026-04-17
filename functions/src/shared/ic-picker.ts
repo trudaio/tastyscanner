@@ -307,6 +307,7 @@ export function candidateToTrade(
         delta: Math.round(c.deltaShortPut * 100) / 100,
         theta: Math.round(c.thetaTotal * 100) / 100,
         exitPl: null, exitDate: null, closedBy: null, status: 'open',
+        exitTarget: 75,     // AI uses neutral profile exit target
     };
 }
 
@@ -428,6 +429,7 @@ export function pickBestIC(
         exitDate: null,
         closedBy: null,
         status: 'open',
+        exitTarget: 75,
         rationale: reasons.join(' | '),
         confidenceScore: Math.round(confidence),
         rulesApplied: [

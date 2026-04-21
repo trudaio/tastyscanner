@@ -2,6 +2,7 @@
 
 import type { IAiState, IAiCompetitionTrade, IMarketContext } from './types';
 import type { IOptionQuote, IRawPosition } from './tasty-rest-client';
+import { buildProvestBlock, probTouch } from './metrics';
 
 /**
  * Strike overlap detection. Prevents picking an IC that shares a strike with an
@@ -395,12 +396,31 @@ export function pickBestIC(
     const margin = candidates.length > 1 ? candidates[0].score - candidates[1].score : 20;
     const confidence = Math.max(30, Math.min(95, 50 + margin * 2));
 
-    // Build rationale
+    // Build rationale — PROVEST prelude + narrative reasons
+    const provest = buildProvestBlock({
+        pop: chosen.pop,
+        probTouch: probTouch(chosen.deltaShortPut, chosen.deltaShortCall),
+        compositeScore: chosen.score,
+        profileName: 'Neutral',     // AI picker runs on neutral-profile rules
+        wings: chosen.wings,
+        minDelta: rules.targetDeltaSymmetric[0],
+        maxDelta: rules.targetDeltaSymmetric[1],
+        shortPutDelta: chosen.deltaShortPut,
+        shortCallDelta: chosen.deltaShortCall,
+        vix: marketCtx.vix,
+        ticker: input.ticker,
+        ivRank: marketCtx.ivRank,
+        dte: input.dte,
+        dteManagement: 14,
+    });
+
     const reasons: string[] = [];
     reasons.push(`Picked ${chosen.wings}-wing IC at ${chosen.putSell}/${chosen.callSell} shorts`);
     reasons.push(`POP ${chosen.pop.toFixed(1)}%, credit $${chosen.credit.toFixed(2)}, RR ${chosen.rr.toFixed(2)}:1`);
     reasons.push(`Market: VIX=${marketCtx.vix.toFixed(1)}, IVR=${marketCtx.ivRank.toFixed(0)}`);
     if (experimentVariant) reasons.push(`(experiment: ${experimentVariant})`);
+
+    const fullRationale = `${provest}\n\n${reasons.join(' | ')}`;
 
     const strategyStr = `IC ${chosen.putBuy}/${chosen.putSell}p ${chosen.callSell}/${chosen.callBuy}c`;
 
@@ -430,7 +450,7 @@ export function pickBestIC(
         closedBy: null,
         status: 'open',
         exitTarget: 75,
-        rationale: reasons.join(' | '),
+        rationale: fullRationale,
         confidenceScore: Math.round(confidence),
         rulesApplied: [
             `seed_vix_gate_18`,

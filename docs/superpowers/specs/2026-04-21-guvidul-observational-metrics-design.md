@@ -78,9 +78,10 @@ T — {timingNote}
 | File | Change |
 |------|--------|
 | `functions/src/shared/metrics.ts` | **new** — `probTouch()`, `touchAlertLevel()`, `buildProvestBlock()`, `ivrVerdict()`. Pure functions, no imports from services. |
-| `functions/src/shared/prompts.ts` | update picker prompt to require 7-line PROVEST prelude in rationale; update closeCheck prompt to require alert-level prefix per position in its analysis output. |
-| `functions/src/shared/ic-picker.ts` | call `buildProvestBlock()` to compute the expected prelude; pass fields to LLM context; verify LLM output begins with a valid 7-line block (soft validation, warn-only). |
-| `functions/src/closeCheck.ts` | compute `touchAlertLevel()` per open position; pass alert level to LLM prompt so it prefixes each position analysis. |
+| `functions/src/shared/prompts.ts` | not modified — PROVEST is post-processed, not prompted. More robust than depending on LLM compliance. |
+| `functions/src/shared/ic-picker.ts` | `pickBestIC` rule-based path prepends PROVEST block to rationale via `buildProvestBlock()`. |
+| `functions/src/shared/llm-picker.ts` | post-process: after Claude selects a candidate, prepend deterministic PROVEST block (from the chosen `IcCandidate`) to Claude's narrative rationale. Applies to main path, risk-modified path, and rule-based fallback. |
+| `functions/src/closeCheck.ts` | compute `touchAlertLevel()` per open position from streamer deltas; emit structured `console.log` lines (visible in Firebase Functions logs). closeCheck is mechanical — no LLM prompt involved. |
 | `functions/src/shared/metrics.test.ts` | **new** — unit tests for each helper. |
 
 ## 5. Data Flow
@@ -92,10 +93,10 @@ picker (ic-picker.ts)
   ├─ compute probTouch(), ivrVerdict(), symmetryNote, skewNote (new)
   └─ LLM prompt includes PROVEST fields → rationale begins with 7-line block
 
-closeCheck (closeCheck.ts)
-  ├─ open positions with per-leg deltas (existing)
-  ├─ compute touchAlertLevel() per position (new)
-  └─ LLM prompt injects per-position alertLevel → response prefixes each position analysis
+closeCheck (closeCheck.ts) — mechanical, no LLM
+  ├─ open positions with per-leg quotes (existing)
+  ├─ compute touchAlertLevel() from short-leg deltas (new)
+  └─ emit `[🟡 WATCH]`/`[🟠 WARN]`/`[🔴 ADJUST]` lines via console.log to Firebase logs
 ```
 
 ## 6. Testing

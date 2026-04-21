@@ -9,6 +9,7 @@ import { getCredentialsForUser, findActiveTastyUser } from './shared/credentials
 import {
     getAccessToken, getAccounts, getMarketDataSnapshot, getTransactions,
 } from './shared/tasty-rest-client';
+import { touchAlertLevel, touchAlertPrefix } from './shared/metrics';
 import type { ICompetitionRoundV2, ICompetitionTradeV2, IAiCompetitionTrade } from './shared/types';
 
 const CATALIN_UID = process.env.CATALIN_UID ?? '';
@@ -58,6 +59,16 @@ async function maybeCloseAiTrade(trade: IAiCompetitionTrade, quotes: Map<string,
         const sc = quotes.get(scSym); const cb = quotes.get(cbSym);
         if (ps && pb && sc && cb) {
             currentClose = ps.mid + sc.mid - pb.mid - cb.mid;
+
+            // Observational heads-up: log touch-alert level based on current short-leg deltas
+            const spDelta = ps.delta ?? 0;
+            const scDelta = sc.delta ?? 0;
+            const level = touchAlertLevel(spDelta, scDelta);
+            if (level !== 'normal') {
+                const prefix = touchAlertPrefix(level);
+                const mPct = Math.round(Math.max(Math.abs(spDelta), Math.abs(scDelta)) * 100);
+                console.log(`${prefix} ${trade.ticker} ${trade.expiration} ${trade.strategy} — max short |δ| = ${mPct}`);
+            }
         }
     }
 

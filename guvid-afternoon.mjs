@@ -190,13 +190,15 @@ async function main() {
   console.log(`VIX: ${vix ? vix.toFixed(2) : 'N/A'}`);
 
   // ── Morning doc & day-over-day ────────────────────────────────────────────
-  const dailyRef = db.doc(`guvid-agent/daily/${todayStr}`);
+  // Firestore paths must have even segment count (collection/doc pairs)
+  // guvid-agent/{daily|scans}/{DATE}/data  →  4 segments
+  const dailyRef = db.doc(`guvid-agent/daily/${todayStr}/data`);
   let morningNetLiq = null;
   try { const s = await dailyRef.get(); if (s.exists) morningNetLiq = s.data()?.morningNetLiq ?? null; } catch {}
   const netLiqChange = morningNetLiq !== null ? afternoonNetLiq - morningNetLiq : null;
 
   let yesterdayNetLiq = null;
-  try { const s = await db.doc(`guvid-agent/daily/${yesterdayStr}`).get(); if (s.exists) yesterdayNetLiq = s.data()?.afternoonNetLiq ?? s.data()?.morningNetLiq ?? null; } catch {}
+  try { const s = await db.doc(`guvid-agent/daily/${yesterdayStr}/data`).get(); if (s.exists) yesterdayNetLiq = s.data()?.afternoonNetLiq ?? s.data()?.morningNetLiq ?? null; } catch {}
   const netLiqChangeDayOverDay = yesterdayNetLiq !== null ? afternoonNetLiq - yesterdayNetLiq : null;
   const afternoonTimestamp = new Date().toISOString();
 
@@ -332,7 +334,7 @@ async function main() {
 
   // ── Save afternoon scan ───────────────────────────────────────────────────
   console.log('\nSaving afternoon scan summary...');
-  await db.doc(`guvid-agent/scans/${todayStr}`).set({
+  await db.doc(`guvid-agent/scans/${todayStr}/data`).set({
     afternoon: {
       timestamp: afternoonTimestamp,
       netLiq: afternoonNetLiq,

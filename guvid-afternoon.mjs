@@ -232,19 +232,33 @@ async function main() {
     const parsedPositions = [];
 
     for (const pos of openPositions) {
-      const icStr = pos.ic || pos.profile || pos.description || '';
-      let parsed = parseIC(icStr);
-      if (!parsed && pos.ticker && pos.expiration) {
-        const strikes = [pos.longPut, pos.shortPut, pos.shortCall, pos.longCall].map(parseFloat).filter(s => !isNaN(s));
-        if (strikes.length === 4) parsed = { ticker: pos.ticker, longPut: strikes[0], shortPut: strikes[1], shortCall: strikes[2], longCall: strikes[3], expiration: pos.expiration };
+      // ic field is an object: {longPutStrike, shortPutStrike, shortCallStrike, longCallStrike, expiration}
+      let parsed = null;
+      const icObj = typeof pos.ic === 'object' && pos.ic !== null ? pos.ic : null;
+      const ticker = pos.ticker;
+      const expiration = pos.expiration || icObj?.expiration;
+      if (icObj && ticker && expiration) {
+        const lp = parseFloat(icObj.longPutStrike ?? icObj.longPut ?? 0);
+        const sp = parseFloat(icObj.shortPutStrike ?? icObj.shortPut ?? 0);
+        const sc = parseFloat(icObj.shortCallStrike ?? icObj.shortCall ?? 0);
+        const lc = parseFloat(icObj.longCallStrike ?? icObj.longCall ?? 0);
+        if (lp && sp && sc && lc) parsed = { ticker, longPut: lp, shortPut: sp, shortCall: sc, longCall: lc, expiration };
       }
-      if (!parsed) { console.log(`  Skipping ${pos.id} — cannot parse: "${icStr}"`); continue; }
+      // Fallback: parse ic as string
+      if (!parsed && typeof pos.ic === 'string') parsed = parseIC(pos.ic);
+      // Fallback: top-level strike fields
+      if (!parsed && ticker && expiration) {
+        const strikes = [pos.longPut, pos.shortPut, pos.shortCall, pos.longCall].map(parseFloat).filter(s => !isNaN(s));
+        if (strikes.length === 4) parsed = { ticker, longPut: strikes[0], shortPut: strikes[1], shortCall: strikes[2], longCall: strikes[3], expiration };
+      }
+      if (!parsed) { console.log(`  Skipping ${pos.id} — cannot parse IC`); continue; }
       parsedPositions.push({ pos, parsed });
+      const streamerTicker = parsed.ticker === 'SPX' ? 'SPXW' : parsed.ticker;
       [
-        toDxSymbol(parsed.ticker, parsed.expiration, parsed.longPut, 'P'),
-        toDxSymbol(parsed.ticker, parsed.expiration, parsed.shortPut, 'P'),
-        toDxSymbol(parsed.ticker, parsed.expiration, parsed.shortCall, 'C'),
-        toDxSymbol(parsed.ticker, parsed.expiration, parsed.longCall, 'C'),
+        toDxSymbol(streamerTicker, parsed.expiration, parsed.longPut, 'P'),
+        toDxSymbol(streamerTicker, parsed.expiration, parsed.shortPut, 'P'),
+        toDxSymbol(streamerTicker, parsed.expiration, parsed.shortCall, 'C'),
+        toDxSymbol(streamerTicker, parsed.expiration, parsed.longCall, 'C'),
       ].forEach(s => allSymbols.add(s));
     }
 
@@ -256,7 +270,8 @@ async function main() {
     }
 
     const getMid = (sym) => {
-      const q = quotes[sym];
+      // For SPX weeklies, dxFeed uses .SPXW prefix — try both
+      const q = quotes[sym] || quotes[sym.replace('.SPX', '.SPXW')];
       if (!q) return null;
       const bid = parseFloat(q.bidPrice ?? q.bid ?? 0);
       const ask = parseFloat(q.askPrice ?? q.ask ?? 0);
@@ -265,8 +280,9 @@ async function main() {
 
     for (const { pos, parsed } of parsedPositions) {
       const { ticker, longPut, shortPut, shortCall, longCall, expiration } = parsed;
-      const credit = parseFloat(pos.credit || pos.initialCredit || pos.maxProfit || 0);
-      const daysOpen = pos.openedAt ? Math.ceil((Date.now() - new Date(pos.openedAt).getTime()) / 86400000) : null;
+      const credit = parseFloat(pos.credit || (typeof pos.ic === 'object' ? pos.ic?.credit : null) || pos.initialCredit || 0);
+      const openedDate = pos.openedAt || pos.openDate || null;
+      const daysOpen = openedDate ? Math.ceil((Date.now() - new Date(openedDate).getTime()) / 86400000) : null;
       const daysRemaining = daysUntilExpiration(expiration);
 
       if (daysRemaining <= 0) {
@@ -306,7 +322,7 @@ async function main() {
       const checkData = {
         date: new Date().toISOString(),
         ticker,
-        profile: pos.profile || pos.description || pos.ic || '',
+        profile: typeof pos.profile === 'string' ? pos.profile : (pos.description || ''),
         ic: `${ticker} ${longPut}/${shortPut}/${shortCall}/${longCall} ${expiration}`,
         credit,
         currentValue: currentValue !== null ? parseFloat(currentValue.toFixed(4)) : null,

@@ -121,35 +121,46 @@ async function main() {
     }
   }
   credList.sort((a, b) => b.iat - a.iat);
-  console.log(`Found ${credList.length} broker accounts to try.`);
+  // Only try top 5 most-recent tokens to avoid 40 × 5s timeouts
+  const candidates = credList.slice(0, 5);
+  console.log(`Trying top ${candidates.length} of ${credList.length} broker accounts.`);
+
+  const withTimeout = (promise, ms) => Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`timeout ${ms}ms`)), ms)),
+  ]);
 
   let tastyClient = null;
   let accountNumber = null;
   let streamToken = null;
   let dxLinkUrl = 'wss://tasty-openapi-ws.dxfeed.com/realtime';
 
-  for (const cred of credList) {
-    try {
-      const client = new TastyTradeClient({
-        ...TastyTradeClient.ProdConfig,
-        clientSecret: cred.clientSecret,
-        refreshToken: cred.refreshToken,
-        oauthScopes: ['read'],
-      });
-      const accts = await client.accountsAndCustomersService.getCustomerAccounts();
-      accountNumber = cred.accountNumber || accts[0]?.account?.['account-number'];
-      const qt = await client.accountsAndCustomersService.getApiQuoteToken();
-      streamToken = qt?.token;
-      dxLinkUrl = qt?.['dxlink-url'] || dxLinkUrl;
-      tastyClient = client;
-      console.log(`Authenticated user ${cred.uid.slice(0,8)}. Account: ${accountNumber}`);
-      break;
-    } catch (e) {
-      // Transient 503s are common — try next user
-      if (e.response?.status !== 503 && !e.message?.includes('503') && !e.message?.includes('timeout')) {
-        // Don't spam log for expected 401s, only log unexpected errors
+  for (const cred of candidates) {
+    // Retry up to 3 times on transient 503s
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const client = new TastyTradeClient({
+          ...TastyTradeClient.ProdConfig,
+          clientSecret: cred.clientSecret,
+          refreshToken: cred.refreshToken,
+          oauthScopes: ['read'],
+        });
+        const accts = await withTimeout(client.accountsAndCustomersService.getCustomerAccounts(), 6000);
+        accountNumber = cred.accountNumber || accts[0]?.account?.['account-number'];
+        const qt = await withTimeout(client.accountsAndCustomersService.getApiQuoteToken(), 6000);
+        streamToken = qt?.token;
+        dxLinkUrl = qt?.['dxlink-url'] || dxLinkUrl;
+        tastyClient = client;
+        console.log(`Authenticated user ${cred.uid.slice(0,8)} (attempt ${attempt}). Account: ${accountNumber}`);
+        break;
+      } catch (e) {
+        const is503 = e.response?.status === 503 || e.message?.includes('503') || e.message?.includes('timeout');
+        console.log(`  uid ${cred.uid.slice(0,8)} attempt ${attempt}: ${e.message?.slice(0,60)}`);
+        if (!is503 || attempt === 3) break; // don't retry on 401 or after 3 tries
+        await new Promise(r => setTimeout(r, 2000 * attempt));
       }
     }
+    if (tastyClient) break;
   }
 
   if (!tastyClient || !accountNumber) throw new Error('Could not authenticate with any TastyTrade account');

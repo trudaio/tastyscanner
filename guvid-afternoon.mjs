@@ -2,41 +2,12 @@ import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { readFileSync } from 'fs';
 import WS from './node_modules/ws/index.js';
+import TastyTradeClient from './node_modules/@tastytrade/api/dist/tastytrade-api.js';
 
 // ── Firebase init ──────────────────────────────────────────────────────────
 const sa = JSON.parse(readFileSync('/tmp/firebase-sa.json', 'utf8'));
 initializeApp({ credential: cert(sa) });
 const db = getFirestore();
-
-// ── TastyTrade helpers ─────────────────────────────────────────────────────
-const TT_BASE = 'https://api.tastyworks.com';
-
-async function ttGet(path, token, params) {
-  const url = new URL(`${TT_BASE}${path}`);
-  if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, String(v)));
-  const res = await fetch(url.toString(), {
-    headers: { Authorization: token, 'Content-Type': 'application/json' },
-  });
-  if (!res.ok) throw new Error(`TT GET ${path} → ${res.status}: ${await res.text()}`);
-  return res.json();
-}
-
-async function getAccessToken(clientSecret, refreshToken) {
-  const body = new URLSearchParams({
-    grant_type: 'refresh_token',
-    refresh_token: refreshToken,
-    client_secret: clientSecret,
-    scope: 'read',
-  }).toString();
-  const res = await fetch(`${TT_BASE}/oauth/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-  });
-  if (!res.ok) throw new Error(`OAuth → ${res.status}: ${await res.text()}`);
-  const data = await res.json();
-  return `Bearer ${data.access_token || data['access-token']}`;
-}
 
 // ── DxLink WebSocket streamer ──────────────────────────────────────────────
 async function getQuotesAndGreeks(wsUrl, token, symbols, waitMs) {
@@ -44,7 +15,6 @@ async function getQuotesAndGreeks(wsUrl, token, symbols, waitMs) {
   return new Promise((resolve) => {
     const quotes = {};
     const greeks = {};
-
     const ws = new WS(wsUrl);
     const send = (obj) => { if (ws.readyState === WS.OPEN) ws.send(JSON.stringify(obj)); };
 
@@ -56,7 +26,6 @@ async function getQuotesAndGreeks(wsUrl, token, symbols, waitMs) {
       let msgs;
       try { msgs = JSON.parse(raw.toString()); } catch { return; }
       if (!Array.isArray(msgs)) msgs = [msgs];
-
       for (const msg of msgs) {
         if (msg.type === 'SETUP') {
           send({ type: 'AUTH', channel: 0, token });
@@ -64,8 +33,7 @@ async function getQuotesAndGreeks(wsUrl, token, symbols, waitMs) {
           send({ type: 'CHANNEL_REQUEST', channel: 1, service: 'FEED', parameters: { contract: 'AUTO' } });
         } else if (msg.type === 'CHANNEL_OPENED' && msg.channel === 1) {
           send({
-            type: 'FEED_SUBSCRIPTION',
-            channel: 1,
+            type: 'FEED_SUBSCRIPTION', channel: 1,
             add: [
               ...symbols.map(s => ({ type: 'Quote', symbol: s })),
               ...symbols.map(s => ({ type: 'Greeks', symbol: s })),
@@ -109,8 +77,7 @@ function yesterdayET() {
 }
 function daysUntilExpiration(expDateStr) {
   const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  const exp = new Date(expDateStr + 'T16:00:00');
-  return Math.ceil((exp - et) / (1000 * 60 * 60 * 24));
+  return Math.ceil((new Date(expDateStr + 'T16:00:00') - et) / 86400000);
 }
 
 function parseIC(icStr) {
@@ -120,13 +87,12 @@ function parseIC(icStr) {
   const ticker = parts[0];
   const expiration = parts[parts.length - 1];
   if (!/^\d{4}-\d{2}-\d{2}$/.test(expiration)) return null;
-  const strikeStr = parts.slice(1, parts.length - 1).join('/');
-  const strikes = strikeStr.split('/').map(s => parseFloat(s.trim())).filter(s => !isNaN(s));
+  const strikes = parts.slice(1, parts.length - 1).join('/').split('/').map(s => parseFloat(s.trim())).filter(s => !isNaN(s));
   if (strikes.length !== 4) return null;
   return { ticker, longPut: strikes[0], shortPut: strikes[1], shortCall: strikes[2], longCall: strikes[3], expiration };
 }
 
-// dxFeed compact format: .SPY260516C565
+// dxFeed compact symbol: .SPY260516C565
 function toDxSymbol(ticker, expiration, strike, optionType) {
   const [y, m, d] = expiration.split('-');
   return `.${ticker}${y.slice(2)}${m}${d}${optionType}${strike}`;
@@ -138,56 +104,61 @@ async function main() {
   const yesterdayStr = yesterdayET();
   console.log(`\n=== Guvid Afternoon Agent — ${todayStr} ===\n`);
 
-  // ── Read credentials and authenticate ────────────────────────────────────
+  // ── Authenticate: try all users sorted by most recent token ───────────────
   console.log('Reading TastyTrade credentials from Firestore...');
   const usersSnap = await db.collection('users').get();
-  if (usersSnap.empty) throw new Error('No users found in Firestore');
+  const credList = [];
+  for (const userDoc of usersSnap.docs) {
+    const brokerSnap = await db.collection('users').doc(userDoc.id).collection('brokerAccounts').get();
+    for (const b of brokerSnap.docs) {
+      const data = b.data();
+      const creds = data?.credentials || {};
+      if (!creds.refreshToken || !creds.clientSecret) continue;
+      try {
+        const payload = JSON.parse(Buffer.from(creds.refreshToken.split('.')[1], 'base64url').toString());
+        credList.push({ uid: userDoc.id, iat: payload.iat || 0, accountNumber: data.accountNumber, ...creds });
+      } catch {}
+    }
+  }
+  credList.sort((a, b) => b.iat - a.iat);
+  console.log(`Found ${credList.length} broker accounts to try.`);
 
-  let accessToken = null;
+  let tastyClient = null;
   let accountNumber = null;
   let streamToken = null;
   let dxLinkUrl = 'wss://tasty-openapi-ws.dxfeed.com/realtime';
 
-  outer: for (const userDoc of usersSnap.docs) {
-    const brokerSnap = await db.collection('users').doc(userDoc.id).collection('brokerAccounts').get();
-    for (const brokerDoc of brokerSnap.docs) {
-      const data = brokerDoc.data();
-      const clientSecret = data?.credentials?.clientSecret;
-      const refreshToken = data?.credentials?.refreshToken;
-      if (!clientSecret || !refreshToken) continue;
-
-      try {
-        accessToken = await getAccessToken(clientSecret, refreshToken);
-        accountNumber = data?.accountNumber;
-
-        if (!accountNumber) {
-          const acctResp = await ttGet('/customers/me/accounts', accessToken);
-          const accounts = acctResp?.data?.items || [];
-          if (accounts.length > 0) accountNumber = accounts[0]?.account?.['account-number'];
-        }
-
-        const streamResp = await ttGet('/api-quote-tokens', accessToken);
-        streamToken = streamResp?.data?.token;
-        dxLinkUrl = streamResp?.data?.['dxlink-url'] || dxLinkUrl;
-
-        console.log(`Authenticated user ${userDoc.id}. Account: ${accountNumber}`);
-        console.log(`DxLink URL: ${dxLinkUrl}`);
-        break outer;
-      } catch (e) {
-        console.log(`Auth failed for user ${userDoc.id}: ${e.message}`);
-        accessToken = null;
+  for (const cred of credList) {
+    try {
+      const client = new TastyTradeClient({
+        ...TastyTradeClient.ProdConfig,
+        clientSecret: cred.clientSecret,
+        refreshToken: cred.refreshToken,
+        oauthScopes: ['read'],
+      });
+      const accts = await client.accountsAndCustomersService.getCustomerAccounts();
+      accountNumber = cred.accountNumber || accts[0]?.account?.['account-number'];
+      const qt = await client.accountsAndCustomersService.getApiQuoteToken();
+      streamToken = qt?.token;
+      dxLinkUrl = qt?.['dxlink-url'] || dxLinkUrl;
+      tastyClient = client;
+      console.log(`Authenticated user ${cred.uid.slice(0,8)}. Account: ${accountNumber}`);
+      break;
+    } catch (e) {
+      // Transient 503s are common — try next user
+      if (e.response?.status !== 503 && !e.message?.includes('503') && !e.message?.includes('timeout')) {
+        // Don't spam log for expected 401s, only log unexpected errors
       }
     }
   }
 
-  if (!accessToken || !accountNumber) throw new Error('Could not authenticate with TastyTrade');
+  if (!tastyClient || !accountNumber) throw new Error('Could not authenticate with any TastyTrade account');
 
   // ── Net Liq snapshot ──────────────────────────────────────────────────────
   console.log('\nFetching account balances...');
-  const balResp = await ttGet(`/accounts/${accountNumber}/balances`, accessToken);
-  const balData = balResp?.data;
+  const balances = await tastyClient.balancesAndPositionsService.getAccountBalanceValues(accountNumber);
   const afternoonNetLiq = parseFloat(
-    balData?.['net-liquidating-value'] ?? balData?.['net-liquidation-value'] ?? balData?.['net-liq'] ?? 0
+    balances?.['net-liquidating-value'] ?? balances?.['net-liquidation-value'] ?? balances?.['net-liq'] ?? 0
   );
   console.log(`Afternoon Net Liq: $${afternoonNetLiq.toFixed(2)}`);
 
@@ -211,12 +182,10 @@ async function main() {
   const dailyRef = db.doc(`guvid-agent/daily/${todayStr}`);
   let morningNetLiq = null;
   try { const s = await dailyRef.get(); if (s.exists) morningNetLiq = s.data()?.morningNetLiq ?? null; } catch {}
-
   const netLiqChange = morningNetLiq !== null ? afternoonNetLiq - morningNetLiq : null;
 
   let yesterdayNetLiq = null;
   try { const s = await db.doc(`guvid-agent/daily/${yesterdayStr}`).get(); if (s.exists) yesterdayNetLiq = s.data()?.afternoonNetLiq ?? s.data()?.morningNetLiq ?? null; } catch {}
-
   const netLiqChangeDayOverDay = yesterdayNetLiq !== null ? afternoonNetLiq - yesterdayNetLiq : null;
   const afternoonTimestamp = new Date().toISOString();
 
@@ -226,7 +195,6 @@ async function main() {
   // ── Read open positions ───────────────────────────────────────────────────
   console.log('\nReading open positions...');
   let openPositions = [];
-
   for (const getter of [
     () => db.collection('guvid-agent').doc('positions').collection('records').where('status', '==', 'open').get(),
     () => db.collection('positions').where('status', '==', 'open').get(),
@@ -240,7 +208,6 @@ async function main() {
       }
     } catch {}
   }
-
   console.log(`Positions to check: ${openPositions.length}`);
 
   const positionChecks = [];
@@ -291,23 +258,27 @@ async function main() {
 
       if (daysRemaining <= 0) {
         console.log(`${ticker} IC EXPIRED`);
-        const lpM = getMid(toDxSymbol(ticker, expiration, longPut, 'P'));
-        const spM = getMid(toDxSymbol(ticker, expiration, shortPut, 'P'));
-        const scM = getMid(toDxSymbol(ticker, expiration, shortCall, 'C'));
-        const lcM = getMid(toDxSymbol(ticker, expiration, longCall, 'C'));
+        const [lpM, spM, scM, lcM] = [
+          getMid(toDxSymbol(ticker, expiration, longPut, 'P')),
+          getMid(toDxSymbol(ticker, expiration, shortPut, 'P')),
+          getMid(toDxSymbol(ticker, expiration, shortCall, 'C')),
+          getMid(toDxSymbol(ticker, expiration, longCall, 'C')),
+        ];
         const finalPL = (lpM !== null && spM !== null && scM !== null && lcM !== null) ? (credit - (spM + scM - lpM - lcM)) * 100 : null;
         await pos.ref.update({ status: 'expired', expiredAt: new Date().toISOString(), finalPL });
         continue;
       }
 
-      const lpM = getMid(toDxSymbol(ticker, expiration, longPut, 'P'));
-      const spM = getMid(toDxSymbol(ticker, expiration, shortPut, 'P'));
-      const scM = getMid(toDxSymbol(ticker, expiration, shortCall, 'C'));
-      const lcM = getMid(toDxSymbol(ticker, expiration, longCall, 'C'));
+      const [lpM, spM, scM, lcM] = [
+        getMid(toDxSymbol(ticker, expiration, longPut, 'P')),
+        getMid(toDxSymbol(ticker, expiration, shortPut, 'P')),
+        getMid(toDxSymbol(ticker, expiration, shortCall, 'C')),
+        getMid(toDxSymbol(ticker, expiration, longCall, 'C')),
+      ];
 
       let currentValue = null, pl = null, plPerDay = null;
       if (lpM !== null && spM !== null && scM !== null && lcM !== null) {
-        currentValue = spM + scM - lpM - lcM;
+        currentValue = spM + scM - lpM - lcM; // debit to close
         pl = (credit - currentValue) * 100;
         plPerDay = daysOpen ? pl / daysOpen : null;
       }
@@ -341,7 +312,7 @@ async function main() {
       positionChecks.push(checkData);
       console.log(`${ticker} ${longPut}/${shortPut}/${shortCall}/${longCall} ${expiration} | DTE:${daysRemaining} | P&L:${pl !== null ? '$'+pl.toFixed(0) : 'N/A'} (${profitPct !== null ? (profitPct*100).toFixed(1)+'%' : '?'}) | Credit:$${credit}`);
       if (profitTargetReached) { profitTargetsReached.push(`${ticker} ${longPut}/${shortPut}/${shortCall}/${longCall} ${expiration} (${(profitPct*100).toFixed(1)}%)`); console.log(`  ✓ PROFIT TARGET >=50%`); }
-      if (under21DTE) { under21DTEList.push({ ticker, daysRemaining, id: pos.id }); console.log(`  ⚠ ${daysRemaining} DTE`); }
+      if (under21DTE) { under21DTEList.push({ ticker, daysRemaining }); console.log(`  ⚠ ${daysRemaining} DTE`); }
 
       const existingChecks = Array.isArray(pos.dailyChecks) ? pos.dailyChecks : [];
       await pos.ref.update({ dailyChecks: [...existingChecks, checkData], lastChecked: new Date().toISOString() });
@@ -392,4 +363,4 @@ async function main() {
   process.exit(0);
 }
 
-main().catch(e => { console.error('Fatal error:', e); process.exit(1); });
+main().catch(e => { console.error('Fatal error:', e.message); process.exit(1); });

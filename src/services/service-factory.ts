@@ -42,6 +42,8 @@ import type { IScenarioStudyService } from './scenario-study/scenario-study.inte
 import { ScenarioStudyService } from './scenario-study/scenario-study.service';
 import type { ITradeJournalService } from './trade-journal/trade-journal.service.interface';
 import { TradeJournalService } from './trade-journal/trade-journal.service';
+import type { IEconomicCalendarService } from './economic-calendar/economic-calendar.service.interface';
+import { EconomicCalendarService } from './economic-calendar/economic-calendar.service';
 
 export class ServiceFactory implements IServiceFactory {
 
@@ -211,6 +213,15 @@ export class ServiceFactory implements IServiceFactory {
     private _tradeJournal: Lazy<ITradeJournalService> = new Lazy<ITradeJournalService>(() => new TradeJournalService(this));
     get tradeJournal(): ITradeJournalService {
         return this._tradeJournal.value;
+    }
+
+    private _economicCalendar: Lazy<IEconomicCalendarService> = new Lazy<IEconomicCalendarService>(() => {
+        const svc = new EconomicCalendarService();
+        svc.init();
+        return svc;
+    });
+    get economicCalendar(): IEconomicCalendarService {
+        return this._economicCalendar.value;
     }
 
 }

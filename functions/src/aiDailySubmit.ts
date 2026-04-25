@@ -11,6 +11,7 @@ import {
 } from './shared/tasty-rest-client';
 import { getTopCandidates, hasStrikeOverlap, type ChainInput } from './shared/ic-picker';
 import { pickWithLlm } from './shared/llm-picker';
+import { checkGates, fetchUpcomingEvents } from './shared/economic-calendar';
 import type {
     IAiState, ICompetitionRoundV2, IMarketContext, ITechnicalsContext, IWeeklyMemo,
 } from './shared/types';
@@ -57,6 +58,28 @@ export const aiDailySubmit = onSchedule(
 
         const date = new Date().toISOString().split('T')[0];
         console.log(`[aiDailySubmit] Starting for uid=${uid}, date=${date}`);
+
+        // 0. Economic Calendar gate — skip all picks when today/tomorrow (ET) has high-impact event
+        try {
+            const upcomingEvents = await fetchUpcomingEvents(48);
+            const gates = await checkGates(new Date(), upcomingEvents);
+            if (gates.ladderingPause.paused) {
+                const reason = gates.ladderingPause.reason;
+                const blockingIds = gates.ladderingPause.blockingEvents.map((e) => e.id);
+                console.log(`[aiDailySubmit] BLOCKED by economic event: ${reason}`);
+                await admin.firestore().collection('dailyScans').doc(date).set({
+                    scanDate: date,
+                    uid,
+                    blocked: true,
+                    blockedReason: reason,
+                    blockingEventIds: blockingIds,
+                    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+                }, { merge: true });
+                return;
+            }
+        } catch (err) {
+            console.warn('[aiDailySubmit] Economic calendar gate check failed, proceeding (fail-open)', err);
+        }
 
         // 1. Load credentials + access token
         const creds = await getCredentialsForUser(uid);

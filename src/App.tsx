@@ -21,6 +21,7 @@ import { RiskExposerPage } from './pages/RiskExposerPage';
 import { IbkrCallbackPage } from './pages/IbkrCallbackPage';
 import { GuviduVsCatalinPage } from './pages/GuviduVsCatalinPage';
 import { GuviduVisualizationPage } from './pages/GuviduVisualizationPage';
+import { EconomicCalendarPage } from './pages/EconomicCalendarPage';
 
 /* Core CSS required for Ionic components to work properly */
 import '@ionic/react/css/core.css';
@@ -147,6 +148,9 @@ const App: React.FC = () => {
                                 </Route>
                                 <Route path="/guvid-visualization" exact={true}>
                                     <GuviduVisualizationPage />
+                                </Route>
+                                <Route path="/economic-calendar" exact={true}>
+                                    <EconomicCalendarPage />
                                 </Route>
                                 <Route path="/superadmin" exact={true}>
                                     <SuperAdminPage />

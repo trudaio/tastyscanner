@@ -596,8 +596,8 @@ export const GuviduVsCatalinComponent: React.FC = () => {
     return (
         <Container>
             <Hero>
-                <HeroTitle>Guvidul vs Catalin</HeroTitle>
-                <HeroSub>Autonomous AI competition • Daily picks at 10:30 AM ET • Reveal at 11:00 AM</HeroSub>
+                <HeroTitle>Guvidul AI Track Record</HeroTitle>
+                <HeroSub>Autonomous daily IC picks · 1 SPX + 1 QQQ · ≤45 DTE · Run after market open ET</HeroSub>
                 <Countdown>
                     <IonIcon icon={trophyOutline} style={{ fontSize: 18, color: '#4a9eff' }} />
                     <span>Winner declared in</span>
@@ -683,7 +683,7 @@ export const GuviduVsCatalinComponent: React.FC = () => {
             {filteredRounds.length === 0 ? (
                 <EmptyState>
                     <div style={{ fontSize: 48, marginBottom: 12 }}>🎲</div>
-                    <div>No rounds yet. Submit your first pick above — the AI will respond at 10:30 AM ET on the next weekday.</div>
+                    <div>No rounds yet. Guvidul AI runs daily on weekdays and creates a position autonomously.</div>
                 </EmptyState>
             ) : (
                 filteredRounds.map((r) => <RoundCardComponent key={r.id} round={r} />)
@@ -938,7 +938,7 @@ const AiSide: React.FC<{
                 <SideLabel $color="#4a9eff">AI · Guvidul</SideLabel>
                 <LockedPlaceholder>
                     <div style={{ fontSize: 32 }}>⏳</div>
-                    <span>Waiting for 10:30 AM ET submit window</span>
+                    <span>AI pick pending — populated by next scheduled run</span>
                 </LockedPlaceholder>
             </Side>
         );
@@ -968,7 +968,7 @@ const AiSide: React.FC<{
                 </MetricRow>
             )}
 
-            {trade.rationale && trade.rationale !== 'AI has not picked yet — will be submitted at 10:30 AM ET' && (
+            {trade.rationale && !trade.rationale.startsWith('AI has not picked yet') && (
                 <Rationale>💡 {trade.rationale}</Rationale>
             )}
 
@@ -1100,7 +1100,7 @@ const SubmitModal: React.FC<{
             <ModalBody>
                 <h2 style={{ margin: '0 0 16px 0' }}>Submit your IC pick</h2>
                 <p style={{ color: '#888', fontSize: 12, marginBottom: 20 }}>
-                    AI will respond on the same expiration at 10:30 AM ET on the next weekday.
+                    AI will respond on the same expiration at the next scheduled run on the next weekday.
                 </p>
 
                 <FormRow>

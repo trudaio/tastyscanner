@@ -134,7 +134,58 @@ export async function getOptionsChain(token: string, underlying: string): Promis
     }>;
 }> {
     const encodedUnderlying = encodeURIComponent(underlying);
-    return request('GET', `/option-chains/${encodedUnderlying}/nested`, token);
+    const resp = await request<{
+        data: {
+            items: Array<{
+                expirations: Array<{
+                    'expiration-date': string;
+                    'days-to-expiration': number;
+                    strikes: Array<{
+                        'strike-price': string;
+                        call: string;
+                        'call-streamer-symbol': string;
+                        put: string;
+                        'put-streamer-symbol': string;
+                    }>;
+                }>;
+            }>;
+        };
+    }>('GET', `/option-chains/${encodedUnderlying}/nested`, token);
+    return resp.data;
+}
+
+/** Get market metrics (IV rank, IV percentile, beta) for one or more underlyings. */
+export async function getMarketMetrics(
+    token: string,
+    symbols: string[],
+): Promise<Map<string, { ivRank: number; ivPercentile: number; beta: number | null }>> {
+    const result = new Map<string, { ivRank: number; ivPercentile: number; beta: number | null }>();
+    if (symbols.length === 0) return result;
+    try {
+        const symbolsParam = encodeURIComponent(symbols.join(','));
+        const resp = await request<{
+            data: {
+                items: Array<{
+                    symbol: string;
+                    'implied-volatility-index-rank'?: string;
+                    'implied-volatility-percentile'?: string;
+                    beta?: string;
+                }>;
+            };
+        }>('GET', `/market-metrics?symbols=${symbolsParam}`, token);
+        for (const item of resp.data.items ?? []) {
+            const ivrFraction = parseFloat(item['implied-volatility-index-rank'] ?? '0');
+            const ivpFraction = parseFloat(item['implied-volatility-percentile'] ?? '0');
+            result.set(item.symbol, {
+                ivRank: Math.round(ivrFraction * 100),       // API returns 0..1, normalize to 0..100
+                ivPercentile: Math.round(ivpFraction * 100),
+                beta: item.beta ? parseFloat(item.beta) : null,
+            });
+        }
+    } catch (e) {
+        console.warn('[tasty] market-metrics failed:', e);
+    }
+    return result;
 }
 
 /** Get market data snapshot for option symbols. Batch of up to 100 symbols per call. */

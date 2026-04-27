@@ -7,7 +7,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { defineSecret } from 'firebase-functions/params';
 import { getCredentialsForUser, findActiveTastyUser } from './shared/credentials';
 import {
-    getAccessToken, getAccounts, getOptionsChain, getMarketDataSnapshot, getUnderlyingPrice, getAccountBalances, getPositions,
+    getAccessToken, getAccounts, getOptionsChain, getMarketDataSnapshot, getUnderlyingPrice, getAccountBalances, getPositions, getMarketMetrics,
 } from './shared/tasty-rest-client';
 import { getTopCandidates, hasStrikeOverlap, type ChainInput } from './shared/ic-picker';
 import { pickWithLlm } from './shared/llm-picker';
@@ -106,11 +106,9 @@ export const aiDailySubmit = onSchedule(
         const existingPositions = await getPositions(token, accountNumber);
         console.log(`[aiDailySubmit] Open positions: ${existingPositions.length} option legs`);
 
-        // Hard cap 80%, soft cap 50% (or 70% with VIX>22 exception)
-        if (bpePct >= 80) {
-            console.warn(`[aiDailySubmit] BPE ${bpePct}% >= 80% hard cap — skipping all picks today`);
-            return;
-        }
+        // 2026-04-27: BPE caps removed for autonomous paper-trading mode.
+        // AI picks are virtual (Firestore-only), don't consume real account BPE.
+        // BPE is logged above for context only — user retains discretion to execute manually.
 
         // 5. For each ticker, fetch chain + underlying price + market data, pick ICs
         for (const ticker of TICKERS) {
@@ -128,16 +126,21 @@ export const aiDailySubmit = onSchedule(
                     continue;
                 }
 
-                // Filter expirations: user-picked + next 3-4 upcoming (for ghost mode)
+                // Filter expirations: user-picked + 1 best upcoming (for autonomous daily mode)
+                // 2026-04-27: reduced from 4 ghost expirations/ticker to 1, per autonomous-mode redesign.
+                // Goal: 1 SPX + 1 QQQ position per day = clear learning signal, controlled BPE growth.
                 const userExps = userExpsByTicker.get(ticker) ?? new Set<string>();
                 const upcomingGhost = firstChain.expirations
                     .filter((e) => e['days-to-expiration'] >= 7 && e['days-to-expiration'] <= 45)
-                    .slice(0, 4)
+                    .slice(0, 1)
                     .map((e) => e['expiration-date']);
                 const targetExps = new Set<string>([...userExps, ...upcomingGhost]);
 
                 // Market context
                 const vix = await getUnderlyingPrice(token, 'VIX') ?? 20;
+                const metricsMap = await getMarketMetrics(token, [ticker]);
+                const tickerMetrics = metricsMap.get(ticker);
+                const ivRank = tickerMetrics?.ivRank ?? 0;
 
                 // Pull latest technical indicators (RSI/BB/ATR) for this ticker
                 let technicals: ITechnicalsContext | null = null;
@@ -175,17 +178,12 @@ export const aiDailySubmit = onSchedule(
                 const marketContext: IMarketContext = {
                     underlyingPrice,
                     vix,
-                    ivRank: 0, // TODO: fetch IV rank via /instruments/cryptocurrencies or /market-metrics
+                    ivRank,
                     technicals,
                 };
 
-                // BPE gate per-ticker (re-checked since BPE could change between tickers)
-                // 50% standard cap; 70% allowed only if VIX > 22 (Catalin's documented exception)
-                const bpeCap = vix > 22 ? 70 : 50;
-                if (bpePct >= bpeCap) {
-                    console.warn(`[aiDailySubmit] ${ticker}: BPE ${bpePct.toFixed(1)}% >= ${bpeCap}% cap (VIX=${vix.toFixed(1)}) — skipping ticker`);
-                    continue;
-                }
+                // BPE per-ticker check removed (autonomous paper mode).
+                // Logged for posterity; LLM still receives bpePercentage in prompt for context.
 
                 for (const expDate of targetExps) {
                     const exp = firstChain.expirations.find((e) => e['expiration-date'] === expDate);

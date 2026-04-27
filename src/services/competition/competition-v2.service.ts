@@ -152,7 +152,7 @@ export async function submitUserPick(
             pop: 0, ev: 0, alpha: 0, rr: 0,
             delta: 0, theta: 0,
             exitPl: null, exitDate: null, closedBy: null, status: 'open',
-            rationale: 'AI has not picked yet — will be submitted at 10:30 AM ET',
+            rationale: 'AI has not picked yet — will be submitted at the next scheduled run',
             confidenceScore: 0,
             rulesApplied: [],
             experimentVariant: null,

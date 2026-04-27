@@ -54,6 +54,26 @@ export interface ICompetitionTradeV2 {
     exitTarget?: number;
 }
 
+/** Alternative IC considered but not picked. Used for counterfactual analysis. */
+export interface IAlternativeCandidate {
+    strikes: { putBuy: number; putSell: number; callSell: number; callBuy: number };
+    wings: number;
+    quantity: number;
+    credit: number;
+    pop: number;
+    ev: number;
+    rr: number;
+    deltaShortPut: number;
+    deltaShortCall: number;
+    score: number;
+    /** Filled at close time by closeCheck. */
+    counterfactual?: {
+        hypotheticalExitPl: number;     // dollars
+        regretVsActual: number;          // hypothetical - actual; positive = "should have picked this"
+        computedAt: string;              // ISO
+    };
+}
+
 export interface IAiCompetitionTrade extends ICompetitionTradeV2 {
     rationale: string;
     confidenceScore: number;     // 0-100
@@ -74,6 +94,8 @@ export interface IAiCompetitionTrade extends ICompetitionTradeV2 {
     riskConcerns?: string[];
     riskConfidence?: number;
     riskAuditLogId?: string;
+    // Counterfactual analysis (autonomous-mode, 2026-04-27):
+    alternativesConsidered?: IAlternativeCandidate[];
 }
 
 export interface IUserFeedback {

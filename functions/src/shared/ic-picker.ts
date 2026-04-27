@@ -1,6 +1,6 @@
 // AI Iron Condor picker — seeded with Catalin's rules, extensible via AiState
 
-import type { IAiState, IAiCompetitionTrade, IMarketContext } from './types';
+import type { IAiState, IAiCompetitionTrade, IAlternativeCandidate, IMarketContext } from './types';
 import type { IOptionQuote, IRawPosition } from './tasty-rest-client';
 import { buildProvestBlock, probTouch } from './metrics';
 
@@ -396,6 +396,23 @@ export function pickBestIC(
     const margin = candidates.length > 1 ? candidates[0].score - candidates[1].score : 20;
     const confidence = Math.max(30, Math.min(95, 50 + margin * 2));
 
+    // Capture top 3 alternatives (excluding chosen) for counterfactual analysis
+    const alternativesConsidered: IAlternativeCandidate[] = candidates
+        .filter((c) => c !== chosen && (c.putSell !== chosen.putSell || c.callSell !== chosen.callSell))
+        .slice(0, 3)
+        .map((c) => ({
+            strikes: { putBuy: c.putBuy, putSell: c.putSell, callSell: c.callSell, callBuy: c.callBuy },
+            wings: c.wings,
+            quantity: c.quantity,
+            credit: Math.round(c.credit * 100) / 100,
+            pop: Math.round(c.pop * 10) / 10,
+            ev: Math.round(c.ev * 100) / 100,
+            rr: Math.round(c.rr * 100) / 100,
+            deltaShortPut: Math.round(c.deltaShortPut * 100) / 100,
+            deltaShortCall: Math.round(c.deltaShortCall * 100) / 100,
+            score: Math.round(c.score * 100) / 100,
+        }));
+
     // Build rationale — PROVEST prelude + narrative reasons
     const provest = buildProvestBlock({
         pop: chosen.pop,
@@ -461,6 +478,7 @@ export function pickBestIC(
             `bp_min_credit_quarter_wing`,
         ],
         experimentVariant,
+        alternativesConsidered,
     };
 
     return { pick: aiTrade, reason: reasons.join(' | '), candidatesEvaluated: candidates.length };

@@ -41,6 +41,26 @@ function setWinner(round: ICompetitionRoundV2): { winner: ICompetitionRoundV2['w
     return { winner: userScore > aiScore ? 'User' : 'AI', userScore, aiScore };
 }
 
+/** Compute hypothetical exit P&L for an alternative IC at current quotes. */
+function computeAltCounterfactual(
+    alt: import('./shared/types').IAlternativeCandidate,
+    quotes: Map<string, import('./shared/tasty-rest-client').IOptionQuote>,
+    streamerSymLookup: (strike: number, type: 'P' | 'C') => string | null,
+): { hypotheticalCloseCost: number | null; hypotheticalExitPl: number | null } {
+    const psSym = streamerSymLookup(alt.strikes.putSell, 'P');
+    const pbSym = streamerSymLookup(alt.strikes.putBuy, 'P');
+    const scSym = streamerSymLookup(alt.strikes.callSell, 'C');
+    const cbSym = streamerSymLookup(alt.strikes.callBuy, 'C');
+    if (!psSym || !pbSym || !scSym || !cbSym) return { hypotheticalCloseCost: null, hypotheticalExitPl: null };
+    const ps = quotes.get(psSym); const pb = quotes.get(pbSym);
+    const sc = quotes.get(scSym); const cb = quotes.get(cbSym);
+    if (!ps || !pb || !sc || !cb) return { hypotheticalCloseCost: null, hypotheticalExitPl: null };
+    const closeCost = ps.mid + sc.mid - pb.mid - cb.mid;
+    // exitPl in dollars (matches closeCheck convention: (credit - closeCost) * 100 * qty)
+    const pl = Math.round((alt.credit - closeCost) * 100 * alt.quantity * 100) / 100;
+    return { hypotheticalCloseCost: closeCost, hypotheticalExitPl: pl };
+}
+
 /** Check AI virtual trade — close if exit target hit or DTE<=14 */
 async function maybeCloseAiTrade(trade: IAiCompetitionTrade, quotes: Map<string, import('./shared/tasty-rest-client').IOptionQuote>, streamerSymLookup: (strike: number, type: 'P' | 'C') => string | null): Promise<IAiCompetitionTrade | null> {
     const dte = daysUntil(trade.expiration);
@@ -72,30 +92,54 @@ async function maybeCloseAiTrade(trade: IAiCompetitionTrade, quotes: Map<string,
         }
     }
 
+    // Helper: enrich alternativesConsidered with counterfactual P&L for the closed trade
+    const enrichAlternatives = (actualExitPl: number) => {
+        if (!trade.alternativesConsidered || trade.alternativesConsidered.length === 0) {
+            return trade.alternativesConsidered;
+        }
+        const now = new Date().toISOString();
+        return trade.alternativesConsidered.map((alt) => {
+            const cf = computeAltCounterfactual(alt, quotes, streamerSymLookup);
+            if (cf.hypotheticalExitPl === null) return alt;
+            return {
+                ...alt,
+                counterfactual: {
+                    hypotheticalExitPl: cf.hypotheticalExitPl,
+                    regretVsActual: Math.round((cf.hypotheticalExitPl - actualExitPl) * 100) / 100,
+                    computedAt: now,
+                },
+            };
+        });
+    };
+
     // Profit % = (credit - currentClose) / credit * 100
     if (currentClose !== null && trade.credit > 0) {
         const profitPct = ((trade.credit - currentClose) / trade.credit) * 100;
         if (profitPct >= exitTarget) {
+            const exitPl = Math.round((trade.credit - currentClose) * 100 * trade.quantity * 100) / 100;
             return {
                 ...trade,
                 status: 'closed',
-                exitPl: Math.round((trade.credit - currentClose) * 100 * trade.quantity * 100) / 100,
+                exitPl,
                 exitDate: new Date().toISOString().split('T')[0],
                 closedBy: 'target',
+                alternativesConsidered: enrichAlternatives(exitPl),
             };
         }
     }
 
     // DTE management: 14 days (was 10). Best-practices update 2026-04-17.
     if (dte <= 14) {
+        const exitPl = currentClose !== null
+            ? Math.round((trade.credit - currentClose) * 100 * trade.quantity * 100) / 100
+            : Math.round(trade.credit * 100 * trade.quantity * 100) / 100;
         return {
             ...trade,
             status: 'closed',
-            exitPl: currentClose !== null
-                ? Math.round((trade.credit - currentClose) * 100 * trade.quantity * 100) / 100
-                : Math.round(trade.credit * 100 * trade.quantity * 100) / 100, // if no close price, assume worthless
+            exitPl,
             exitDate: new Date().toISOString().split('T')[0],
             closedBy: 'dte',
+            alternativesConsidered: enrichAlternatives(exitPl),
         };
     }
 
@@ -216,6 +260,22 @@ export const closeCheck = onSchedule(
                     const entry = strikeMap.get(leg.strike);
                     if (!entry) continue;
                     allSymbols.push(leg.optionType === 'C' ? entry.call : entry.put);
+                }
+                // Also fetch quotes for alternative-IC strikes (counterfactual analysis)
+                if (r.aiTrade.alternativesConsidered) {
+                    for (const alt of r.aiTrade.alternativesConsidered) {
+                        const altLegs: Array<[number, 'P' | 'C']> = [
+                            [alt.strikes.putBuy, 'P'],
+                            [alt.strikes.putSell, 'P'],
+                            [alt.strikes.callSell, 'C'],
+                            [alt.strikes.callBuy, 'C'],
+                        ];
+                        for (const [strike, type] of altLegs) {
+                            const entry = strikeMap.get(strike);
+                            if (!entry) continue;
+                            allSymbols.push(type === 'C' ? entry.call : entry.put);
+                        }
+                    }
                 }
             }
 

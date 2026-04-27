@@ -8,6 +8,7 @@ import { defineSecret } from 'firebase-functions/params';
 import { findActiveTastyUser } from './shared/credentials';
 import { callClaude, BudgetExceededError } from './shared/llm-client';
 import { REFLECT_SYSTEM_PROMPT, buildReflectUserPrompt } from './shared/prompts';
+import { upsertLearnedRule } from './shared/learned-rules';
 import type { ICompetitionRoundV2, IAiState, IWeeklyMemo, IAdversarialFinding } from './shared/types';
 import { DEFAULT_AI_STATE } from './shared/types';
 
@@ -176,6 +177,22 @@ export const weeklyReflect = onSchedule(
         const adversarial = await runAdversarialReview(uid, weekId, rounds);
         if (adversarial.findings.length > 0) {
             console.log(`[weeklyReflect] Adversarial review: ${adversarial.findings.length} findings`);
+            // Upsert each finding into aiState.learnedRules so the picker sees them
+            let updatedRules = aiState.learnedRules;
+            for (const f of adversarial.findings) {
+                if (!f.suggestedRuleId || !f.suggestedRule) continue;
+                updatedRules = upsertLearnedRule(updatedRules, {
+                    ruleId: f.suggestedRuleId,
+                    rule: f.suggestedRule,
+                    severity: f.severity,
+                    source: 'adversarial',
+                }, weekId, 'week');
+            }
+            await admin.firestore()
+                .collection('users').doc(uid)
+                .collection('aiState').doc('current')
+                .set({ learnedRules: updatedRules, lastUpdated: new Date().toISOString() }, { merge: true });
+            console.log(`[weeklyReflect] aiState.learnedRules updated: ${updatedRules?.length ?? 0} total`);
         }
 
         const memo: IWeeklyMemo = {

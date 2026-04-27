@@ -12,6 +12,7 @@ import { defineSecret } from 'firebase-functions/params';
 import type { ICompetitionRoundV2, IAiState, IFeatureVector, ILearningLogEntry, IRuleAdjustment } from './shared/types';
 import { DEFAULT_AI_STATE } from './shared/types';
 import { callClaude, BudgetExceededError } from './shared/llm-client';
+import { upsertLearnedRule } from './shared/learned-rules';
 
 const anthropicKey = defineSecret('ANTHROPIC_API_KEY');
 
@@ -256,22 +257,6 @@ export const aiLearning = onDocumentUpdated(
         // Decay exploration rate
         const newExplorationRate = Math.max(0.05, state.explorationRate * 0.95);
 
-        // Update counters
-        const newState: IAiState = {
-            ...state,
-            lastUpdated: new Date().toISOString(),
-            ruleAdjustments: newAdjustments,
-            explorationRate: newExplorationRate,
-            totalRounds: state.totalRounds + 1,
-            wins: state.wins + (outcome === 'win' ? 1 : 0),
-            losses: state.losses + (outcome === 'loss' ? 1 : 0),
-            draws: state.draws + (outcome === 'draw' ? 1 : 0),
-            ghostRounds: state.ghostRounds + (after.ghost ? 1 : 0),
-        };
-        void state;
-
-        await stateRef.set(newState);
-
         // Build post-mortem — LLM-driven for losses, template otherwise
         const templatePost = generateTemplatePostMortem(after, outcome);
         let postMortem = templatePost;
@@ -282,6 +267,35 @@ export const aiLearning = onDocumentUpdated(
                 postMortem = `${templatePost}\n\n[ROOT CAUSE] ${llmAnalysis.rootCause}\n[RULE] ${llmAnalysis.preventiveRule} (id=${llmAnalysis.ruleId}, confidence=${llmAnalysis.confidenceInRule})`;
             }
         }
+
+        // Update counters + learned rules
+        let learnedRules = state.learnedRules;
+        if (llmAnalysis && llmAnalysis.confidenceInRule >= 60 && llmAnalysis.ruleId) {
+            const severity: 'high' | 'medium' | 'low' = llmAnalysis.confidenceInRule >= 80 ? 'high' : 'medium';
+            learnedRules = upsertLearnedRule(learnedRules, {
+                ruleId: llmAnalysis.ruleId,
+                rule: llmAnalysis.preventiveRule,
+                severity,
+                source: 'postmortem',
+            }, roundId, 'round');
+            console.log(`[aiLearning] Learned rule "${llmAnalysis.ruleId}" (severity=${severity}, conf=${llmAnalysis.confidenceInRule})`);
+        }
+
+        const newState: IAiState = {
+            ...state,
+            lastUpdated: new Date().toISOString(),
+            ruleAdjustments: newAdjustments,
+            explorationRate: newExplorationRate,
+            totalRounds: state.totalRounds + 1,
+            wins: state.wins + (outcome === 'win' ? 1 : 0),
+            losses: state.losses + (outcome === 'loss' ? 1 : 0),
+            draws: state.draws + (outcome === 'draw' ? 1 : 0),
+            ghostRounds: state.ghostRounds + (after.ghost ? 1 : 0),
+            learnedRules,
+        };
+        void state;
+
+        await stateRef.set(newState);
 
         // Append to learning log
         const logEntry: ILearningLogEntry & { llmRuleSuggestion?: { ruleId: string; rule: string; confidence: number } } = {

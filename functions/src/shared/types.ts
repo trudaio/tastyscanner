@@ -157,6 +157,19 @@ export interface IWeeklyMemo {
     adversarialAuditLogId?: string;
 }
 
+/** Rule learned from adversarial review or post-mortem analysis. Surfaced in picker prompt. */
+export interface ILearnedRule {
+    ruleId: string;
+    rule: string;                            // human-readable, what to avoid or seek
+    severity: 'high' | 'medium' | 'low';
+    source: 'adversarial' | 'postmortem';
+    addedAt: string;                         // ISO timestamp
+    reinforcedAt: string;                    // ISO; bumped when same ruleId is suggested again
+    reinforceCount: number;                  // how many times this rule has been suggested
+    weekIds?: string[];                       // weekly memo IDs that flagged this
+    sampleRoundIds?: string[];                // up to 5 example rounds
+}
+
 export interface IAiState {
     version: number;
     lastUpdated: string;
@@ -172,6 +185,8 @@ export interface IAiState {
     losses: number;
     draws: number;
     ghostRounds: number;
+    /** Learned rules from post-mortems + adversarial reviews. Picker LLM reads these. */
+    learnedRules?: ILearnedRule[];
 }
 
 export interface IRuleAdjustment {

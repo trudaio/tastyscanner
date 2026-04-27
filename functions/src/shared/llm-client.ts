@@ -19,8 +19,8 @@ const DEFAULT_DAILY_BUDGET_USD = 10.0;
 
 export interface LlmCallContext {
     uid: string;
-    function: 'aiDailySubmit' | 'weeklyReflect' | 'manual';
-    purpose: 'round_pick' | 'risk_review' | 'weekly_memo' | 'test';
+    function: 'aiDailySubmit' | 'weeklyReflect' | 'aiLearning' | 'manual';
+    purpose: 'round_pick' | 'risk_review' | 'weekly_memo' | 'post_mortem' | 'adversarial_review' | 'test';
     agent: AgentRole;
     metadata?: Record<string, unknown>;
 }

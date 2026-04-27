@@ -132,6 +132,15 @@ export interface ICompetitionRoundV2 {
     userVeto?: IUserVeto;
 }
 
+/** Adversarial finding from the weekly review LLM critic. */
+export interface IAdversarialFinding {
+    severity: 'high' | 'medium' | 'low';
+    finding: string;            // 1-2 sentences identifying the mistake pattern
+    suggestedRule: string;       // 1 sentence: how to prevent it
+    suggestedRuleId: string;     // snake_case identifier
+    affectedRoundIds: string[];
+}
+
 export interface IWeeklyMemo {
     weekId: string;              // YYYY-WW
     weekStart: string;
@@ -143,6 +152,9 @@ export interface IWeeklyMemo {
     aiCumulativeScore: number;
     auditLogId: string;
     createdAt: string;
+    // Adversarial review (Phase 3, autonomous-mode):
+    adversarialFindings?: IAdversarialFinding[];
+    adversarialAuditLogId?: string;
 }
 
 export interface IAiState {

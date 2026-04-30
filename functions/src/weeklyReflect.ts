@@ -5,7 +5,7 @@
 import * as admin from 'firebase-admin';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { defineSecret } from 'firebase-functions/params';
-import { findActiveTastyUser } from './shared/credentials';
+import { findActiveTastyUser, CATALIN_UID as CATALIN_UID_CONST } from './shared/credentials';
 import { callClaude, BudgetExceededError } from './shared/llm-client';
 import { REFLECT_SYSTEM_PROMPT, buildReflectUserPrompt } from './shared/prompts';
 import { upsertLearnedRule } from './shared/learned-rules';
@@ -13,7 +13,7 @@ import type { ICompetitionRoundV2, IAiState, IWeeklyMemo, IAdversarialFinding } 
 import { DEFAULT_AI_STATE } from './shared/types';
 
 const anthropicKey = defineSecret('ANTHROPIC_API_KEY');
-const CATALIN_UID = process.env.CATALIN_UID ?? '';
+const CATALIN_UID = CATALIN_UID_CONST;
 
 const ADVERSARIAL_SYSTEM = `You are an adversarial options-trading critic reviewing Guvidul AI's iron-condor picks for the past week. Your job is to find SPECIFIC mistakes — not platitudes.
 

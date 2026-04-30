@@ -5,14 +5,14 @@
 
 import * as admin from 'firebase-admin';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
-import { getCredentialsForUser, findActiveTastyUser } from './shared/credentials';
+import { getCredentialsForUser, findActiveTastyUser, CATALIN_UID as CATALIN_UID_CONST } from './shared/credentials';
 import {
     getAccessToken, getAccounts, getMarketDataSnapshot, getTransactions,
 } from './shared/tasty-rest-client';
 import { touchAlertLevel, touchAlertPrefix } from './shared/metrics';
 import type { ICompetitionRoundV2, ICompetitionTradeV2, IAiCompetitionTrade } from './shared/types';
 
-const CATALIN_UID = process.env.CATALIN_UID ?? '';
+const CATALIN_UID = CATALIN_UID_CONST;
 
 function daysUntil(expirationDate: string): number {
     const exp = new Date(expirationDate + 'T16:00:00-05:00'); // 4 PM ET expiration

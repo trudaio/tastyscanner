@@ -19,6 +19,9 @@
 .env.test.local
 .env.production.local
 .env-*.local
+# Firebase Functions per-project env files (e.g. functions/.env.operatiunea-guvidul)
+functions/.env
+functions/.env.*
 /.nx
 /.nx/cache
 /.vscode/*

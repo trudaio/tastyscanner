@@ -78,8 +78,12 @@ admin.initializeApp({ credential: admin.credential.cert(sa) });
 const db = admin.firestore();
 
 // ── TastyTrade credentials ────────────────────────────────────────────────────
-const CLIENT_SECRET = '1f2391186fc378a6e01147167b5436d58d945e61';
-const REFRESH_TOKEN = 'eyJhbGciOiJFZERTQSIsInR5cCI6InJ0K2p3dCIsImtpZCI6IlVWRThTM3BBTWZUbkVtaUhsUHJnMU5oWWZqMzFNeHFhd08teGpubnhKX2ciLCJqa3UiOiJodHRwczovL2FwaS50YXN0eXRyYWRlLmNvbS9vYXV0aC9qd2tzIn0.eyJpc3MiOiJodHRwczovL2FwaS50YXN0eXRyYWRlLmNvbSIsInN1YiI6IlVjZjkyYzUwZi05ZmQyLTQ0N2EtODg3Ni0wOWIzMWI1NjljY2YiLCJpYXQiOjE3NzU3MTgzNTgsImF1ZCI6ImQ4NDAzMWQ2LTlmOTAtNDJjNi1iZDM3LTYwMWQyMjZkMGZkMCIsImdyYW50X2lkIjoiRzA4YThhZjZiLWE2OWEtNDkyYy05NTQ0LTk4M2NhYmFhNjNkYiIsInNjb3BlIjoicmVhZCJ9.U7yOTbXMczm55_FBt1YNoUVfTM-Gn5masb0DyAtZp7IAo68xzN-q6ipKfFtQQZrFGB5PR-He151iwp59OmhIDA';
+// HARD RULE: this script must NEVER use another user's TastyTrade credentials.
+// It loads credentials only from Catalin's broker accounts in Firestore.
+// The previous version hardcoded a refresh token AND fell back to scanning all
+// users' brokerAccounts — that abused the OAuth grants of other app users and
+// caused TastyTrade to email about DxLink subscription limit exceeded.
+const CATALIN_UID = '7OcSxAkz8eahmOJD2ddu4ElBPsf2'; // macovei17@gmail.com
 const TASTY_BASE = 'https://api.tastyworks.com';
 const axios = require('axios');
 
@@ -117,10 +121,30 @@ function round2(n) { return Math.round(n * 100) / 100; }
 // ── TastyTrade REST via axios + HttpsProxyAgent ───────────────────────────────
 const axiosCfg = { httpsAgent, proxy: false, maxRedirects: 5 };
 
+// Fetch ONLY Catalin's TastyTrade credentials from his brokerAccounts.
+// Refuses to fall back to any other user.
+async function fetchCatalinCredentials() {
+  const snap = await db
+    .collection('users').doc(CATALIN_UID)
+    .collection('brokerAccounts')
+    .where('isActive', '==', true)
+    .get();
+
+  for (const doc of snap.docs) {
+    const data = doc.data();
+    const cs = data?.credentials?.clientSecret;
+    const rt = data?.credentials?.refreshToken;
+    const broker = (data?.brokerType || data?.credentials?.brokerType || '').toLowerCase();
+    if (broker === 'tastytrade' && cs && rt) return { cs, rt };
+  }
+  throw new Error(`No active TastyTrade brokerAccount under users/${CATALIN_UID}/brokerAccounts. Re-link the broker in the app and re-run.`);
+}
+
 async function getAccessToken() {
+  const { cs, rt } = await fetchCatalinCredentials();
   const res = await axios.post(`${TASTY_BASE}/oauth/token`, {
-    refresh_token: REFRESH_TOKEN,
-    client_secret: CLIENT_SECRET,
+    refresh_token: rt,
+    client_secret: cs,
     scope: 'read',
     grant_type: 'refresh_token',
   }, axiosCfg);
@@ -143,6 +167,41 @@ async function getNestedOptionChain(accessToken, symbol) {
     headers: { Authorization: accessToken },
   });
   return res.data?.data?.items ?? res.data?.data ?? res.data;
+}
+
+// Spot price for SPX (cash index) or QQQ (equity ETF) via REST.
+// Used to keep DxLink subscriptions bounded — connor.abramson@tastytrade.com
+// asked us to subscribe only to strikes near the underlying.
+async function getUnderlyingSpot(accessToken, symbol) {
+  try {
+    const params = new URLSearchParams();
+    if (symbol === 'SPX' || symbol.startsWith('$')) params.append('index', symbol);
+    else params.append('equity', symbol);
+    const res = await axios.get(`${TASTY_BASE}/market-data/by-type?${params.toString()}`, {
+      ...axiosCfg, headers: { Authorization: accessToken },
+    });
+    const item = res.data?.data?.items?.[0];
+    if (!item) return null;
+    const last = parseFloat(item['last-trade-price'] ?? '0');
+    if (last > 0) return last;
+    const bid = parseFloat(item.bid ?? '0');
+    const ask = parseFloat(item.ask ?? '0');
+    const m = (bid + ask) / 2;
+    return m > 0 ? m : null;
+  } catch (e) {
+    console.warn(`  spot fetch failed for ${symbol}: ${e?.message ?? e} — falling back to no band filter`);
+    return null;
+  }
+}
+
+// Keep strikes within ±STRIKE_BAND_PCT of spot. Far-OTM strikes never produce
+// qualifying ICs (delta < deltaMin) so subscribing them just burns DxLink quota.
+const STRIKE_BAND_PCT = 0.10;
+function filterStrikesToBand(strikes, spot) {
+  if (!spot || spot <= 0) return strikes; // fail open
+  const lo = spot * (1 - STRIKE_BAND_PCT);
+  const hi = spot * (1 + STRIKE_BAND_PCT);
+  return strikes.filter(s => s.strikePrice >= lo && s.strikePrice <= hi);
 }
 
 // ── IC Builder ────────────────────────────────────────────────────────────────
@@ -258,6 +317,8 @@ async function main() {
 
   console.log('\n[3] Fetching options chains...');
   for (const ticker of tickers) {
+    const spot = await getUnderlyingSpot(accessToken, ticker);
+    console.log(`  ${ticker}: spot=${spot ?? 'unknown'}`);
     const raw = await getNestedOptionChain(accessToken, ticker);
     const expirations = raw.flatMap(c => c.expirations ?? [c]).map(exp => ({
       expirationDate:   exp['expiration-date'],
@@ -268,9 +329,13 @@ async function main() {
         callStreamerSymbol: s['call-streamer-symbol'],
       })),
     }));
-    const filtered = expirations.filter(e => e.daysToExpiration >= minDTE && e.daysToExpiration <= maxDTE);
+    const filtered = expirations
+      .filter(e => e.daysToExpiration >= minDTE && e.daysToExpiration <= maxDTE)
+      .map(e => ({ ...e, strikes: filterStrikesToBand(e.strikes, spot) }))
+      .filter(e => e.strikes.length > 0);
     chains[ticker] = filtered;
-    console.log(`  ${ticker}: ${filtered.length} expirations (DTE ${minDTE}-${maxDTE})`);
+    const band = spot ? `±${(STRIKE_BAND_PCT * 100).toFixed(0)}% of ${spot}` : 'no band (spot unknown)';
+    console.log(`  ${ticker}: ${filtered.length} expirations (DTE ${minDTE}-${maxDTE}, strikes ${band})`);
     filtered.forEach(e => console.log(`    DTE ${e.daysToExpiration} (${e.expirationDate}): ${e.strikes.length} strikes`));
   }
 
@@ -289,105 +354,138 @@ async function main() {
   const quotesMap = {};
   const greeksMap = {};
 
-  const wsClient = new DXLinkWebSocketClient();
-  wsClient.connect(dxLinkUrl);
-  wsClient.setAuthToken(dxAuthToken);
+  // Hoisted so the finally block can clean up regardless of where we threw.
+  // Without this, a throw between connect and the cleanup block (e.g. Firestore
+  // batch.commit failure) would bypass unsubscribe and leave ghost DxLink subs
+  // counting against the account quota — exactly the failure this script's
+  // cleanup is meant to prevent.
+  let wsClient = null;
+  let feed = null;
+  const allSubs = [];
 
-  const feed = new DXLinkFeed(wsClient, FeedContract.AUTO);
-  feed.configure({ acceptAggregationPeriod: 10, acceptDataFormat: FeedDataFormat.COMPACT });
-  feed.addEventListener((records) => {
-    for (const rec of records) {
-      const sym = rec.eventSymbol;
-      if (rec.eventType === 'Quote') {
-        quotesMap[sym] = { bidPrice: rec.bidPrice, askPrice: rec.askPrice };
-      } else if (rec.eventType === 'Greeks') {
-        greeksMap[sym] = { delta: rec.delta, theta: rec.theta, gamma: rec.gamma,
-          vega: rec.vega, volatility: rec.volatility };
+  try {
+    wsClient = new DXLinkWebSocketClient();
+    wsClient.connect(dxLinkUrl);
+    wsClient.setAuthToken(dxAuthToken);
+
+    feed = new DXLinkFeed(wsClient, FeedContract.AUTO);
+    feed.configure({ acceptAggregationPeriod: 10, acceptDataFormat: FeedDataFormat.COMPACT });
+    feed.addEventListener((records) => {
+      for (const rec of records) {
+        const sym = rec.eventSymbol;
+        if (rec.eventType === 'Quote') {
+          quotesMap[sym] = { bidPrice: rec.bidPrice, askPrice: rec.askPrice };
+        } else if (rec.eventType === 'Greeks') {
+          greeksMap[sym] = { delta: rec.delta, theta: rec.theta, gamma: rec.gamma,
+            vega: rec.vega, volatility: rec.volatility };
+        }
+      }
+    });
+
+    const BATCH = 200;
+    for (let i = 0; i < symArray.length; i += BATCH) {
+      const batch = symArray.slice(i, i + BATCH);
+      const subs = [
+        ...batch.map(s => ({ type: 'Quote',  symbol: s })),
+        ...batch.map(s => ({ type: 'Greeks', symbol: s })),
+      ];
+      feed.addSubscriptions(subs);
+      allSubs.push(...subs);
+    }
+
+    console.log('  Waiting 12s for streaming data...');
+    await new Promise(r => setTimeout(r, 12000));
+
+    const qCount = Object.keys(quotesMap).length;
+    const gCount = Object.keys(greeksMap).length;
+    console.log(`  Received: ${qCount} quotes, ${gCount} greek records`);
+
+    console.log('\n[5] Building Iron Condors...');
+    const results = {};
+
+    for (const ticker of tickers) {
+      results[ticker] = { conservative: [], neutral: [], aggressive: [] };
+      for (const [pName, profile] of Object.entries(PROFILES)) {
+        const exps = chains[ticker].filter(e => e.daysToExpiration >= profile.dteMin && e.daysToExpiration <= profile.dteMax);
+        const best = [];
+        for (const exp of exps) {
+          const ics = buildICs(exp, pName, profile, quotesMap, greeksMap);
+          if (ics.length) best.push(ics[0]);
+        }
+        results[ticker][pName] = best;
+        if (best.length) {
+          console.log(`  ${ticker} / ${pName}: ${best.length} IC(s)`);
+          best.forEach(ic => console.log(`    DTE${ic.dte} ${ic.expiration}: credit=$${ic.credit} RR=${ic.rr} POP=${ic.pop}% EV=${ic.ev} alpha=${ic.alpha} score=${ic.score}`));
+        } else {
+          console.log(`  ${ticker} / ${pName}: — no qualifying ICs`);
+        }
       }
     }
-  });
 
-  const BATCH = 200;
-  for (let i = 0; i < symArray.length; i += BATCH) {
-    const batch = symArray.slice(i, i + BATCH);
-    feed.addSubscriptions([
-      ...batch.map(s => ({ type: 'Quote',  symbol: s })),
-      ...batch.map(s => ({ type: 'Greeks', symbol: s })),
-    ]);
-  }
+    console.log('\n[6] Saving to Firestore...');
+    const today = new Date().toISOString().split('T')[0];
 
-  console.log('  Waiting 12s for streaming data...');
-  await new Promise(r => setTimeout(r, 12000));
+    await db.collection('guvid-agent').doc('scans').collection(today).doc('morning').set({
+      date: today,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      type: 'morning',
+      SPX: results['SPX'],
+      QQQ: results['QQQ'],
+    });
+    console.log(`  Scan saved → guvid-agent/scans/${today}/morning`);
 
-  const qCount = Object.keys(quotesMap).length;
-  const gCount = Object.keys(greeksMap).length;
-  console.log(`  Received: ${qCount} quotes, ${gCount} greek records`);
-
-  console.log('\n[5] Building Iron Condors...');
-  const results = {};
-
-  for (const ticker of tickers) {
-    results[ticker] = { conservative: [], neutral: [], aggressive: [] };
-    for (const [pName, profile] of Object.entries(PROFILES)) {
-      const exps = chains[ticker].filter(e => e.daysToExpiration >= profile.dteMin && e.daysToExpiration <= profile.dteMax);
-      const best = [];
-      for (const exp of exps) {
-        const ics = buildICs(exp, pName, profile, quotesMap, greeksMap);
-        if (ics.length) best.push(ics[0]);
-      }
-      results[ticker][pName] = best;
-      if (best.length) {
-        console.log(`  ${ticker} / ${pName}: ${best.length} IC(s)`);
-        best.forEach(ic => console.log(`    DTE${ic.dte} ${ic.expiration}: credit=$${ic.credit} RR=${ic.rr} POP=${ic.pop}% EV=${ic.ev} alpha=${ic.alpha} score=${ic.score}`));
-      } else {
-        console.log(`  ${ticker} / ${pName}: — no qualifying ICs`);
+    const batch = db.batch();
+    let posCount = 0;
+    for (const ticker of tickers) {
+      for (const [pName, ics] of Object.entries(results[ticker])) {
+        for (const ic of ics) {
+          const ref = db.collection('guvid-agent').doc('positions').collection('items').doc();
+          batch.set(ref, {
+            ticker, profile: pName, ic,
+            openDate: today, expiration: ic.expiration,
+            credit: ic.credit, pop: ic.pop, ev: ic.ev, alpha: ic.alpha,
+            rr: ic.rr, wings: ic.wings, status: 'open', dailyChecks: [],
+          });
+          posCount++;
+        }
       }
     }
-  }
+    await batch.commit();
+    console.log(`  ${posCount} position(s) saved → guvid-agent/positions/items/{auto-id}`);
 
-  console.log('\n[6] Saving to Firestore...');
-  const today = new Date().toISOString().split('T')[0];
-
-  await db.collection('guvid-agent').doc('scans').collection(today).doc('morning').set({
-    date: today,
-    timestamp: admin.firestore.FieldValue.serverTimestamp(),
-    type: 'morning',
-    SPX: results['SPX'],
-    QQQ: results['QQQ'],
-  });
-  console.log(`  Scan saved → guvid-agent/scans/${today}/morning`);
-
-  const batch = db.batch();
-  let posCount = 0;
-  for (const ticker of tickers) {
-    for (const [pName, ics] of Object.entries(results[ticker])) {
-      for (const ic of ics) {
-        const ref = db.collection('guvid-agent').doc('positions').collection('items').doc();
-        batch.set(ref, {
-          ticker, profile: pName, ic,
-          openDate: today, expiration: ic.expiration,
-          credit: ic.credit, pop: ic.pop, ev: ic.ev, alpha: ic.alpha,
-          rr: ic.rr, wings: ic.wings, status: 'open', dailyChecks: [],
-        });
-        posCount++;
+    console.log('\n=== SUMMARY ===');
+    console.log(`Date: ${today}  |  Data: ${qCount} quotes, ${gCount} greeks`);
+    for (const ticker of tickers) {
+      for (const pName of Object.keys(PROFILES)) {
+        const ics = results[ticker][pName];
+        if (!ics.length) {
+          console.log(`${ticker} ${pName.padEnd(12)}: — no qualifying ICs`);
+        } else {
+          ics.forEach(ic => console.log(
+            `${ticker} ${pName.padEnd(12)}: DTE${ic.dte} ${ic.expiration}  credit=$${ic.credit}  RR=${ic.rr}  POP=${ic.pop}%  EV=${ic.ev}  score=${ic.score}`
+          ));
+        }
       }
     }
-  }
-  await batch.commit();
-  console.log(`  ${posCount} position(s) saved → guvid-agent/positions/items/{auto-id}`);
-
-  console.log('\n=== SUMMARY ===');
-  console.log(`Date: ${today}  |  Data: ${qCount} quotes, ${gCount} greeks`);
-  for (const ticker of tickers) {
-    for (const pName of Object.keys(PROFILES)) {
-      const ics = results[ticker][pName];
-      if (!ics.length) {
-        console.log(`${ticker} ${pName.padEnd(12)}: — no qualifying ICs`);
-      } else {
-        ics.forEach(ic => console.log(
-          `${ticker} ${pName.padEnd(12)}: DTE${ic.dte} ${ic.expiration}  credit=$${ic.credit}  RR=${ic.rr}  POP=${ic.pop}%  EV=${ic.ev}  score=${ic.score}`
-        ));
+  } finally {
+    // Always drop subscriptions and close the WebSocket — even if the try
+    // block threw — so DxLink doesn't leave ghost subs counting against the
+    // account quota across runs.
+    console.log('\n[7] Cleaning up DxLink subscriptions...');
+    try {
+      if (feed && typeof feed.removeSubscriptions === 'function' && allSubs.length) {
+        feed.removeSubscriptions(allSubs);
+      } else if (feed && typeof feed.clearSubscriptions === 'function') {
+        feed.clearSubscriptions();
       }
+      if (feed && typeof feed.close === 'function') feed.close();
+      if (wsClient && typeof wsClient.disconnect === 'function') wsClient.disconnect();
+      else if (wsClient && typeof wsClient.close === 'function') wsClient.close();
+      // Allow flush of the unsubscribe frames before tearing the socket down.
+      if (wsClient) await new Promise(r => setTimeout(r, 1500));
+      console.log('  Cleanup done.');
+    } catch (e) {
+      console.error('  Cleanup error (non-fatal):', e?.message ?? e);
     }
   }
 

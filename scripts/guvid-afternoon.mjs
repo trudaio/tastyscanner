@@ -85,27 +85,36 @@ function yesterday() {
   return d.toISOString().split('T')[0];
 }
 
-// Known-good fallback credentials (from guvid-scan.mjs)
-const FALLBACK_CLIENT_SECRET = '1f2391186fc378a6e01147167b5436d58d945e61';
-const FALLBACK_REFRESH_TOKEN = 'eyJhbGciOiJFZERTQSIsInR5cCI6InJ0K2p3dCIsImtpZCI6IlVWRThTM3BBTWZUbkVtaUhsUHJnMU5oWWZqMzFNeHFhd08teGpubnhKX2ciLCJqa3UiOiJodHRwczovL2FwaS50YXN0eXRyYWRlLmNvbS9vYXV0aC9qd2tzIn0.eyJpc3MiOiJodHRwczovL2FwaS50YXN0eXRyYWRlLmNvbSIsInN1YiI6IlVjZjkyYzUwZi05ZmQyLTQ0N2EtODg3Ni0wOWIzMWI1NjljY2YiLCJpYXQiOjE3NzU3MTgzNTgsImF1ZCI6ImQ4NDAzMWQ2LTlmOTAtNDJjNi1iZDM3LTYwMWQyMjZkMGZkMCIsImdyYW50X2lkIjoiRzA4YThhZjZiLWE2OWEtNDkyYy05NTQ0LTk4M2NhYmFhNjNkYiIsInNjb3BlIjoicmVhZCJ9.U7yOTbXMczm55_FBt1YNoUVfTM-Gn5masb0DyAtZp7IAo68xzN-q6ipKfFtQQZrFGB5PR-He151iwp59OmhIDA';
+// HARD RULE: this script must NEVER use another user's TastyTrade credentials.
+// It loads credentials only from Catalin's brokerAccounts in Firestore.
+// The previous version scanned ALL users' brokerAccounts and also kept a
+// hardcoded fallback refresh token — that abused the OAuth grants of other
+// app users and triggered the TastyTrade DxLink-quota warning email.
+const CATALIN_UID = '7OcSxAkz8eahmOJD2ddu4ElBPsf2'; // macovei17@gmail.com
 
-// ── Step 3: Read credentials from Firestore ───────────────────────────────────
+// ── Step 3: Read Catalin's TastyTrade credentials from Firestore ──────────────
 async function fetchCredentials() {
-  const usersSnap = await db.collection('users').get();
-  const allCreds = [];
-  for (const userDoc of usersSnap.docs) {
-    const uid = userDoc.id;
-    const brokerSnap = await db.collection('users').doc(uid).collection('brokerAccounts').get();
-    for (const brokerDoc of brokerSnap.docs) {
-      const data = brokerDoc.data();
-      const cs  = data?.credentials?.clientSecret  || data?.clientSecret  || null;
-      const rt  = data?.credentials?.refreshToken  || data?.refreshToken  || null;
-      const upd = brokerDoc.updateTime?.seconds || 0;
-      if (cs && rt) allCreds.push({ cs, rt, upd });
-    }
+  const brokerSnap = await db
+    .collection('users').doc(CATALIN_UID)
+    .collection('brokerAccounts')
+    .where('isActive', '==', true)
+    .get();
+
+  const creds = [];
+  for (const brokerDoc of brokerSnap.docs) {
+    const data = brokerDoc.data();
+    const broker = (data?.brokerType || data?.credentials?.brokerType || '').toLowerCase();
+    if (broker !== 'tastytrade') continue;
+    const cs = data?.credentials?.clientSecret || data?.clientSecret || null;
+    const rt = data?.credentials?.refreshToken || data?.refreshToken || null;
+    const upd = brokerDoc.updateTime?.seconds || 0;
+    if (cs && rt) creds.push({ cs, rt, upd });
   }
-  allCreds.sort((a, b) => b.upd - a.upd);
-  return allCreds; // return all, sorted newest first
+  creds.sort((a, b) => b.upd - a.upd);
+  if (!creds.length) {
+    throw new Error(`No active TastyTrade brokerAccount under users/${CATALIN_UID}/brokerAccounts. Re-link the broker in the app and re-run.`);
+  }
+  return creds;
 }
 
 async function tryGetAccessToken(cs, rt) {
@@ -120,16 +129,13 @@ async function tryGetAccessToken(cs, rt) {
 }
 
 async function getAccessToken(credsList) {
-  // Try each Firestore credential in order
+  // Try each of Catalin's broker entries (newest first).
+  // Refuses to fall back to any other user — no hardcoded fallback token.
   for (const { cs, rt } of credsList) {
     const token = await tryGetAccessToken(cs, rt);
-    if (token) { console.log('  Token obtained from Firestore credentials.'); return token; }
+    if (token) { console.log('  Token obtained from Catalin\'s broker account.'); return token; }
   }
-  // Fall back to hardcoded credentials
-  console.log('  Firestore creds failed, trying hardcoded fallback...');
-  const token = await tryGetAccessToken(FALLBACK_CLIENT_SECRET, FALLBACK_REFRESH_TOKEN);
-  if (token) { console.log('  Token obtained from fallback credentials.'); return token; }
-  throw new Error('All credential attempts failed — refresh tokens may be expired');
+  throw new Error('All of Catalin\'s TastyTrade refresh tokens failed. Re-authenticate in the app and re-run.');
 }
 
 async function getApiQuoteToken(accessToken) {
@@ -207,18 +213,35 @@ async function streamData(dxLinkUrl, dxAuthToken, symbols) {
   });
 
   const BATCH = 200;
+  const allSubs = [];
   for (let i = 0; i < symbols.length; i += BATCH) {
     const batch = symbols.slice(i, i + BATCH);
-    feed.addSubscriptions([
+    const subs = [
       ...batch.map(s => ({ type: 'Quote',  symbol: s })),
       ...batch.map(s => ({ type: 'Greeks', symbol: s })),
-    ]);
+    ];
+    feed.addSubscriptions(subs);
+    allSubs.push(...subs);
   }
 
   console.log(`  Subscribed ${symbols.length} symbols, waiting 12s for data...`);
   await new Promise(r => setTimeout(r, 12000));
   console.log(`  Received: ${Object.keys(quotesMap).length} quotes, ${Object.keys(greeksMap).length} greeks`);
 
+  // Drop subscriptions before disconnect so DxLink doesn't keep ghost subs
+  // counting against the account quota across runs.
+  try {
+    if (typeof feed.removeSubscriptions === 'function' && allSubs.length) {
+      feed.removeSubscriptions(allSubs);
+    } else if (typeof feed.clearSubscriptions === 'function') {
+      feed.clearSubscriptions();
+    }
+    if (typeof feed.close === 'function') feed.close();
+    // Allow flush of unsubscribe frames before tearing the socket down.
+    await new Promise(r => setTimeout(r, 1500));
+  } catch (e) {
+    console.error('  DxLink unsubscribe error (non-fatal):', e?.message ?? e);
+  }
   try { wsClient.disconnect?.(); } catch (_) {}
   return { quotesMap, greeksMap };
 }

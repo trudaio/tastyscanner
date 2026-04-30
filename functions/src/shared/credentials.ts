@@ -5,6 +5,11 @@
 import * as admin from 'firebase-admin';
 import type { TastyCredentials } from './tasty-rest-client';
 
+// Hardcoded so background jobs can never fall back to another user's TastyTrade
+// account. Email: macovei17@gmail.com. Source of past abuse: scheduled jobs
+// picked the first active TastyTrade user and consumed their DxLink quota.
+export const CATALIN_UID = '7OcSxAkz8eahmOJD2ddu4ElBPsf2';
+
 interface IBrokerAccountDoc {
     brokerType: 'tastytrade' | 'TastyTrade' | 'IBKR' | string;
     label: string;
@@ -16,21 +21,20 @@ interface IBrokerAccountDoc {
     };
 }
 
-/** Find the first user with an active TastyTrade account. Returns their uid. */
+/**
+ * Returns Catalin's UID iff he has an active TastyTrade broker account.
+ * Replaces the previous "first active user" scan that abused other users' tokens.
+ */
 export async function findActiveTastyUser(): Promise<string | null> {
-    // Iterate users and check their brokerAccounts subcollection
-    const users = await admin.firestore().collection('users').get();
-    for (const u of users.docs) {
-        const subs = await admin.firestore()
-            .collection('users').doc(u.id)
-            .collection('brokerAccounts')
-            .where('isActive', '==', true)
-            .get();
-        for (const s of subs.docs) {
-            const d = s.data();
-            if (d['brokerType']?.toLowerCase() === 'tastytrade' && d['credentials']?.refreshToken) {
-                return u.id;
-            }
+    const subs = await admin.firestore()
+        .collection('users').doc(CATALIN_UID)
+        .collection('brokerAccounts')
+        .where('isActive', '==', true)
+        .get();
+    for (const s of subs.docs) {
+        const d = s.data();
+        if (d['brokerType']?.toLowerCase() === 'tastytrade' && d['credentials']?.refreshToken) {
+            return CATALIN_UID;
         }
     }
     return null;

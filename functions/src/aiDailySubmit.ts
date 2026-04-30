@@ -5,7 +5,7 @@
 import * as admin from 'firebase-admin';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { defineSecret } from 'firebase-functions/params';
-import { getCredentialsForUser, findActiveTastyUser } from './shared/credentials';
+import { getCredentialsForUser, findActiveTastyUser, CATALIN_UID as CATALIN_UID_CONST } from './shared/credentials';
 import {
     getAccessToken, getAccounts, getOptionsChain, getMarketDataSnapshot, getUnderlyingPrice, getAccountBalances, getPositions,
 } from './shared/tasty-rest-client';
@@ -18,7 +18,7 @@ import { DEFAULT_AI_STATE } from './shared/types';
 
 const anthropicKey = defineSecret('ANTHROPIC_API_KEY');
 
-const CATALIN_UID = process.env.CATALIN_UID ?? ''; // set via config
+const CATALIN_UID = CATALIN_UID_CONST;
 const TICKERS: Array<'SPX' | 'QQQ'> = ['SPX', 'QQQ'];
 
 async function getAiState(uid: string): Promise<IAiState> {
@@ -191,9 +191,17 @@ export const aiDailySubmit = onSchedule(
                     const exp = firstChain.expirations.find((e) => e['expiration-date'] === expDate);
                     if (!exp) continue;
 
-                    // Collect ALL streamer symbols in this expiration
+                    // Collect streamer symbols for strikes within ±10% of spot.
+                    // Far-OTM strikes never qualify (delta below threshold) and just
+                    // waste API quota — connor.abramson@tastytrade.com asked us to
+                    // bound subscriptions.
+                    const STRIKE_BAND_PCT = 0.10;
+                    const lo = underlyingPrice * (1 - STRIKE_BAND_PCT);
+                    const hi = underlyingPrice * (1 + STRIKE_BAND_PCT);
                     const streamerSymbols: string[] = [];
                     for (const s of exp.strikes) {
+                        const k = parseFloat(s['strike-price']);
+                        if (k < lo || k > hi) continue;
                         streamerSymbols.push(s['call-streamer-symbol'], s['put-streamer-symbol']);
                     }
 
@@ -204,19 +212,26 @@ export const aiDailySubmit = onSchedule(
                         continue;
                     }
 
-                    // Build ChainInput
+                    // Build ChainInput — keep only the same ±10% band that we
+                    // fetched quotes for, so the picker doesn't iterate strikes
+                    // it has no quotes for.
                     const chainInput: ChainInput = {
                         ticker,
                         underlyingPrice,
                         expirationDate: expDate,
                         dte: exp['days-to-expiration'],
-                        strikes: exp.strikes.map((s) => ({
-                            strike: parseFloat(s['strike-price']),
-                            callSymbol: s.call,
-                            callStreamerSymbol: s['call-streamer-symbol'],
-                            putSymbol: s.put,
-                            putStreamerSymbol: s['put-streamer-symbol'],
-                        })),
+                        strikes: exp.strikes
+                            .filter((s) => {
+                                const k = parseFloat(s['strike-price']);
+                                return k >= lo && k <= hi;
+                            })
+                            .map((s) => ({
+                                strike: parseFloat(s['strike-price']),
+                                callSymbol: s.call,
+                                callStreamerSymbol: s['call-streamer-symbol'],
+                                putSymbol: s.put,
+                                putStreamerSymbol: s['put-streamer-symbol'],
+                            })),
                         quotes: quoteMap,
                     };
 

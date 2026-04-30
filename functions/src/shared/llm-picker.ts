@@ -5,7 +5,53 @@ import { callClaude, extractJson, BudgetExceededError } from './llm-client';
 import { PICK_SYSTEM_PROMPT, buildPickUserPrompt, type PickPromptInput } from './prompts';
 import { candidateToTrade, type IcCandidate, type CandidatesResult } from './ic-picker';
 import { reviewPick, type RiskReviewResult } from './risk-manager';
-import type { IAiCompetitionTrade, IAiState, ICompetitionTradeV2, IMarketContext } from './types';
+import { buildProvestBlock, probTouch } from './metrics';
+import type { IAiCompetitionTrade, IAiState, IAlternativeCandidate, ICompetitionTradeV2, IMarketContext } from './types';
+
+/** Pull the top alternatives (excluding the chosen one) for counterfactual tracking. */
+function buildAlternatives(allTopN: IcCandidate[], chosen: IcCandidate, max = 3): IAlternativeCandidate[] {
+    return allTopN
+        .filter((c) => c !== chosen && (c.putSell !== chosen.putSell || c.callSell !== chosen.callSell))
+        .slice(0, max)
+        .map((c) => ({
+            strikes: { putBuy: c.putBuy, putSell: c.putSell, callSell: c.callSell, callBuy: c.callBuy },
+            wings: c.wings,
+            quantity: c.quantity,
+            credit: Math.round(c.credit * 100) / 100,
+            pop: Math.round(c.pop * 10) / 10,
+            ev: Math.round(c.ev * 100) / 100,
+            rr: Math.round(c.rr * 100) / 100,
+            deltaShortPut: Math.round(c.deltaShortPut * 100) / 100,
+            deltaShortCall: Math.round(c.deltaShortCall * 100) / 100,
+            score: Math.round(c.score * 100) / 100,
+        }));
+}
+
+/** Build PROVEST prelude from a selected IcCandidate + market context. Skip for custom (deltas unknown). */
+function provestFor(
+    chosen: IcCandidate,
+    ticker: 'SPX' | 'QQQ',
+    marketContext: IMarketContext,
+    dte: number,
+): string | null {
+    if (chosen.deltaShortPut === 0 && chosen.deltaShortCall === 0) return null;
+    return buildProvestBlock({
+        pop: chosen.pop,
+        probTouch: probTouch(chosen.deltaShortPut, chosen.deltaShortCall),
+        compositeScore: chosen.score,
+        profileName: 'Neutral',
+        wings: chosen.wings,
+        minDelta: 16,      // Picker default range for symmetric delta
+        maxDelta: 20,
+        shortPutDelta: chosen.deltaShortPut,
+        shortCallDelta: chosen.deltaShortCall,
+        vix: marketContext.vix,
+        ticker,
+        ivRank: marketContext.ivRank,
+        dte,
+        dteManagement: 14,
+    });
+}
 
 interface ClaudePickResponse {
     selection: number | 'custom';
@@ -137,12 +183,16 @@ export async function pickWithLlm(
     }
 
     const baseTrade = candidateToTrade(chosen, ticker, expirationDate);
+    const provest = provestFor(chosen, ticker, marketContext, dte);
+    const claudeRationale = parsed.rationale || `Claude selected option ${parsed.selection}`;
+    const alternatives = isCustom ? [] : buildAlternatives(candidatesResult.topN, chosen, 3);
     let trade: IAiCompetitionTrade = {
         ...baseTrade,
-        rationale: parsed.rationale || `Claude selected option ${parsed.selection}`,
+        rationale: provest ? `${provest}\n\n${claudeRationale}` : claudeRationale,
         confidenceScore: Math.max(30, Math.min(95, Math.round(parsed.confidenceScore))),
         rulesApplied: parsed.rulesApplied || [],
         experimentVariant: null,
+        alternativesConsidered: alternatives,
         llmModel: 'claude-opus-4-6',
         llmAuditLogId: claudeResponse.auditLogId,
         deviatesFromRules: parsed.deviatesFromRules ?? false,
@@ -218,14 +268,18 @@ function ruleBasedFallback(
     cr: CandidatesResult,
     ticker: 'SPX' | 'QQQ',
     expirationDate: string,
-    _marketCtx: IMarketContext,
+    marketCtx: IMarketContext,
 ): IAiCompetitionTrade | null {
     if (cr.topN.length === 0) return null;
     const best = cr.topN[0];
     const base = candidateToTrade(best, ticker, expirationDate);
+    const dte = Math.max(0, Math.ceil((new Date(expirationDate).getTime() - Date.now()) / 86400000));
+    const provest = provestFor(best, ticker, marketCtx, dte);
+    const alternatives = buildAlternatives(cr.topN, best, 3);
+    const fallbackReason = 'LLM unavailable — rule-based fallback selected highest-scoring candidate.';
     return {
         ...base,
-        rationale: 'LLM unavailable — rule-based fallback selected highest-scoring candidate.',
+        rationale: provest ? `${provest}\n\n${fallbackReason}` : fallbackReason,
         confidenceScore: 50,
         rulesApplied: ['rule_based_fallback'],
         experimentVariant: null,
@@ -234,5 +288,6 @@ function ruleBasedFallback(
         deviationReason: null,
         requiresApproval: false,
         customStrategy: false,
+        alternativesConsidered: alternatives,
     };
 }

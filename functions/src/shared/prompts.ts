@@ -3,6 +3,7 @@
 import type { IcCandidate } from './ic-picker';
 import type { IAiState, ICompetitionRoundV2, IMarketContext } from './types';
 import { selectRelevantResearch } from './research-loader';
+import { formatLearnedRulesForPrompt } from './learned-rules';
 
 export interface PickPromptInput {
     ticker: 'SPX' | 'QQQ';
@@ -60,6 +61,11 @@ export function buildPickUserPrompt(input: PickPromptInput): string {
 
     const memoStr = weeklyMemo ?? '(no memo yet — first week of competition)';
 
+    const learnedRulesStr = formatLearnedRulesForPrompt(aiState.learnedRules);
+    const learnedRulesSection = learnedRulesStr
+        ? `\n# Learned Rules (post-mortems + adversarial reviews)\n${learnedRulesStr}\n\nThese are rules YOU have learned from past mistakes. 🔴 = adversarial finding (high evidence). ⚠️ = post-mortem from a single loss. Honor high-severity rules unless you have strong reason to deviate.`
+        : '';
+
     const catalinStr = catalinSubmission
         ? `Catalin already submitted: ${catalinSubmission.strategy}, POP ${catalinSubmission.pop}%, credit $${catalinSubmission.credit.toFixed(2)}, wings $${catalinSubmission.wings}.`
         : `Catalin has NOT submitted yet for this expiration (or this is a ghost round — you play solo).`;
@@ -103,6 +109,7 @@ ${ruleAdjStr}
 
 # Last Week's Strategy Memo
 ${memoStr}
+${learnedRulesSection}
 
 # Research Excerpts (TastyTrade studies, Options With Davis)
 ${research}

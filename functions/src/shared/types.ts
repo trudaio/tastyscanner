@@ -48,6 +48,30 @@ export interface ICompetitionTradeV2 {
     exitDate: string | null;     // ISO date
     closedBy: 'target' | 'dte' | 'user' | null;
     status: 'open' | 'closed';
+    /** Strategy profile used for this trade. Used by closeCheck for exit target. */
+    profileType?: StrategyProfileType;
+    /** Exit profit target (%) at time of entry. Stored so closeCheck doesn't need profile lookup. */
+    exitTarget?: number;
+}
+
+/** Alternative IC considered but not picked. Used for counterfactual analysis. */
+export interface IAlternativeCandidate {
+    strikes: { putBuy: number; putSell: number; callSell: number; callBuy: number };
+    wings: number;
+    quantity: number;
+    credit: number;
+    pop: number;
+    ev: number;
+    rr: number;
+    deltaShortPut: number;
+    deltaShortCall: number;
+    score: number;
+    /** Filled at close time by closeCheck. */
+    counterfactual?: {
+        hypotheticalExitPl: number;     // dollars
+        regretVsActual: number;          // hypothetical - actual; positive = "should have picked this"
+        computedAt: string;              // ISO
+    };
 }
 
 export interface IAiCompetitionTrade extends ICompetitionTradeV2 {
@@ -70,6 +94,8 @@ export interface IAiCompetitionTrade extends ICompetitionTradeV2 {
     riskConcerns?: string[];
     riskConfidence?: number;
     riskAuditLogId?: string;
+    // Counterfactual analysis (autonomous-mode, 2026-04-27):
+    alternativesConsidered?: IAlternativeCandidate[];
 }
 
 export interface IUserFeedback {
@@ -106,6 +132,15 @@ export interface ICompetitionRoundV2 {
     userVeto?: IUserVeto;
 }
 
+/** Adversarial finding from the weekly review LLM critic. */
+export interface IAdversarialFinding {
+    severity: 'high' | 'medium' | 'low';
+    finding: string;            // 1-2 sentences identifying the mistake pattern
+    suggestedRule: string;       // 1 sentence: how to prevent it
+    suggestedRuleId: string;     // snake_case identifier
+    affectedRoundIds: string[];
+}
+
 export interface IWeeklyMemo {
     weekId: string;              // YYYY-WW
     weekStart: string;
@@ -117,6 +152,22 @@ export interface IWeeklyMemo {
     aiCumulativeScore: number;
     auditLogId: string;
     createdAt: string;
+    // Adversarial review (Phase 3, autonomous-mode):
+    adversarialFindings?: IAdversarialFinding[];
+    adversarialAuditLogId?: string;
+}
+
+/** Rule learned from adversarial review or post-mortem analysis. Surfaced in picker prompt. */
+export interface ILearnedRule {
+    ruleId: string;
+    rule: string;                            // human-readable, what to avoid or seek
+    severity: 'high' | 'medium' | 'low';
+    source: 'adversarial' | 'postmortem';
+    addedAt: string;                         // ISO timestamp
+    reinforcedAt: string;                    // ISO; bumped when same ruleId is suggested again
+    reinforceCount: number;                  // how many times this rule has been suggested
+    weekIds?: string[];                       // weekly memo IDs that flagged this
+    sampleRoundIds?: string[];                // up to 5 example rounds
 }
 
 export interface IAiState {
@@ -134,6 +185,8 @@ export interface IAiState {
     losses: number;
     draws: number;
     ghostRounds: number;
+    /** Learned rules from post-mortems + adversarial reviews. Picker LLM reads these. */
+    learnedRules?: ILearnedRule[];
 }
 
 export interface IRuleAdjustment {

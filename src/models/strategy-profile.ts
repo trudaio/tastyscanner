@@ -19,6 +19,10 @@ export interface IStrategyProfile {
         alphaWeight: number;
     };
     exitProfitPercent: number;
+    /** Minimum VIX level required to open new positions with this profile. */
+    minVIX: number;
+    /** DTE threshold for position management (close/roll when DTE <= this). */
+    dteManagement: number;
 }
 
 export const STRATEGY_PROFILES: Record<StrategyProfileType, IStrategyProfile> = {
@@ -34,9 +38,11 @@ export const STRATEGY_PROFILES: Record<StrategyProfileType, IStrategyProfile> = 
         minPOP: 80,
         maxRiskRewardRatio: 4,
         maxBidAskSpread: 8,
-        minCredit: 1,
+        minCredit: 2.50,
         scoring: { popWeight: 0.70, evWeight: 0.20, alphaWeight: 0.10 },
         exitProfitPercent: 50,
+        minVIX: 18,
+        dteManagement: 14,
     },
     neutral: {
         type: 'neutral',
@@ -50,15 +56,17 @@ export const STRATEGY_PROFILES: Record<StrategyProfileType, IStrategyProfile> = 
         minPOP: 60,
         maxRiskRewardRatio: 4,
         maxBidAskSpread: 8,
-        minCredit: 1,
+        minCredit: 2.50,
         scoring: { popWeight: 0.60, evWeight: 0.25, alphaWeight: 0.15 },
         exitProfitPercent: 75,
+        minVIX: 20,
+        dteManagement: 14,
     },
     aggressive: {
         type: 'aggressive',
         name: 'Aggressive',
         color: '#ff8c00',
-        wings: [5],
+        wings: [10],
         minDelta: 15,
         maxDelta: 24,
         minDTE: 19,
@@ -66,9 +74,11 @@ export const STRATEGY_PROFILES: Record<StrategyProfileType, IStrategyProfile> = 
         minPOP: 60,
         maxRiskRewardRatio: 4,
         maxBidAskSpread: 8,
-        minCredit: 1,
+        minCredit: 2.50,
         scoring: { popWeight: 0.40, evWeight: 0.35, alphaWeight: 0.25 },
-        exitProfitPercent: 90,
+        exitProfitPercent: 50,
+        minVIX: 23,
+        dteManagement: 14,
     },
 };
 

@@ -1,7 +1,8 @@
 // AI Iron Condor picker — seeded with Catalin's rules, extensible via AiState
 
-import type { IAiState, IAiCompetitionTrade, IMarketContext } from './types';
+import type { IAiState, IAiCompetitionTrade, IAlternativeCandidate, IMarketContext } from './types';
 import type { IOptionQuote, IRawPosition } from './tasty-rest-client';
+import { buildProvestBlock, probTouch } from './metrics';
 
 /**
  * Strike overlap detection. Prevents picking an IC that shares a strike with an
@@ -179,7 +180,6 @@ export function buildCandidates(
         maxRRRatio: number;                      // e.g. 5 (wings:credit)
         minCredit: number;                       // e.g. 1.0 per share for $5 wings
         minPOP: number;                          // default POP threshold (e.g. 70)
-        minPOPForWings5?: number;                // POP exception ONLY for $5 wings (VIX-crunch scenario)
     },
 ): IcCandidate[] {
     const candidates: IcCandidate[] = [];
@@ -212,9 +212,7 @@ export function buildCandidates(
             if (credit <= 0) continue;
 
             const pop = calcPOP(deltas.sp, deltas.sc);
-            // POP threshold: default minPOP for most wings; relaxed threshold only for $5 wings (Catalin's VIX-crunch exception)
-            const popThreshold = wings === 5 && rules.minPOPForWings5 !== undefined ? rules.minPOPForWings5 : rules.minPOP;
-            if (pop < popThreshold) continue;
+            if (pop < rules.minPOP) continue;
 
             const rr = wings / credit;
             if (rr > rules.maxRRRatio) continue;
@@ -310,6 +308,7 @@ export function candidateToTrade(
         delta: Math.round(c.deltaShortPut * 100) / 100,
         theta: Math.round(c.thetaTotal * 100) / 100,
         exitPl: null, exitDate: null, closedBy: null, status: 'open',
+        exitTarget: 75,     // AI uses neutral profile exit target
     };
 }
 
@@ -324,18 +323,18 @@ export function getTopCandidates(
         return {
             candidates: [], topN: [],
             reason: `VIX ${marketCtx.vix} < 18 — gate closed`,
-            rules: { minPOP: 70, maxRRRatio: 5, minCredit: 1.0, wingWidths: [5, 10, 15, 20] },
+            rules: { minPOP: 70, maxRRRatio: 5, minCredit: 2.5, wingWidths: [10] },
         };
     }
 
-    // POP rules: default 70% for all wings; VIX-crunch exception (VIX 18-22) allows 60% ONLY for $5 wings
+    // Best-practices update (2026-04-17): wings $10 only, credit = 1/4 wing width
+    // Source: 14 YouTube studies, 71K+ trades. $5 wings unprofitable per 12-yr TastyTrade study.
     const rules = {
-        wingWidths: [5, 10, 15, 20],
+        wingWidths: [10],
         targetDeltaSymmetric: [16, 20] as [number, number],
         maxRRRatio: 5,
-        minCredit: 1.0,
+        minCredit: 2.5,    // 1/4 wing width ($10/4) — was $1 flat
         minPOP: 70,
-        minPOPForWings5: marketCtx.vix < 22 ? 60 : 70, // only relaxes for $5 wings during VIX crunch
     };
 
     const candidates = buildCandidates(input, rules);
@@ -359,20 +358,17 @@ export function pickBestIC(
     state: IAiState,
     marketCtx: IMarketContext,
 ): PickResult {
-    // VIX gate — AI inherits from Catalin seed (adjustable via learning)
     if (marketCtx.vix < 18) {
         return { pick: null, reason: `VIX ${marketCtx.vix} < 18 — skip (seed rule)`, candidatesEvaluated: 0 };
     }
 
-    // Seed rules (copy of Catalin's as starting point)
-    // POP exception: VIX-crunch (18-22) allows 60% POP ONLY on $5 wings
+    // Best-practices update (2026-04-17): wings $10 only, proportional credit
     const rules = {
-        wingWidths: [5, 10, 15, 20],
+        wingWidths: [10],
         targetDeltaSymmetric: [16, 20] as [number, number],
         maxRRRatio: 5,
-        minCredit: 1.0,
+        minCredit: 2.5,
         minPOP: 70,
-        minPOPForWings5: marketCtx.vix < 22 ? 60 : 70,
     };
 
     const candidates = buildCandidates(input, rules);
@@ -400,12 +396,48 @@ export function pickBestIC(
     const margin = candidates.length > 1 ? candidates[0].score - candidates[1].score : 20;
     const confidence = Math.max(30, Math.min(95, 50 + margin * 2));
 
-    // Build rationale
+    // Capture top 3 alternatives (excluding chosen) for counterfactual analysis
+    const alternativesConsidered: IAlternativeCandidate[] = candidates
+        .filter((c) => c !== chosen && (c.putSell !== chosen.putSell || c.callSell !== chosen.callSell))
+        .slice(0, 3)
+        .map((c) => ({
+            strikes: { putBuy: c.putBuy, putSell: c.putSell, callSell: c.callSell, callBuy: c.callBuy },
+            wings: c.wings,
+            quantity: c.quantity,
+            credit: Math.round(c.credit * 100) / 100,
+            pop: Math.round(c.pop * 10) / 10,
+            ev: Math.round(c.ev * 100) / 100,
+            rr: Math.round(c.rr * 100) / 100,
+            deltaShortPut: Math.round(c.deltaShortPut * 100) / 100,
+            deltaShortCall: Math.round(c.deltaShortCall * 100) / 100,
+            score: Math.round(c.score * 100) / 100,
+        }));
+
+    // Build rationale — PROVEST prelude + narrative reasons
+    const provest = buildProvestBlock({
+        pop: chosen.pop,
+        probTouch: probTouch(chosen.deltaShortPut, chosen.deltaShortCall),
+        compositeScore: chosen.score,
+        profileName: 'Neutral',     // AI picker runs on neutral-profile rules
+        wings: chosen.wings,
+        minDelta: rules.targetDeltaSymmetric[0],
+        maxDelta: rules.targetDeltaSymmetric[1],
+        shortPutDelta: chosen.deltaShortPut,
+        shortCallDelta: chosen.deltaShortCall,
+        vix: marketCtx.vix,
+        ticker: input.ticker,
+        ivRank: marketCtx.ivRank,
+        dte: input.dte,
+        dteManagement: 14,
+    });
+
     const reasons: string[] = [];
     reasons.push(`Picked ${chosen.wings}-wing IC at ${chosen.putSell}/${chosen.callSell} shorts`);
     reasons.push(`POP ${chosen.pop.toFixed(1)}%, credit $${chosen.credit.toFixed(2)}, RR ${chosen.rr.toFixed(2)}:1`);
     reasons.push(`Market: VIX=${marketCtx.vix.toFixed(1)}, IVR=${marketCtx.ivRank.toFixed(0)}`);
     if (experimentVariant) reasons.push(`(experiment: ${experimentVariant})`);
+
+    const fullRationale = `${provest}\n\n${reasons.join(' | ')}`;
 
     const strategyStr = `IC ${chosen.putBuy}/${chosen.putSell}p ${chosen.callSell}/${chosen.callBuy}c`;
 
@@ -434,15 +466,19 @@ export function pickBestIC(
         exitDate: null,
         closedBy: null,
         status: 'open',
-        rationale: reasons.join(' | '),
+        exitTarget: 75,
+        rationale: fullRationale,
         confidenceScore: Math.round(confidence),
         rulesApplied: [
             `seed_vix_gate_18`,
             `seed_symmetric_delta_16_20`,
             `seed_max_rr_${rules.maxRRRatio}to1`,
             `seed_min_pop_${rules.minPOP}`,
+            `bp_wings_10_only`,
+            `bp_min_credit_quarter_wing`,
         ],
         experimentVariant,
+        alternativesConsidered,
     };
 
     return { pick: aiTrade, reason: reasons.join(' | '), candidatesEvaluated: candidates.length };

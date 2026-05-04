@@ -21,7 +21,7 @@ import {WatchListsComponent} from "./watch-lists.component";
 import {TickerMenuItemComponent} from "./ticker-menu-item.component";
 import {BrokerAccountsComponent} from "./broker-accounts.component";
 import {AccountInfoComponent} from "./account-info.component";
-import {alertCircleOutline, analyticsOutline, bookOutline, filterOutline, personCircleOutline, keyOutline, trophyOutline, layersOutline, barChartOutline, warningOutline, notificationsOutline, timerOutline, flaskOutline, eyeOutline, statsChartOutline} from "ionicons/icons";
+import {alertCircleOutline, analyticsOutline, bookOutline, filterOutline, personCircleOutline, keyOutline, trophyOutline, layersOutline, barChartOutline, warningOutline, notificationsOutline, timerOutline, flaskOutline, eyeOutline, statsChartOutline, trendingUpOutline, scanOutline} from "ionicons/icons";
 import {useHistory} from "react-router-dom";
 import { auth } from '../firebase';
 
@@ -187,6 +187,16 @@ const Menu: React.FC = observer(() => {
         <IonItem button routerLink="/strategy-simulator" routerDirection="forward" lines="none">
           <IonIcon slot="start" icon={flaskOutline} />
           <IonLabel>Strategy Simulator</IonLabel>
+        </IonItem>
+
+        <IonItem button routerLink="/skew-analysis" routerDirection="forward" lines="none">
+          <IonIcon slot="start" icon={trendingUpOutline} />
+          <IonLabel>Skew Analysis</IonLabel>
+        </IonItem>
+
+        <IonItem button routerLink="/skew-scanner" routerDirection="forward" lines="none">
+          <IonIcon slot="start" icon={scanOutline} />
+          <IonLabel>Skew Scanner</IonLabel>
         </IonItem>
 
         {/* IC Savior — temporarily hidden, will revisit later

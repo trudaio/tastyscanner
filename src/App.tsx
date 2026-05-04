@@ -21,6 +21,8 @@ import { RiskExposerPage } from './pages/RiskExposerPage';
 import { IbkrCallbackPage } from './pages/IbkrCallbackPage';
 import { GuviduVsCatalinPage } from './pages/GuviduVsCatalinPage';
 import { GuviduVisualizationPage } from './pages/GuviduVisualizationPage';
+import { SkewAnalysisPage } from './pages/SkewAnalysisPage';
+import { SkewScannerPage } from './pages/SkewScannerPage';
 
 /* Core CSS required for Ionic components to work properly */
 import '@ionic/react/css/core.css';
@@ -147,6 +149,12 @@ const App: React.FC = () => {
                                 </Route>
                                 <Route path="/guvid-visualization" exact={true}>
                                     <GuviduVisualizationPage />
+                                </Route>
+                                <Route path="/skew-analysis" exact={true}>
+                                    <SkewAnalysisPage />
+                                </Route>
+                                <Route path="/skew-scanner" exact={true}>
+                                    <SkewScannerPage />
                                 </Route>
                                 <Route path="/superadmin" exact={true}>
                                     <SuperAdminPage />

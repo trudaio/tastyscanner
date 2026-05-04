@@ -16,7 +16,7 @@ export class SkewScannerService implements ISkewScannerService {
 
     constructor(_factory: IServiceFactory) {
         makeObservable(this, {
-            rows: observable,
+            rows: observable.shallow,
             isRunning: observable,
             delayMs: observable,
             setDelayMs: action,

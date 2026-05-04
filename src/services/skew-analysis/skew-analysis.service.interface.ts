@@ -61,6 +61,66 @@ export interface ISuggestedTrades {
     insights: ISuggestedInsight[];
 }
 
+/** Per-delta level data for a single expiration. */
+export interface IDeltaLevelDetail {
+    delta: number; // 10, 20, 30, 40
+    putStrike: number | null;
+    putPremium: number | null;
+    putDelta: number | null;
+    putVolume: number;
+    putIv: number | null;
+    putDistPct: number | null; // signed % from stock price
+    callStrike: number | null;
+    callPremium: number | null;
+    callDelta: number | null;
+    callVolume: number;
+    callIv: number | null;
+    callDistPct: number | null;
+    skewDollar: number | null; // putPremium - callPremium
+    skewPct: number | null; // (put - call) / call * 100
+    imbalance: number | null; // putDist / callDist
+}
+
+/** Detailed view of one expiration: per-delta plus totals. */
+export interface IExpirationDetail {
+    expiration: string;
+    expirationLabel: string;
+    dte: number;
+    isMonthly: boolean;
+    perDelta: IDeltaLevelDetail[]; // 10, 20, 30, 40
+    putVolumeTotal: number;
+    callVolumeTotal: number;
+    maxPain: number | null;
+}
+
+/** Single strike row used by the volatility smile + bell curve scatters. */
+export interface IStrikeRow {
+    strike: number;
+    type: 'put' | 'call';
+    premium: number | null;
+    iv: number | null; // 0..1 raw, page renders as %
+    delta: number | null; // signed (-) for puts
+    volume: number;
+}
+
+export type TermStructure = 'backwardation' | 'contango' | 'flat' | 'unknown';
+
+export interface ISkewSummary {
+    stockPrice: number | null;
+    /** average premium-skew % across all 10Δ expirations */
+    avgSkewPct10: number | null;
+    /** 10Δ skew in front-monthly minus back-monthly */
+    termStructure: TermStructure;
+    /** front-monthly max pain */
+    maxPain: number | null;
+    /** front-monthly expected move */
+    expectedMove: IExpectedMove | null;
+    putCallRatio: IPCRatio | null;
+    /** put + call total volume across all expirations within 60 days */
+    totalPuts60d: number;
+    totalCalls60d: number;
+}
+
 export interface ISkewSnapshot {
     ticker: string;
     fetchedAt: number;
@@ -75,6 +135,10 @@ export interface ISkewSnapshot {
     byDistance: IStrikeByDistance[];
     basicTechnicals: IBasicTechnicals;
     suggestedTrades: ISuggestedTrades;
+    // F2.5: extended views
+    expirationDetails: IExpirationDetail[];
+    strikesByExpiration: Record<string, IStrikeRow[]>;
+    summary: ISkewSummary;
 }
 
 export interface ISkewAnalysisService {

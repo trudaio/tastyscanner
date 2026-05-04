@@ -16,6 +16,10 @@ import { useServices } from '../hooks/use-services.hook';
 import type { ISkewSnapshot, SuggestionLevel } from '../services/skew-analysis/skew-analysis.service.interface';
 import SkewErrorBoundary from '../components/skew/skew-error-boundary.component';
 import { SkewChartComponent } from '../components/skew/skew-chart.component';
+import { SkewStatsRow } from '../components/skew/skew-stats-row.component';
+import { SkewPremiumSkewChart } from '../components/skew/skew-premium-skew-chart.component';
+import { SkewScatterChart } from '../components/skew/skew-scatter.component';
+import { SkewDeltaTable } from '../components/skew/skew-delta-table.component';
 
 // ── v13-inspired palette ────────────────────────────────────────────────
 const C = {
@@ -476,27 +480,83 @@ export const SkewAnalysisPage: React.FC = observer(() => {
 });
 
 const SnapshotView: React.FC<{ snapshot: ISkewSnapshot }> = ({ snapshot }) => {
-    const { ivMetrics, maxPain, expectedMove, putCallRatio, basicTechnicals, suggestedTrades } = snapshot;
+    const { ivMetrics, basicTechnicals, suggestedTrades } = snapshot;
     const tone = ASSESSMENT_TONE[suggestedTrades.assessment] ?? 'neutral';
+
+    const expirationOptions = snapshot.expirationDetails.map((d) => ({
+        expiration: d.expiration,
+        label: `${d.expiration} (${d.isMonthly ? 'May' : 'wk'})`.replace(/\(.*\)/, () => {
+            const dt = new Date(d.expiration + 'T00:00:00');
+            return `(${dt.toLocaleDateString('en-US', { month: 'short' })})`;
+        }),
+        isMonthly: d.isMonthly,
+    }));
+    const defaultMonthly = snapshot.expirationDetails.find((d) => d.isMonthly)?.expiration;
 
     return (
         <>
+            <SkewStatsRow ticker={snapshot.ticker} summary={snapshot.summary} />
+
             <Card>
                 <SectionHeading>
                     <div>
-                        <CardTitle>{snapshot.ticker} • last close {fmtMoney(snapshot.stockPrice)}</CardTitle>
-                        <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>
-                            Skew Chart — IV by delta level
-                        </div>
+                        <CardTitle>{snapshot.ticker} — Premium Skew (%)</CardTitle>
+                        <MetricSub>4 lines (10/20/30/40Δ) + put/call volume bars per expiration</MetricSub>
                     </div>
-                    <MetricSub>
-                        {snapshot.chartData.length} expirations • range {snapshot.fromDate} → {snapshot.toDate}
-                    </MetricSub>
                 </SectionHeading>
-                <SkewErrorBoundary fallbackTitle="Skew chart">
+                <SkewErrorBoundary fallbackTitle="Premium skew chart">
+                    <SkewPremiumSkewChart
+                        chartData={snapshot.chartData}
+                        expirationDetails={snapshot.expirationDetails}
+                    />
+                </SkewErrorBoundary>
+            </Card>
+
+            <Card>
+                <SectionHeading>
+                    <div>
+                        <CardTitle>{snapshot.ticker} — Skew Chart (IV by delta level)</CardTitle>
+                        <MetricSub>
+                            {snapshot.chartData.length} expirations • range {snapshot.fromDate} → {snapshot.toDate}
+                        </MetricSub>
+                    </div>
+                </SectionHeading>
+                <SkewErrorBoundary fallbackTitle="IV skew chart">
                     <SkewChartComponent data={snapshot.chartData.slice()} />
                 </SkewErrorBoundary>
             </Card>
+
+            <Card>
+                <SkewErrorBoundary fallbackTitle="Bell curve">
+                    <SkewScatterChart
+                        mode="bell"
+                        strikesByExpiration={snapshot.strikesByExpiration}
+                        expirations={expirationOptions}
+                        defaultExpiration={defaultMonthly}
+                        stockPrice={snapshot.stockPrice}
+                    />
+                </SkewErrorBoundary>
+            </Card>
+
+            <Card>
+                <SkewErrorBoundary fallbackTitle="Volatility smile">
+                    <SkewScatterChart
+                        mode="smile"
+                        strikesByExpiration={snapshot.strikesByExpiration}
+                        expirations={expirationOptions}
+                        defaultExpiration={defaultMonthly}
+                        stockPrice={snapshot.stockPrice}
+                    />
+                </SkewErrorBoundary>
+            </Card>
+
+            <SkewErrorBoundary fallbackTitle="Delta table">
+                <SkewDeltaTable
+                    ticker={snapshot.ticker}
+                    stockPrice={snapshot.stockPrice}
+                    expirationDetails={snapshot.expirationDetails}
+                />
+            </SkewErrorBoundary>
 
             <MetricGrid>
                 <MetricCard>
@@ -506,33 +566,6 @@ const SnapshotView: React.FC<{ snapshot: ISkewSnapshot }> = ({ snapshot }) => {
                     <KvRow><KvLabel>IV Percentile</KvLabel><KvValue>{ivMetrics.ivPercentile == null ? '–' : ivMetrics.ivPercentile}</KvValue></KvRow>
                     <KvRow><KvLabel>IV Index</KvLabel><KvValue>{fmtPct(ivMetrics.ivIndex, 1)}</KvValue></KvRow>
                     <KvRow><KvLabel>Beta</KvLabel><KvValue>{fmtNum(ivMetrics.beta, 2)}</KvValue></KvRow>
-                </MetricCard>
-
-                <MetricCard>
-                    <CardTitle>Max Pain</CardTitle>
-                    <MetricValue>{maxPain == null ? '–' : `$${maxPain}`}</MetricValue>
-                    <MetricSub>Strike where aggregate option holders maximize losses across the front-monthly chain</MetricSub>
-                </MetricCard>
-
-                <MetricCard>
-                    <CardTitle>Expected Move</CardTitle>
-                    <MetricValue>{expectedMove == null ? '–' : `±${fmtMoney(expectedMove.dollars)}`}</MetricValue>
-                    <MetricSub>{expectedMove == null ? 'no ATM straddle' : `${fmtPct(expectedMove.percent, 2)} of price`}</MetricSub>
-                    {expectedMove && (
-                        <KvRow><KvLabel>Range</KvLabel><KvValue>{fmtMoney(expectedMove.lowerBound)} → {fmtMoney(expectedMove.upperBound)}</KvValue></KvRow>
-                    )}
-                </MetricCard>
-
-                <MetricCard>
-                    <CardTitle>P/C Ratio (60d volume)</CardTitle>
-                    <MetricValue>{putCallRatio == null ? '–' : fmtNum(putCallRatio.ratio, 2)}</MetricValue>
-                    {putCallRatio ? (
-                        <MetricSub>
-                            puts {putCallRatio.putVolume.toLocaleString()} • calls {putCallRatio.callVolume.toLocaleString()}
-                        </MetricSub>
-                    ) : (
-                        <MetricSub>no volume data</MetricSub>
-                    )}
                 </MetricCard>
             </MetricGrid>
 

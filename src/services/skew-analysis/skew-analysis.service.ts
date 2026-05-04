@@ -88,13 +88,14 @@ export class SkewAnalysisService implements ISkewAnalysisService {
             threeYearsAgo.setDate(threeYearsAgo.getDate() - 365 * 3);
             const threeYearsAgoIso = isoDate(threeYearsAgo);
 
-            const [chainRaw, priceHistory, stockPrice, marketMetrics, fundamentalsRaw, longPriceHistory] = await Promise.all([
+            const [chainRaw, priceHistory, stockPrice, marketMetrics, fundamentalsRaw, longPriceHistory, fmpFundamentals] = await Promise.all([
                 this.polygon.getOptionsChainSnapshot(key, fromDate, toDate),
                 this.polygon.getPriceHistory(key, yearAgoIso, todayIsoStr),
                 this.polygon.getStockPrice(key),
                 this.factory.marketDataProvider.getSymbolMetrics(key).catch(() => null),
                 this.polygon.getFinancials(key, 12).catch(() => []),
                 this.polygon.getPriceHistory(key, threeYearsAgoIso, todayIsoStr).catch(() => [] as IPolygonAggregateBar[]),
+                this.fmp.getFundamentals(key).catch(() => null),
             ]);
 
             const fundamentalsTimeSeries = buildFundamentalsTimeSeries(fundamentalsRaw, longPriceHistory);
@@ -158,6 +159,7 @@ export class SkewAnalysisService implements ISkewAnalysisService {
                 strikesByExpiration,
                 summary,
                 fundamentalsTimeSeries,
+                fmpFundamentals,
             };
 
             runInAction(() => {

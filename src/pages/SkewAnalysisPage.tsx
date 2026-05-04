@@ -361,6 +361,15 @@ function fmtMoney(v: unknown): string {
     return n == null ? '–' : `$${n.toFixed(2)}`;
 }
 
+function fmtMarketCap(v: unknown): string {
+    const n = toNum(v);
+    if (n == null) return '–';
+    if (Math.abs(n) >= 1e12) return `$${(n / 1e12).toFixed(2)}T`;
+    if (Math.abs(n) >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
+    if (Math.abs(n) >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
+    return `$${n.toFixed(0)}`;
+}
+
 export const SkewAnalysisPage: React.FC = observer(() => {
     const services = useServices();
     const skew = services.skewAnalysis;
@@ -621,7 +630,12 @@ const SnapshotView: React.FC<{ snapshot: ISkewSnapshot }> = ({ snapshot }) => {
 
             <TwoCol>
                 <Card>
-                    <CardTitle>Basic Technicals (Polygon)</CardTitle>
+                    <CardTitle>Technicals + Fundamentals</CardTitle>
+                    {snapshot.fmpFundamentals && (snapshot.fmpFundamentals.companyName || snapshot.fmpFundamentals.sector) && (
+                        <div style={{ fontSize: 12, color: C.textDim, marginBottom: 8 }}>
+                            {snapshot.fmpFundamentals.companyName} {snapshot.fmpFundamentals.sector ? `• ${snapshot.fmpFundamentals.sector}` : ''} {snapshot.fmpFundamentals.industry ? `• ${snapshot.fmpFundamentals.industry}` : ''}
+                        </div>
+                    )}
                     <Table>
                         <tbody>
                             <tr><td>RSI(14)</td><td>{fmtNum(basicTechnicals.rsi14, 2)}</td></tr>
@@ -632,11 +646,30 @@ const SnapshotView: React.FC<{ snapshot: ISkewSnapshot }> = ({ snapshot }) => {
                             <tr><td>52W Position</td><td>{fmtNum(basicTechnicals.week52RangePct, 0)}%</td></tr>
                             <tr><td>YTD Return</td><td>{fmtPct(basicTechnicals.ytdReturnPct, 1)}</td></tr>
                             <tr><td>QTD Return</td><td>{fmtPct(basicTechnicals.qtdReturnPct, 1)}</td></tr>
+                            {snapshot.fmpFundamentals && (
+                                <>
+                                    <tr style={{ borderTop: `2px solid ${C.border}` }}><td colSpan={2} style={{ paddingTop: 10, color: C.textDim, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Fundamentals (FMP)</td></tr>
+                                    <tr><td>P/E (TTM)</td><td>{fmtNum(snapshot.fmpFundamentals.pe, 2)}</td></tr>
+                                    <tr><td>EPS (TTM proxy)</td><td>{fmtMoney(snapshot.fmpFundamentals.eps)}</td></tr>
+                                    <tr><td>Market Cap</td><td>{fmtMarketCap(snapshot.fmpFundamentals.marketCap)}</td></tr>
+                                    <tr><td>P/S (TTM)</td><td>{fmtNum(snapshot.fmpFundamentals.priceToSales, 2)}</td></tr>
+                                    <tr><td>P/B (TTM)</td><td>{fmtNum(snapshot.fmpFundamentals.priceToBook, 2)}</td></tr>
+                                    <tr><td>ROE (TTM)</td><td>{fmtPct(snapshot.fmpFundamentals.roe, 1)}</td></tr>
+                                    <tr><td>ROIC (TTM)</td><td>{fmtPct(snapshot.fmpFundamentals.roic, 1)}</td></tr>
+                                    <tr><td>LT Debt/Equity</td><td>{fmtNum(snapshot.fmpFundamentals.longTermDebtToEquity, 2)}</td></tr>
+                                    <tr><td>Beta (FMP)</td><td>{fmtNum(snapshot.fmpFundamentals.beta, 2)}</td></tr>
+                                    <tr><td>Dividend / Yield</td><td>{snapshot.fmpFundamentals.dividend != null ? `${fmtMoney(snapshot.fmpFundamentals.dividend)} / ${fmtPct(snapshot.fmpFundamentals.dividendYield, 2)}` : '–'}</td></tr>
+                                    <tr><td>EPS Q/Q growth</td><td>{fmtPct(snapshot.fmpFundamentals.epsGrowthQuarterly, 1)}</td></tr>
+                                    <tr><td>Sales Q/Q growth</td><td>{fmtPct(snapshot.fmpFundamentals.salesGrowthQuarterly, 1)}</td></tr>
+                                </>
+                            )}
                         </tbody>
                     </Table>
-                    <div style={{ marginTop: 10, fontSize: 11, color: C.textMuted }}>
-                        Add VITE_FMP_API_KEY for P/E, EPS, market cap, dividend, beta, and ratios.
-                    </div>
+                    {!snapshot.fmpFundamentals && (
+                        <div style={{ marginTop: 10, fontSize: 11, color: C.textMuted }}>
+                            FMP key configured but returned no data — common for ETFs / indices.
+                        </div>
+                    )}
                 </Card>
 
                 <Card>

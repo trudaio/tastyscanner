@@ -144,6 +144,19 @@ export interface ISkewSnapshot {
     expirationDetails: IExpirationDetail[];
     strikesByExpiration: Record<string, IStrikeRow[]>;
     summary: ISkewSummary;
+    // F4: company fundamentals time series
+    fundamentalsTimeSeries: IFundamentalsPoint[];
+}
+
+/** One quarter of fundamentals + matched stock price at quarter end. */
+export interface IFundamentalsPoint {
+    fiscalPeriod: string;
+    periodEndDate: string;
+    price: number | null;
+    eps: number | null;
+    epsDiluted: number | null;
+    revenue: number | null;
+    netIncome: number | null;
 }
 
 export interface ISkewAnalysisService {

@@ -13,10 +13,13 @@ import type {
     IStrikeRow,
     ISkewSummary,
     TermStructure,
+    IFundamentalsPoint,
 } from './skew-analysis.service.interface';
 import {
     PolygonClient,
     type IPolygonOptionSnapshot,
+    type IPolygonAggregateBar,
+    type IPolygonFinancials,
 } from '../api-clients/polygon.client';
 import { FmpClient } from '../api-clients/fmp.client';
 import {
@@ -79,13 +82,22 @@ export class SkewAnalysisService implements ISkewAnalysisService {
             yearAgo.setDate(yearAgo.getDate() - 365);
             const yearAgoIso = isoDate(yearAgo);
             const todayIsoStr = isoDate(new Date());
+            // For fundamentals price evolution we need ~3y of price data so we
+            // can match each quarter's end-of-period close.
+            const threeYearsAgo = new Date();
+            threeYearsAgo.setDate(threeYearsAgo.getDate() - 365 * 3);
+            const threeYearsAgoIso = isoDate(threeYearsAgo);
 
-            const [chainRaw, priceHistory, stockPrice, marketMetrics] = await Promise.all([
+            const [chainRaw, priceHistory, stockPrice, marketMetrics, fundamentalsRaw, longPriceHistory] = await Promise.all([
                 this.polygon.getOptionsChainSnapshot(key, fromDate, toDate),
                 this.polygon.getPriceHistory(key, yearAgoIso, todayIsoStr),
                 this.polygon.getStockPrice(key),
                 this.factory.marketDataProvider.getSymbolMetrics(key).catch(() => null),
+                this.polygon.getFinancials(key, 12).catch(() => []),
+                this.polygon.getPriceHistory(key, threeYearsAgoIso, todayIsoStr).catch(() => [] as IPolygonAggregateBar[]),
             ]);
+
+            const fundamentalsTimeSeries = buildFundamentalsTimeSeries(fundamentalsRaw, longPriceHistory);
 
             const processed = processOptions(chainRaw, stockPrice ?? null);
             const chartData = formatChartData(processed.byExp);
@@ -145,6 +157,7 @@ export class SkewAnalysisService implements ISkewAnalysisService {
                 expirationDetails,
                 strikesByExpiration,
                 summary,
+                fundamentalsTimeSeries,
             };
 
             runInAction(() => {
@@ -514,6 +527,48 @@ function buildSummary(args: {
         totalPuts60d: putCallRatio?.putVolume ?? 0,
         totalCalls60d: putCallRatio?.callVolume ?? 0,
     };
+}
+
+function buildFundamentalsTimeSeries(
+    financials: IPolygonFinancials[],
+    priceHistory: IPolygonAggregateBar[],
+): IFundamentalsPoint[] {
+    if (financials.length === 0) return [];
+    // Sort financials chronologically by periodEndDate (asc)
+    const sorted = [...financials]
+        .filter((f) => f.periodEndDate)
+        .sort((a, b) => a.periodEndDate.localeCompare(b.periodEndDate));
+
+    return sorted.map((f) => {
+        const target = new Date(f.periodEndDate + 'T00:00:00').getTime();
+        const price = nearestClose(priceHistory, target);
+        const label = `${f.fiscalPeriod}${f.fiscalYear ? ` ${f.fiscalYear}` : ''}`.trim();
+        return {
+            fiscalPeriod: label || f.periodEndDate,
+            periodEndDate: f.periodEndDate,
+            price,
+            eps: f.eps,
+            epsDiluted: f.epsDiluted,
+            revenue: f.revenue,
+            netIncome: f.netIncome,
+        };
+    });
+}
+
+function nearestClose(bars: IPolygonAggregateBar[], targetMs: number): number | null {
+    if (bars.length === 0) return null;
+    let best: IPolygonAggregateBar | null = null;
+    let bestDiff = Infinity;
+    for (const b of bars) {
+        const diff = Math.abs(b.t - targetMs);
+        if (diff < bestDiff) {
+            bestDiff = diff;
+            best = b;
+        }
+    }
+    // Cap matching window at 30 days — anything more is suspicious
+    if (best && bestDiff <= 31 * 24 * 60 * 60 * 1000) return best.c;
+    return null;
 }
 
 function toNumOrNull(v: unknown): number | null {

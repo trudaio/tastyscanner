@@ -50,6 +50,33 @@ interface IPolygonPrevResponse {
     results?: Array<{ c?: number }>;
 }
 
+export interface IPolygonFinancials {
+    fiscalPeriod: string;
+    fiscalYear: string;
+    periodEndDate: string;
+    eps: number | null;
+    epsDiluted: number | null;
+    revenue: number | null;
+    netIncome: number | null;
+}
+
+interface IPolygonFinancialsResponse {
+    results?: Array<{
+        fiscal_period?: string;
+        fiscal_year?: string;
+        period_of_report_date?: string;
+        end_date?: string;
+        financials?: {
+            income_statement?: {
+                basic_earnings_per_share?: { value?: number };
+                diluted_earnings_per_share?: { value?: number };
+                revenues?: { value?: number };
+                net_income_loss?: { value?: number };
+            };
+        };
+    }>;
+}
+
 export class PolygonClient {
     private readonly apiKey: string;
     private readonly baseUrl = POLYGON_BASE_URL;
@@ -108,6 +135,38 @@ export class PolygonClient {
         }
         const data = (await res.json()) as IPolygonAggsResponse;
         return data.results ?? [];
+    }
+
+    /**
+     * Quarterly financials. Returns most-recent first; caller should sort if a
+     * chronological order is desired.
+     */
+    async getFinancials(
+        ticker: string,
+        limit = 12,
+        signal?: AbortSignal,
+    ): Promise<IPolygonFinancials[]> {
+        if (!this.isConfigured) return [];
+        const url = `${this.baseUrl}/vX/reference/financials?ticker=${encodeURIComponent(ticker)}&timeframe=quarterly&order=desc&limit=${limit}&apiKey=${this.apiKey}`;
+        const res = await fetch(url, { signal });
+        if (!res.ok) {
+            if (res.status === 429) throw new PolygonRateLimitError('Polygon rate limit hit (429)');
+            return [];
+        }
+        const data = (await res.json()) as IPolygonFinancialsResponse;
+        const results = data.results ?? [];
+        return results.map((r) => {
+            const inc = r.financials?.income_statement;
+            return {
+                fiscalPeriod: r.fiscal_period ?? '',
+                fiscalYear: r.fiscal_year ?? '',
+                periodEndDate: r.end_date ?? r.period_of_report_date ?? '',
+                eps: inc?.basic_earnings_per_share?.value ?? null,
+                epsDiluted: inc?.diluted_earnings_per_share?.value ?? null,
+                revenue: inc?.revenues?.value ?? null,
+                netIncome: inc?.net_income_loss?.value ?? null,
+            };
+        });
     }
 
     /** Last close price using the previous-day aggregate endpoint. */

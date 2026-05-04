@@ -282,9 +282,9 @@ const SnapshotView: React.FC<{ snapshot: ISkewSnapshot }> = ({ snapshot }) => {
                     <IonCardTitle>Skew Chart — IV by delta level</IonCardTitle>
                 </IonCardHeader>
                 <IonCardContent>
-                    <div style={{ width: '100%', height: 380 }}>
-                        <ResponsiveContainer>
-                            <LineChart data={snapshot.chartData} margin={{ top: 12, right: 24, bottom: 8, left: 0 }}>
+                    <div style={{ width: '100%', minHeight: 380 }}>
+                        <ResponsiveContainer width="100%" height={380} minWidth={300}>
+                            <LineChart data={snapshot.chartData.slice()} margin={{ top: 12, right: 24, bottom: 8, left: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="var(--ion-color-light-shade)" />
                                 <XAxis dataKey="expirationLabel" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
                                 <YAxis tick={{ fontSize: 11 }} unit="%" domain={['auto', 'auto']} />

@@ -51,6 +51,19 @@ const Legend = styled.div`
   color: #a0a0b0;
 `;
 
+const Interp = styled.div`
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  background: rgba(56, 189, 248, 0.06);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #cfd5e0;
+
+  strong { color: #38bdf8; }
+`;
+
 const LegendDot = styled.span<{ $color: string; $dashed?: boolean }>`
   display: inline-block;
   width: 16px;
@@ -195,6 +208,14 @@ export const SkewChartComponent: React.FC<IProps> = ({ data }) => {
 
     return (
         <Wrapper>
+            <Interp>
+                <strong>Reading this:</strong> the X-axis lists expirations from front to back. The Y-axis is implied
+                volatility (%). Each delta level (10, 20, 30, 40) gets two lines — solid for the put leg, dashed for the
+                matching call leg. Look at the put-side spread between deltas: a wide gap between the 10Δ put line (top)
+                and the 40Δ put line means strong skew — the wings are charging more vol than the body. A flat or
+                inverted pattern signals little fear premium. The ◆ marker on the X-axis tags the 3rd-Friday monthly
+                expirations, which usually have the deepest liquidity.
+            </Interp>
             <Svg viewBox={`0 0 ${VW} ${VH}`} preserveAspectRatio="none">
                 {/* Y-grid */}
                 {yTicks.map((t, i) => (

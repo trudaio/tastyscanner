@@ -20,6 +20,7 @@ import { SkewStatsRow } from '../components/skew/skew-stats-row.component';
 import { SkewPremiumSkewChart } from '../components/skew/skew-premium-skew-chart.component';
 import { SkewScatterChart } from '../components/skew/skew-scatter.component';
 import { SkewDeltaTable } from '../components/skew/skew-delta-table.component';
+import { SkewByDistanceTable } from '../components/skew/skew-by-distance-table.component';
 
 // ── v13-inspired palette ────────────────────────────────────────────────
 const C = {
@@ -312,17 +313,6 @@ const InsightRow = styled.div<{ $tone: SuggestionLevel }>`
   &:last-child { margin-bottom: 0; }
 `;
 
-const DistChip = styled.span`
-  display: inline-block;
-  background: ${C.accent1};
-  color: white;
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-`;
-
 const ASSESSMENT_TONE: Record<string, 'good' | 'warn' | 'bad' | 'neutral'> = {
     'Bullish': 'good',
     'Balanced': 'neutral',
@@ -604,39 +594,14 @@ const SnapshotView: React.FC<{ snapshot: ISkewSnapshot }> = ({ snapshot }) => {
                 </Card>
             </TwoCol>
 
-            <Card>
-                <CardTitle>Strike by Distance — front monthly</CardTitle>
-                <Table>
-                    <thead>
-                        <tr>
-                            <th>Distance</th>
-                            <th>Put Strike</th>
-                            <th>Put Δ</th>
-                            <th>Put Premium</th>
-                            <th>Put Volume</th>
-                            <th>Call Strike</th>
-                            <th>Call Δ</th>
-                            <th>Call Premium</th>
-                            <th>Call Volume</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {snapshot.byDistance.map((row) => (
-                            <tr key={row.distancePct}>
-                                <td><DistChip>±{row.distancePct}%</DistChip></td>
-                                <td>{row.put ? fmtMoney(row.put.strike) : '–'}</td>
-                                <td>{fmtNum(row.put?.delta, 2)}</td>
-                                <td>{row.put ? fmtMoney(row.put.premium) : '–'}</td>
-                                <td>{row.put ? row.put.volume.toLocaleString() : '–'}</td>
-                                <td>{row.call ? fmtMoney(row.call.strike) : '–'}</td>
-                                <td>{fmtNum(row.call?.delta, 2)}</td>
-                                <td>{row.call ? fmtMoney(row.call.premium) : '–'}</td>
-                                <td>{row.call ? row.call.volume.toLocaleString() : '–'}</td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </Table>
-            </Card>
+            <SkewErrorBoundary fallbackTitle="Strike by distance">
+                <SkewByDistanceTable
+                    ticker={snapshot.ticker}
+                    stockPrice={snapshot.stockPrice}
+                    strikesByExpiration={snapshot.strikesByExpiration}
+                    expirations={expirationOptions}
+                />
+            </SkewErrorBoundary>
 
             {!skew_hasFmpKeyHint() && (
                 <IonNote color="medium" style={{ display: 'block', textAlign: 'center', fontSize: 12 }}>

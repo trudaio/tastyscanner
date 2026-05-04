@@ -148,6 +148,20 @@ const PUT_COLOR = '#ef4444';
 
 type DteFilter = 'all' | 'lt30' | '30to60' | '60to90' | 'gt90';
 type Mode = 'gex' | 'spotGex' | 'vanna' | 'vannaGex';
+type RangeFilter = 'pm10' | 'pm20' | 'pm50' | 'all';
+
+const RANGE_PCT: Record<RangeFilter, number | null> = {
+    pm10: 10,
+    pm20: 20,
+    pm50: 50,
+    all: null,
+};
+const RANGE_LABEL: Record<RangeFilter, string> = {
+    pm10: '±10%',
+    pm20: '±20%',
+    pm50: '±50%',
+    all: 'All',
+};
 
 interface IExpirationOption {
     expiration: string;
@@ -257,6 +271,7 @@ export const SkewGexChart: React.FC<IProps> = ({ ticker, stockPrice, strikesByEx
     const fallbackExp = expirations.find((e) => e.isMonthly)?.expiration ?? expirations[0]?.expiration ?? '';
     const [selectedExp, setSelectedExp] = useState<string>(fallbackExp);
     const [dteFilter, setDteFilter] = useState<DteFilter>('all');
+    const [rangeFilter, setRangeFilter] = useState<RangeFilter>('pm20');
     const [mode, setMode] = useState<Mode>('gex');
     const [hover, setHover] = useState<{ x: number; y: number; b: IGexBucket; cumulative: number } | null>(null);
 
@@ -264,19 +279,30 @@ export const SkewGexChart: React.FC<IProps> = ({ ticker, stockPrice, strikesByEx
 
     const buckets = useMemo(() => {
         const dteOk = dteFilterFn(dteFilter);
+        const rangePct = RANGE_PCT[rangeFilter];
+        const lo = rangePct != null && stockPrice != null ? stockPrice * (1 - rangePct / 100) : -Infinity;
+        const hi = rangePct != null && stockPrice != null ? stockPrice * (1 + rangePct / 100) : Infinity;
         const all: IStrikeRow[] = [];
         if (aggregate) {
             for (const e of expirations) {
                 const rows = strikesByExpiration[e.expiration];
                 if (!rows) continue;
-                for (const r of rows) if (dteOk(r.dte)) all.push(r);
+                for (const r of rows) {
+                    if (!dteOk(r.dte)) continue;
+                    if (r.strike < lo || r.strike > hi) continue;
+                    all.push(r);
+                }
             }
         } else {
             const rows = strikesByExpiration[selectedExp] ?? [];
-            for (const r of rows) if (dteOk(r.dte)) all.push(r);
+            for (const r of rows) {
+                if (!dteOk(r.dte)) continue;
+                if (r.strike < lo || r.strike > hi) continue;
+                all.push(r);
+            }
         }
         return buildBuckets(all, spot);
-    }, [aggregate, expirations, strikesByExpiration, selectedExp, dteFilter, spot]);
+    }, [aggregate, expirations, strikesByExpiration, selectedExp, dteFilter, rangeFilter, stockPrice, spot]);
 
     const interp = useMemo(() => buildInterpretation(buckets, stockPrice, ticker, mode), [buckets, stockPrice, ticker, mode]);
 
@@ -418,6 +444,11 @@ export const SkewGexChart: React.FC<IProps> = ({ ticker, stockPrice, strikesByEx
                         <option value="30to60">DTE: 30–60</option>
                         <option value="60to90">DTE: 60–90</option>
                         <option value="gt90">DTE: &gt; 90</option>
+                    </Select>
+                    <Select value={rangeFilter} onChange={(e) => setRangeFilter(e.target.value as RangeFilter)}>
+                        {(['pm10', 'pm20', 'pm50', 'all'] as RangeFilter[]).map((r) => (
+                            <option key={r} value={r}>Range: {RANGE_LABEL[r]}</option>
+                        ))}
                     </Select>
                     <span style={{ width: 8 }} />
                     <Btn $active={mode === 'gex'} onClick={() => setMode('gex')}>GEX</Btn>

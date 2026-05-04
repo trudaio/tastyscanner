@@ -5,16 +5,20 @@
  * beta, ratios). Optional — if the API key is missing, callers fall back to
  * basic technicals only.
  *
- * Free-tier rate limit: 250 requests/day. We pack everything into 4 parallel
- * calls per ticker so a single page load only spends 4 of those.
+ * NOTE (2025): legacy `/api/v3/` endpoints are no longer accessible to accounts
+ * created after 2025-08-31. We use the newer `stable/` endpoints which take
+ * `?symbol=` as a query parameter and return slightly different field names.
+ *
+ * Free-tier rate limit: 250 requests/day. We pack everything into 5 parallel
+ * calls per ticker so a single page load only spends 5 of those.
  */
 
-const FMP_BASE = 'https://financialmodelingprep.com/api/v3';
+const FMP_BASE = 'https://financialmodelingprep.com/stable';
 const REQUEST_TIMEOUT_MS = 10_000;
 
 export interface IFmpFundamentals {
     pe: number | null;
-    eps: number | null; // EPS TTM
+    eps: number | null; // EPS TTM (sum of last 4 quarters)
     marketCap: number | null;
     livePrice: number | null;
     dividend: number | null;
@@ -33,7 +37,7 @@ export interface IFmpFundamentals {
     sector: string | null;
     industry: string | null;
     companyName: string | null;
-    // Finviz-style additions (from /v3/quote and richer /v3/profile fields)
+    // Finviz-style additions (from /quote and richer /profile fields)
     priceAvg50: number | null;
     priceAvg200: number | null;
     yearHigh: number | null;
@@ -44,7 +48,7 @@ export interface IFmpFundamentals {
     avgVolume: number | null;
     change: number | null; // $
     changePct: number | null; // %
-    earningsAnnouncement: string | null; // ISO date string
+    earningsAnnouncement: string | null; // ISO date string (not in stable/quote — left null)
     revenueTtm: number | null;
     netIncomeTtm: number | null;
     bookValuePerShare: number | null;
@@ -60,25 +64,30 @@ export interface IFmpFundamentals {
     earningsYield: number | null; // %
 }
 
+/** stable/profile shape */
 interface IFmpProfile {
     symbol?: string;
     price?: number;
     beta?: number;
-    mktCap?: number;
-    lastDiv?: number;
+    marketCap?: number;
+    lastDividend?: number;
     sector?: string;
     industry?: string;
     companyName?: string;
-    volAvg?: number;
-    range?: string; // "10.50-50.30"
-    changes?: number;
+    averageVolume?: number;
+    range?: string;
+    change?: number;
+    changePercentage?: number;
 }
 
+/** stable/quote shape */
 interface IFmpQuote {
     symbol?: string;
+    name?: string;
     price?: number;
-    changesPercentage?: number;
+    changePercentage?: number;
     change?: number;
+    volume?: number;
     dayLow?: number;
     dayHigh?: number;
     yearHigh?: number;
@@ -86,72 +95,61 @@ interface IFmpQuote {
     marketCap?: number;
     priceAvg50?: number;
     priceAvg200?: number;
-    volume?: number;
-    avgVolume?: number;
-    eps?: number;
-    pe?: number;
-    earningsAnnouncement?: string;
-    sharesOutstanding?: number;
+    open?: number;
+    previousClose?: number;
+    timestamp?: number;
 }
 
+/** stable/key-metrics-ttm shape — many fewer fields than legacy v3. */
 interface IFmpKeyMetricsTtm {
-    peRatioTTM?: number;
-    priceToBookRatioTTM?: number;
-    priceToSalesRatioTTM?: number;
-    enterpriseValueOverEBITDATTM?: number;
-    longTermDebtToCapitalizationTTM?: number;
-    netDebtToCapitalizationTTM?: number;
-    debtToEquityTTM?: number;
-    longTermDebtToEquityTTM?: number;
-    returnOnEquityTTM?: number;
-    returnOnTangibleAssetsTTM?: number;
-    earningsYieldTTM?: number;
-    dividendPerShareTTM?: number;
-    dividendYieldTTM?: number;
-    netIncomePerShareTTM?: number;
-    sharesOutstandingTTM?: number;
-    revenuePerShareTTM?: number;
-    bookValuePerShareTTM?: number;
-    cashPerShareTTM?: number;
-    payoutRatioTTM?: number;
-    pegRatioTTM?: number;
+    marketCap?: number;
     enterpriseValueTTM?: number;
-}
-
-interface IFmpRatiosTtm {
+    evToEBITDATTM?: number;
+    evToSalesTTM?: number;
+    netDebtToEBITDATTM?: number;
     returnOnAssetsTTM?: number;
     returnOnEquityTTM?: number;
+    returnOnInvestedCapitalTTM?: number;
     returnOnCapitalEmployedTTM?: number;
-    priceEarningsRatioTTM?: number;
-    priceToSalesRatioTTM?: number;
-    priceBookValueRatioTTM?: number;
-    longTermDebtToEquityTTM?: number;
-    debtEquityRatioTTM?: number;
-    dividendYielTTM?: number; // FMP typo
-    dividendYieldTTM?: number;
-    dividendPerShareTTM?: number;
-    netProfitMarginTTM?: number;
-    operatingProfitMarginTTM?: number;
-    grossProfitMarginTTM?: number;
-    payoutRatioTTM?: number;
-    priceEarningsToGrowthRatioTTM?: number;
+    earningsYieldTTM?: number;
+    freeCashFlowYieldTTM?: number;
+    workingCapitalTTM?: number;
 }
 
-interface IFmpIncomeStatementGrowth {
-    growthRevenue?: number; // fraction
-    growthEPS?: number; // fraction
-    period?: string;
-    date?: string;
+/** stable/ratios-ttm shape — most ratios live here now. */
+interface IFmpRatiosTtm {
+    grossProfitMarginTTM?: number;
+    operatingProfitMarginTTM?: number;
+    netProfitMarginTTM?: number;
+    ebitMarginTTM?: number;
+    ebitdaMarginTTM?: number;
+    priceToEarningsRatioTTM?: number;
+    priceToBookRatioTTM?: number;
+    priceToSalesRatioTTM?: number;
+    priceToEarningsGrowthRatioTTM?: number;
+    debtToEquityRatioTTM?: number;
+    debtToAssetsRatioTTM?: number;
+    debtToCapitalRatioTTM?: number;
+    longTermDebtToCapitalRatioTTM?: number;
+    dividendYieldTTM?: number;
+    dividendPerShareTTM?: number;
+    dividendPayoutRatioTTM?: number;
+    revenuePerShareTTM?: number;
+    netIncomePerShareTTM?: number;
+    cashPerShareTTM?: number;
+    bookValuePerShareTTM?: number;
+    enterpriseValueMultipleTTM?: number;
 }
 
 interface IFmpIncomeStatement {
     eps?: number;
-    epsdiluted?: number;
+    epsDiluted?: number;
     revenue?: number;
     netIncome?: number;
     period?: string;
     date?: string;
     weightedAverageShsOut?: number;
+    weightedAverageShsOutDil?: number;
 }
 
 async function fetchWithTimeout<T>(url: string): Promise<T | null> {
@@ -185,11 +183,11 @@ export class FmpClient {
         const symbol = encodeURIComponent(ticker.toUpperCase());
 
         const [profileArr, keyMetricsArr, ratiosArr, incomeArr, quoteArr] = await Promise.all([
-            fetchWithTimeout<IFmpProfile[]>(`${FMP_BASE}/profile/${symbol}?apikey=${this.apiKey}`),
-            fetchWithTimeout<IFmpKeyMetricsTtm[]>(`${FMP_BASE}/key-metrics-ttm/${symbol}?apikey=${this.apiKey}`),
-            fetchWithTimeout<IFmpRatiosTtm[]>(`${FMP_BASE}/ratios-ttm/${symbol}?apikey=${this.apiKey}`),
-            fetchWithTimeout<IFmpIncomeStatement[]>(`${FMP_BASE}/income-statement/${symbol}?period=quarter&limit=4&apikey=${this.apiKey}`),
-            fetchWithTimeout<IFmpQuote[]>(`${FMP_BASE}/quote/${symbol}?apikey=${this.apiKey}`),
+            fetchWithTimeout<IFmpProfile[]>(`${FMP_BASE}/profile?symbol=${symbol}&apikey=${this.apiKey}`),
+            fetchWithTimeout<IFmpKeyMetricsTtm[]>(`${FMP_BASE}/key-metrics-ttm?symbol=${symbol}&apikey=${this.apiKey}`),
+            fetchWithTimeout<IFmpRatiosTtm[]>(`${FMP_BASE}/ratios-ttm?symbol=${symbol}&apikey=${this.apiKey}`),
+            fetchWithTimeout<IFmpIncomeStatement[]>(`${FMP_BASE}/income-statement?symbol=${symbol}&period=quarter&limit=4&apikey=${this.apiKey}`),
+            fetchWithTimeout<IFmpQuote[]>(`${FMP_BASE}/quote?symbol=${symbol}&apikey=${this.apiKey}`),
         ]);
 
         const profile = Array.isArray(profileArr) && profileArr.length > 0 ? profileArr[0] : null;
@@ -220,7 +218,6 @@ export class FmpClient {
             ? incomeQ.slice(0, 4).reduce((a, q) => a + (q.eps ?? 0), 0) // TTM proxy = sum of last 4 quarters
             : null;
 
-        // TTM proxies — sum the last 4 quarters when available
         const revenueTtm = incomeQ.length >= 1 && incomeQ[0].revenue != null
             ? incomeQ.slice(0, 4).reduce((a, q) => a + (q.revenue ?? 0), 0)
             : null;
@@ -228,25 +225,31 @@ export class FmpClient {
             ? incomeQ.slice(0, 4).reduce((a, q) => a + (q.netIncome ?? 0), 0)
             : null;
 
-        const marketCap = quote?.marketCap ?? profile?.mktCap ?? null;
+        const marketCap = quote?.marketCap ?? profile?.marketCap ?? keyMetrics?.marketCap ?? null;
         const livePrice = quote?.price ?? profile?.price ?? null;
 
-        const dividendYield = (() => {
-            if (ratios?.dividendYieldTTM != null) return ratios.dividendYieldTTM * 100;
-            if (ratios?.dividendYielTTM != null) return ratios.dividendYielTTM * 100;
-            if (keyMetrics?.dividendYieldTTM != null) return keyMetrics.dividendYieldTTM * 100;
+        // sharesOutstanding — derive from market cap / price (most reliable post-stable)
+        const sharesOutstanding = (() => {
+            if (incomeQ.length > 0 && incomeQ[0].weightedAverageShsOut != null) return incomeQ[0].weightedAverageShsOut;
+            if (marketCap != null && livePrice != null && livePrice > 0) return marketCap / livePrice;
             return null;
         })();
 
+        const dividendYield = ratios?.dividendYieldTTM != null
+            ? ratios.dividendYieldTTM * 100
+            : null;
+
         const dividend = (() => {
-            if (profile?.lastDiv != null && profile.lastDiv > 0) return profile.lastDiv;
+            if (profile?.lastDividend != null && profile.lastDividend > 0) return profile.lastDividend;
             if (ratios?.dividendPerShareTTM != null) return ratios.dividendPerShareTTM;
             return null;
         })();
 
+        const debtToEquity = ratios?.debtToEquityRatioTTM ?? null;
+
         return {
-            pe: quote?.pe ?? ratios?.priceEarningsRatioTTM ?? keyMetrics?.peRatioTTM ?? null,
-            eps: quote?.eps ?? eps,
+            pe: ratios?.priceToEarningsRatioTTM ?? null,
+            eps,
             marketCap,
             livePrice,
             dividend,
@@ -254,17 +257,21 @@ export class FmpClient {
             beta: profile?.beta ?? null,
             epsGrowthQuarterly,
             salesGrowthQuarterly,
-            epsThisYear: null, // FMP free tier doesn't expose forward EPS estimates reliably
+            epsThisYear: null,
             epsNextYear: null,
-            longTermDebtToEquity: ratios?.longTermDebtToEquityTTM ?? keyMetrics?.longTermDebtToEquityTTM ?? null,
-            roic: ratios?.returnOnCapitalEmployedTTM != null ? ratios.returnOnCapitalEmployedTTM * 100 : null,
-            roe: (() => {
-                const v = ratios?.returnOnEquityTTM ?? keyMetrics?.returnOnEquityTTM;
+            // longTermDebtToEquity — stable doesn't expose it; use overall D/E as proxy when missing
+            longTermDebtToEquity: debtToEquity,
+            roic: (() => {
+                const v = keyMetrics?.returnOnInvestedCapitalTTM ?? keyMetrics?.returnOnCapitalEmployedTTM;
                 return v != null ? v * 100 : null;
             })(),
-            sharesOutstanding: quote?.sharesOutstanding ?? keyMetrics?.sharesOutstandingTTM ?? null,
-            priceToSales: ratios?.priceToSalesRatioTTM ?? keyMetrics?.priceToSalesRatioTTM ?? null,
-            priceToBook: ratios?.priceBookValueRatioTTM ?? keyMetrics?.priceToBookRatioTTM ?? null,
+            roe: (() => {
+                const v = keyMetrics?.returnOnEquityTTM;
+                return v != null ? v * 100 : null;
+            })(),
+            sharesOutstanding,
+            priceToSales: ratios?.priceToSalesRatioTTM ?? null,
+            priceToBook: ratios?.priceToBookRatioTTM ?? null,
             sector: profile?.sector ?? null,
             industry: profile?.industry ?? null,
             companyName: profile?.companyName ?? null,
@@ -275,26 +282,25 @@ export class FmpClient {
             dayHigh: quote?.dayHigh ?? null,
             dayLow: quote?.dayLow ?? null,
             volume: quote?.volume ?? null,
-            avgVolume: quote?.avgVolume ?? profile?.volAvg ?? null,
-            change: quote?.change ?? profile?.changes ?? null,
-            changePct: quote?.changesPercentage ?? null,
-            earningsAnnouncement: quote?.earningsAnnouncement ?? null,
+            avgVolume: profile?.averageVolume ?? null,
+            change: quote?.change ?? profile?.change ?? null,
+            changePct: quote?.changePercentage ?? profile?.changePercentage ?? null,
+            earningsAnnouncement: null, // not available on stable/quote — would need separate stable/earnings call
             revenueTtm,
             netIncomeTtm,
-            bookValuePerShare: keyMetrics?.bookValuePerShareTTM ?? null,
-            cashPerShare: keyMetrics?.cashPerShareTTM ?? null,
-            debtToEquity: ratios?.debtEquityRatioTTM ?? keyMetrics?.debtToEquityTTM ?? null,
+            bookValuePerShare: ratios?.bookValuePerShareTTM ?? null,
+            cashPerShare: ratios?.cashPerShareTTM ?? null,
+            debtToEquity,
             profitMargin: ratios?.netProfitMarginTTM != null ? ratios.netProfitMarginTTM * 100 : null,
             operatingMargin: ratios?.operatingProfitMarginTTM != null ? ratios.operatingProfitMarginTTM * 100 : null,
             grossMargin: ratios?.grossProfitMarginTTM != null ? ratios.grossProfitMarginTTM * 100 : null,
-            returnOnAssets: ratios?.returnOnAssetsTTM != null ? ratios.returnOnAssetsTTM * 100 : null,
-            payoutRatio: (() => {
-                const v = ratios?.payoutRatioTTM ?? keyMetrics?.payoutRatioTTM;
-                return v != null ? v * 100 : null;
-            })(),
-            pegRatio: ratios?.priceEarningsToGrowthRatioTTM ?? keyMetrics?.pegRatioTTM ?? null,
-            enterpriseValueOverEbitda: keyMetrics?.enterpriseValueOverEBITDATTM ?? null,
+            returnOnAssets: keyMetrics?.returnOnAssetsTTM != null ? keyMetrics.returnOnAssetsTTM * 100 : null,
+            payoutRatio: ratios?.dividendPayoutRatioTTM != null ? ratios.dividendPayoutRatioTTM * 100 : null,
+            pegRatio: ratios?.priceToEarningsGrowthRatioTTM ?? null,
+            // EV/EBITDA — prefer key-metrics evToEBITDATTM, else ratios enterpriseValueMultipleTTM
+            enterpriseValueOverEbitda: keyMetrics?.evToEBITDATTM ?? ratios?.enterpriseValueMultipleTTM ?? null,
             earningsYield: keyMetrics?.earningsYieldTTM != null ? keyMetrics.earningsYieldTTM * 100 : null,
         };
     }
 }
+

@@ -1,119 +1,101 @@
-# Skew Dashboard Integration — Plan
+# Skew Dashboard Integration — Status & TODO
 
-Branch: `feature/skew-integration`
-
-## Goal
-
-Integrate features from `github.com/trudaio/skew-dashboard` into TastyScanner as two **stand-alone** left-menu pages:
-
-1. **Skew Analysis** (`/skew-analysis`) — per-ticker IV skew chart, IV rank, max pain, expected move, P/C ratio, fundamentals, suggested trades, strike-by-distance
-2. **Skew Scanner** (`/skew-scanner`) — multi-ticker scanner with editable watchlist (default 100, persisted in Firestore)
-
-The original Backtest tab is **dropped**. We reuse TastyScanner's existing TastyTrade OAuth session (no separate refresh token).
-
-## Design summary
-
-- **Tech**: Full port — TS strict + MobX + Ionic 8 + React 19. Service-oriented (`ServiceFactory` pattern). No plain JS, no separate `.css` files outside theme.
-- **APIs**: Polygon.io (chains/history/snapshots), TastyTrade (market metrics — via existing client), FMP (fundamentals, optional with fallback)
-- **Persistence**: Firestore `users/{uid}/skewWatchlist/main` (single doc with `tickers: string[]`)
-- **Rate limit**: 8s/request in Scanner (Polygon free tier) + exponential backoff on 429
-
-## Phased delivery
-
-| Phase | Goal | Push? |
-|------|------|-------|
-| **F1** | Foundation: branch, env vars, scaffold servicii goale + 2 pagini placeholder + meniu + rute | ✅ branch + Firebase deploy |
-| **F2** | Skew Analysis page complet funcțional (toate cele 9 secțiuni, fundamentals cu fallback) | ✅ branch + deploy |
-| **F3** | Scanner + watchlist editabil + persistență Firestore | ✅ branch + deploy |
-| **F4** | QA final + merge în master + deploy producție | ✅ master |
+**Branch:** `feature/skew-integration`
+**Production URL:** https://operatiunea-guvidul.web.app/skew-analysis
+**Started:** 2026-05-04
 
 ---
 
-## F1 — Foundation (CURRENT)
+## ✅ Done
 
-### Setup
-- [x] Create branch `feature/skew-integration`
-- [x] Add `VITE_POLYGON_API_KEY` to `.env.local` (from old `skew-dashboard-v13`)
-- [x] Add empty `VITE_FMP_API_KEY=` placeholder (filled later by user)
-- [x] Write `tasks/skew-integration-todo.md` (this file)
+### F1 — Foundation (commit `be7e5f3`)
+- [x] Branch `feature/skew-integration`
+- [x] `VITE_POLYGON_API_KEY` în `.env.local` (gitignored)
+- [x] `VITE_FMP_API_KEY` placeholder (fallback mode activ)
+- [x] Schelă servicii: `SkewAnalysisService`, `SkewScannerService`, `SkewWatchlistService`
+- [x] API clients: `PolygonClient`, `FmpClient`
+- [x] Pagini placeholder + 2 intrări meniu + rute (`/skew-analysis`, `/skew-scanner`)
+- [x] Type check + build clean
 
-### Math utilities (port from `App.jsx` ~280-600)
-- [ ] Create `src/utils/skew-math.ts`:
-  - `bsDelta(S, K, T, r, sigma, type)` — Black-Scholes delta
-  - `normalCDF(x)`
-  - `calculateRSI(closes, period)`
-  - `calculateATR(highs, lows, closes, period)`
-  - `calculateIVRank(currentIV, ivs[])`
-  - `calculateMaxPain(strikes, putOI, callOI)`
-  - `calculateExpectedMove(atmStraddle, S, daysToExp)`
-  - `extractPremium(option)` — bid/ask mid with bid>0&&ask>0 guard
+### F2 — Skew Analysis page complete (commits `fc7d9a7` → `34b8b73`)
+- [x] `src/utils/skew-math.ts` — toate funcțiile pure (BS delta, RSI, ATR, IV rank, max pain, expected move, P/C ratio, HV, 52W range, isMonthlyExpiration, daysToExpiration)
+- [x] Polygon client full implementation (chains snapshot cu cursor pagination, history, prev close, 429 detection)
+- [x] FMP client cu graceful fallback când lipsește cheia
+- [x] Reuse TastyTrade `getSymbolMetrics` din `MarketDataProvider` existent
+- [x] CSP actualizat: `api.polygon.io` + `financialmodelingprep.com` adăugate în `firebase.json`
+- [x] **Bug fix**: TastyTrade `beta` și IV fields vin ca string-uri — coerce defensiv prin `toNumOrNull`
+- [x] **Hot fix**: `IonInput type="date"` cauza crash — înlocuit cu plain `<input>` styled
+- [x] **Hot fix**: MobX `observable` default cu deep proxy crăpa pe Recharts → switched la `observable.shallow` / `observable.ref`
+- [x] AppErrorBoundary global ca să prevină vreodată blank-screen pe crash-uri viitoare
+- [x] Production source maps active pentru debugging
 
-### API clients (stubs only in F1, full impl in F2)
-- [ ] `src/services/api-clients/polygon.client.ts` — class shell, methods declared, all return `null`/`[]` for now
-- [ ] `src/services/api-clients/fmp.client.ts` — same; checks for `VITE_FMP_API_KEY`, returns `null` if missing
+### F2.5 — V13 design parity (commit `e6944d6`)
+- [x] **Stats Row** — 7 carduri: Stock Price • Avg Skew • Term Struct (cu pill + explicație) • Max Pain • Exp Move • P/C Gauge SVG • Total Contracts (60d) Puts/Calls
+- [x] **Premium Skew chart** — 4 linii skew % (10/20/30/40Δ) + bare put/call volume + 4 toggle-uri (Monthly/Weekly/Put Vol/Call Vol) + zero-line + caption
+- [x] **IV Skew chart** — păstrat (8 linii put/call IV)
+- [x] **Skew Bell Curve** — scatter Delta(-0.5..0.5) vs Premium($), red puts / green calls, ATM line, dropdown selector expirare
+- [x] **Volatility Smile** — scatter Strike vs IV%, ATM line, dropdown
+- [x] **Delta Table** — 11 coloane (Exp/Δ/Put/Call/Skew$/Skew%/Imbal), Monthly Analysis card + Formula bar
+- [x] Theme dark v13 (#0a0a0f, #12121a, #2a2a3a) scoped doar pe pagina asta
+- [x] Title cu gradient albastru→violet
+- [x] 10 ETF shortcut buttons (SPY/QQQ/IWM/GLD/SLV/DIA/VTI/VOO/EEM/XLF)
+- [x] Plain styled inputs (text + date) cu color-scheme dark
 
-### Service stubs
-- [ ] `src/services/skew-analysis/` — `skew-analysis.service.interface.ts` + `.service.ts` (MobX observable; observable maps for `snapshotByTicker`, loading, errors; method stubs)
-- [ ] `src/services/skew-scanner/` — `skew-scanner.service.interface.ts` + `.service.ts` (observable rows + status + start/stop method stubs)
-- [ ] `src/services/skew-watchlist/` — `skew-watchlist.service.interface.ts` + `.service.ts` (observable `tickers: string[]`, Firestore subscribe stub, load/add/remove method stubs; default 100 tickers constant)
+### F2.6 — Polish (commit `e2b2e7c`)
+- [x] **Bell Curve Y-range fix** — filtrez Y range doar la punctele din intervalul vizibil X + cap la percentila 95
+- [x] **Strike by Distance redesign** — per-expiration (3 rânduri ±1%/±5%/±10%) cu coloanele Put Delta(Strike) | Call Delta(Strike) | Δ Diff | Δ Diff %
+- [x] Interpretări scurte (≤300 cuvinte) deasupra fiecărui chart/tabel: IV chart, Bell Curve, Vol Smile, Strike by Distance
 
-### ServiceFactory wiring
-- [ ] Add to `service-factory.interface.ts`: `skewAnalysis`, `skewScanner`, `skewWatchlist`
-- [ ] Add to `service-factory.ts`: Lazy registrations + getters
+### F2.7 — Tooltips + OI (commit `498facd`)
+- [x] **Hover tooltip pe Premium Skew chart** — linie verticală + dot-uri pe linii + tooltip cu skew % la fiecare delta + Put Vol / Call Vol totale + P/C ratio per expiration
+- [x] **Coloane Put Vol + Call Vol în Strike by Distance**
+- [x] **Open Interest By Strikes** chart nou — bare paired per strike, toggle Aggregate / per Expiration, SPOT marker, hover tooltip, interpretare auto-generată
 
-### Pages (placeholder content for F1)
-- [ ] `src/pages/SkewAnalysisPage.tsx` — Ionic page with header "Skew Analysis" + "Coming soon" banner
-- [ ] `src/pages/SkewScannerPage.tsx` — Ionic page with header "Skew Scanner" + "Coming soon" banner
-
-### Routing + menu
-- [ ] `src/App.tsx`: add 2 routes `/skew-analysis`, `/skew-scanner`
-- [ ] `src/components/Menu.tsx`: add 2 menu entries with icons (`trendingUpOutline`, `scanOutline`)
-
-### Verification
-- [ ] `npx tsc --noEmit` passes (zero errors)
-- [ ] `npm run dev` — manually click both menu entries, verify pages render
-
-### Ship
-- [ ] Commit on `feature/skew-integration`
-- [ ] Push to origin
-- [ ] `npm run build` + `firebase deploy --only hosting:preview` (or production if no preview channel) and share URL
-
----
-
-## F2 — Skew Analysis page (FUTURE)
-
-Sections to implement:
-1. Date range picker (today → today+90 days, max 6 months)
-2. Skew chart — Recharts line chart, IV across strikes for 4 deltas (10/20/30/40), color-coded
-3. IV metrics card — IV rank, IV percentile, 5-day change (from TastyTrade)
-4. Max pain card
-5. Expected move card (from ATM straddle)
-6. P/C ratio card (total open interest)
-7. Fundamentals table (FMP-backed, fallback when key missing)
-8. Suggested trades section
-9. Strike by distance table (1%, 5%, 10% OTM)
-
-CSP update needed: add `https://api.polygon.io https://financialmodelingprep.com` to `connect-src` in `firebase.json`.
-
-## F3 — Scanner + Watchlist (FUTURE)
-
-- Scanner controls (Start/Stop, delay, progress N/M)
-- Sortable rows table (ticker, IV rank, skew %, last update, status)
-- Watchlist edit modal — add/remove/reorder
-- Firestore persistence
-- Default 100-ticker list constant
-- Rate-limit handling (8s default delay, exponential backoff on 429)
-
-## F4 — QA + ship to master
-
-- Full regression in dev mode
-- `npx tsc --noEmit` clean
-- `npm run build` clean
-- Merge to master
-- Deploy production
+### F2.8 — Gamma Exposure (commit `f70d266`)
+- [x] **Gamma Exposure (GEX) chart** — bare paired (call GEX verde, put GEX roșu sign-flipped), linie albă cumulative, SPOT marker
+- [x] Toggle: Aggregate / Exp Filter / DTE Filter (All / <30 / 30-60 / 60-90 / >90)
+- [x] Toggle: GEX (activ) / Spot GEX (activ) / Vanna (disabled, BSM pending) / VannaGEX (disabled)
+- [x] Hover tooltip cu Call GEX / Put GEX / Net / Cumulative
+- [x] Interpretare auto-generată: net GEX, zero-gamma flip strike, regime framing
+- [x] Formula: γ × OI × 100 × spot² × 1%, în milioane $
 
 ---
 
-## Phase 2 — Inline ticker enrichment (DEFERRED)
+## 🚧 În așteptare / Următoarele faze
 
-User will specify what skew data to surface inline when searching a ticker (in TastyScanner's existing search/ticker flow). Scope TBD.
+### F3 — Skew Scanner cu watchlist editabil (NU pornit)
+Pagina `/skew-scanner` e încă placeholder. Are nevoie de:
+- [ ] Watchlist editabil persistat în Firestore (`users/{uid}/skewWatchlist/main`)
+- [ ] Modal add/remove/reorder tickere (default 100 deja seedat în memorie)
+- [ ] Scanner care iterează lista cu delay 8s (Polygon free tier rate limit)
+- [ ] Tabel sortabil cu rândurile (ticker, IV rank, skew %, last update, status, retry pe 429)
+- [ ] Buton Start/Stop, indicator progres N/M
+- [ ] 25Δ skew per ticker (monthly expirations only)
+
+### Vanna + VannaGEX (necesită BSM math)
+- [ ] Implementare formulă Vanna în `skew-math.ts`: `Vanna = -e^(-rT) × φ(d1) × d2 / σ`
+- [ ] Helper-uri BSM (`d1`, `d2`, `normalPDF`)
+- [ ] Activare butoanelor Vanna și VannaGEX în GEX chart
+- [ ] Switching între moduri în chart (recompute buckets cu vanna în loc de gamma)
+
+### FMP integration
+- [ ] User obține cheie FMP gratis de la `financialmodelingprep.com/developer/docs/free`
+- [ ] Adaugă `VITE_FMP_API_KEY=...` în `.env.local`
+- [ ] FMP client deja implementat — automat detectează cheia și completează tabelul Fundamentals (P/E, EPS, market cap, dividend, beta, ratios)
+
+### Phase 2 — Inline ticker enrichment (DEFERRED, urmează după F3)
+User a menționat în brainstorming-ul inițial că vrea ca atunci când caută un ticker în TastyScanner-ul existent (search bar etc.), să apară inline câteva info de skew (skew %, IV rank, max pain). Scope TBD — așteaptă să-mi spună exact ce date vrea expuse și unde.
+
+### Igienizare după ce e gata
+- [ ] **Cheia Polygon din `~/Downloads/skew-dashboard-v13/src/App.jsx` e expusă în Downloads.** Recomand să generezi o nouă cheie pe `polygon.io/dashboard` și să o înlocuiești în `.env.local`. Vechile fișiere v8/v13 din Downloads pot fi șterse.
+- [ ] Pre-existing TastyScanner toFixed bug în account-info.component (Greeks rendering) — defensiv prin AppErrorBoundary, dar ideal de fixat la sursă cu coerce la number.
+
+---
+
+## 🚀 Production deploy
+
+**Production URL:** https://operatiunea-guvidul.web.app/skew-analysis
+
+Branch `feature/skew-integration` mergeat în `master` și deployat în producție via `firebase deploy --only hosting`.
+
+Următorul deploy de producție: după F3 (Scanner) sau după update Vanna/VannaGEX, când vor exista funcționalități noi notabile.

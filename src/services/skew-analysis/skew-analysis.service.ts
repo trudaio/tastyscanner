@@ -3,9 +3,31 @@ import type { IServiceFactory } from '../service-factory.interface';
 import type {
     ISkewAnalysisService,
     ISkewSnapshot,
+    ISkewChartPoint,
+    ISuggestedInsight,
+    ISuggestedTrades,
+    IStrikeByDistance,
+    IStrikeByDistanceLeg,
 } from './skew-analysis.service.interface';
-import { PolygonClient } from '../api-clients/polygon.client';
+import {
+    PolygonClient,
+    type IPolygonOptionSnapshot,
+} from '../api-clients/polygon.client';
 import { FmpClient } from '../api-clients/fmp.client';
+import {
+    extractPremium,
+    calculateIVRank,
+    calculateMaxPain,
+    calculateExpectedMove,
+    calculatePCRatio,
+    calculateBasicTechnicals,
+    isMonthlyExpiration,
+    daysToExpiration,
+    type IProcessedOption,
+} from '../../utils/skew-math';
+
+const DELTAS = [10, 20, 30, 40] as const;
+const DISTANCE_PERCENTS = [1, 5, 10] as const;
 
 export class SkewAnalysisService implements ISkewAnalysisService {
     snapshotByTicker: Map<string, ISkewSnapshot | null> = new Map();
@@ -14,8 +36,10 @@ export class SkewAnalysisService implements ISkewAnalysisService {
 
     private readonly polygon: PolygonClient;
     private readonly fmp: FmpClient;
+    private readonly factory: IServiceFactory;
 
-    constructor(_factory: IServiceFactory) {
+    constructor(factory: IServiceFactory) {
+        this.factory = factory;
         this.polygon = new PolygonClient();
         this.fmp = new FmpClient();
         makeObservable(this, {
@@ -25,26 +49,84 @@ export class SkewAnalysisService implements ISkewAnalysisService {
         });
     }
 
-    async loadSnapshot(ticker: string, _fromDate: string, _toDate: string): Promise<void> {
+    get hasPolygonKey(): boolean {
+        return this.polygon.isConfigured;
+    }
+
+    get hasFmpKey(): boolean {
+        return this.fmp.isConfigured;
+    }
+
+    async loadSnapshot(ticker: string, fromDate: string, toDate: string): Promise<void> {
         const key = ticker.toUpperCase();
         runInAction(() => {
             this.loadingByTicker.set(key, true);
             this.errorByTicker.set(key, null);
         });
         try {
-            // F2: orchestrate Polygon (chains + history + price), TastyTrade
-            // (market metrics), FMP (fundamentals with fallback) + processors.
-            // For F1 we just record an empty snapshot so the page can render.
+            if (!this.polygon.isConfigured) {
+                throw new Error('Polygon API key missing — set VITE_POLYGON_API_KEY');
+            }
+
+            const yearAgo = new Date();
+            yearAgo.setDate(yearAgo.getDate() - 365);
+            const yearAgoIso = isoDate(yearAgo);
+            const todayIsoStr = isoDate(new Date());
+
+            const [chainRaw, priceHistory, stockPrice, marketMetrics] = await Promise.all([
+                this.polygon.getOptionsChainSnapshot(key, fromDate, toDate),
+                this.polygon.getPriceHistory(key, yearAgoIso, todayIsoStr),
+                this.polygon.getStockPrice(key),
+                this.factory.marketDataProvider.getSymbolMetrics(key).catch(() => null),
+            ]);
+
+            const processed = processOptions(chainRaw, stockPrice ?? null);
+            const chartData = formatChartData(processed.byExp);
+            const allOptions = processed.allOptions;
+            const firstMonthly = chartData.find((d) => d.isMonthly) ?? chartData[0];
+            const optsForFirst = firstMonthly
+                ? allOptions.filter((o) => o.expiration === firstMonthly.expiration)
+                : allOptions;
+
+            const maxPain = calculateMaxPain(optsForFirst);
+            const expectedMove = stockPrice ? calculateExpectedMove(optsForFirst, stockPrice) : null;
+            const putCallRatio = calculatePCRatio(allOptions);
+            const ivRank = calculateIVRank(processed.allIVs.map((iv) => iv * 100));
+            const basicTechnicals = stockPrice
+                ? calculateBasicTechnicals(priceHistory, stockPrice)
+                : calculateBasicTechnicals(priceHistory, priceHistory[priceHistory.length - 1]?.c ?? 0);
+            const byDistance = stockPrice
+                ? buildByDistance(optsForFirst, stockPrice)
+                : DISTANCE_PERCENTS.map((p) => ({ distancePct: p, put: null, call: null }));
+            const suggestedTrades = buildSuggestedTrades(chartData, ivRank, putCallRatio?.ratio ?? null);
+
             const snapshot: ISkewSnapshot = {
                 ticker: key,
                 fetchedAt: Date.now(),
-                stockPrice: null,
-                chartData: [],
-                ivMetrics: { ivRank: null, ivPercentile: null, fiveDayChange: null },
-                maxPain: null,
-                expectedMove: null,
-                putCallRatio: null,
+                fromDate,
+                toDate,
+                stockPrice: stockPrice ?? null,
+                chartData,
+                ivMetrics: {
+                    ivRank: marketMetrics?.impliedVolatilityIndexRank != null
+                        ? Math.round(marketMetrics.impliedVolatilityIndexRank * 100)
+                        : ivRank,
+                    ivPercentile: marketMetrics?.impliedVolatilityPercentile != null
+                        ? Math.round(marketMetrics.impliedVolatilityPercentile * 100)
+                        : null,
+                    ivIndex: marketMetrics?.impliedVolatilityIndex != null
+                        ? Math.round(marketMetrics.impliedVolatilityIndex * 1000) / 10
+                        : null,
+                    beta: marketMetrics?.beta ?? null,
+                },
+                maxPain,
+                expectedMove,
+                putCallRatio,
+                byDistance,
+                basicTechnicals,
+                suggestedTrades,
             };
+
             runInAction(() => {
                 this.snapshotByTicker.set(key, snapshot);
                 this.loadingByTicker.set(key, false);
@@ -69,12 +151,217 @@ export class SkewAnalysisService implements ISkewAnalysisService {
     getError(ticker: string): string | null {
         return this.errorByTicker.get(ticker.toUpperCase()) ?? null;
     }
+}
 
-    get hasPolygonKey(): boolean {
-        return this.polygon.isConfigured;
+interface IExpirationGroup {
+    puts: IProcessedOption[];
+    calls: IProcessedOption[];
+    isMonthly: boolean;
+}
+
+interface IProcessedChain {
+    byExp: Map<string, IExpirationGroup>;
+    allOptions: IProcessedOption[];
+    allIVs: number[];
+}
+
+function processOptions(raw: IPolygonOptionSnapshot[], stockPrice: number | null): IProcessedChain {
+    const byExp = new Map<string, IExpirationGroup>();
+    const allOptions: IProcessedOption[] = [];
+    const allIVs: number[] = [];
+    void stockPrice;
+
+    for (const opt of raw) {
+        const exp = opt.details?.expiration_date;
+        const type = opt.details?.contract_type;
+        const strike = opt.details?.strike_price;
+        if (!exp || !type || strike === undefined) continue;
+        const iv = opt.implied_volatility;
+        if (iv && iv > 0) allIVs.push(iv);
+
+        const record: IProcessedOption = {
+            strike,
+            delta: opt.greeks?.delta ?? null,
+            iv: iv ?? null,
+            premium: extractPremium(opt),
+            type,
+            expiration: exp,
+            volume: opt.day?.volume ?? 0,
+            openInterest: opt.open_interest ?? 0,
+        };
+        allOptions.push(record);
+
+        let group = byExp.get(exp);
+        if (!group) {
+            group = { puts: [], calls: [], isMonthly: isMonthlyExpiration(exp) };
+            byExp.set(exp, group);
+        }
+        if (type === 'put') group.puts.push(record);
+        else group.calls.push(record);
+    }
+    return { byExp, allOptions, allIVs };
+}
+
+function findClosestByDelta(legs: IProcessedOption[], target: number): IProcessedOption | null {
+    let best: IProcessedOption | null = null;
+    let bestDiff = Infinity;
+    for (const leg of legs) {
+        if (leg.delta === null) continue;
+        const diff = Math.abs(leg.delta - target);
+        if (diff < bestDiff) {
+            bestDiff = diff;
+            best = leg;
+        }
+    }
+    return best;
+}
+
+function findClosestByStrike(legs: IProcessedOption[], targetStrike: number): IProcessedOption | null {
+    let best: IProcessedOption | null = null;
+    let bestDiff = Infinity;
+    for (const leg of legs) {
+        const diff = Math.abs(leg.strike - targetStrike);
+        if (diff < bestDiff) {
+            bestDiff = diff;
+            best = leg;
+        }
+    }
+    return best;
+}
+
+function formatChartData(byExp: Map<string, IExpirationGroup>): ISkewChartPoint[] {
+    const sorted = Array.from(byExp.entries()).sort(([a], [b]) => a.localeCompare(b));
+    return sorted.map(([exp, group]) => {
+        const point: ISkewChartPoint = {
+            expiration: exp,
+            expirationLabel: shortDate(exp),
+            dte: daysToExpiration(exp),
+            isMonthly: group.isMonthly,
+            putIv10: null, callIv10: null,
+            putIv20: null, callIv20: null,
+            putIv30: null, callIv30: null,
+            putIv40: null, callIv40: null,
+            skewPct10: null,
+            premiumSkew10Pct: null,
+        };
+        for (const d of DELTAS) {
+            const putTarget = -d / 100;
+            const callTarget = d / 100;
+            const bestPut = findClosestByDelta(group.puts, putTarget);
+            const bestCall = findClosestByDelta(group.calls, callTarget);
+            const putIv = bestPut?.iv != null ? +(bestPut.iv * 100).toFixed(2) : null;
+            const callIv = bestCall?.iv != null ? +(bestCall.iv * 100).toFixed(2) : null;
+            assignIv(point, d, putIv, callIv);
+            if (d === 10 && bestPut && bestCall) {
+                if (bestPut.iv != null && bestCall.iv != null) {
+                    point.skewPct10 = +(((bestPut.iv - bestCall.iv) / bestCall.iv) * 100).toFixed(2);
+                }
+                if (bestPut.premium != null && bestCall.premium != null && bestCall.premium > 0) {
+                    point.premiumSkew10Pct = +(((bestPut.premium - bestCall.premium) / bestCall.premium) * 100).toFixed(2);
+                }
+            }
+        }
+        return point;
+    });
+}
+
+function assignIv(point: ISkewChartPoint, delta: number, putIv: number | null, callIv: number | null): void {
+    switch (delta) {
+        case 10: point.putIv10 = putIv; point.callIv10 = callIv; return;
+        case 20: point.putIv20 = putIv; point.callIv20 = callIv; return;
+        case 30: point.putIv30 = putIv; point.callIv30 = callIv; return;
+        case 40: point.putIv40 = putIv; point.callIv40 = callIv; return;
+    }
+}
+
+function buildByDistance(opts: IProcessedOption[], stockPrice: number): IStrikeByDistance[] {
+    const puts = opts.filter((o) => o.type === 'put');
+    const calls = opts.filter((o) => o.type === 'call');
+    return DISTANCE_PERCENTS.map((pct) => {
+        const putTarget = stockPrice * (1 - pct / 100);
+        const callTarget = stockPrice * (1 + pct / 100);
+        const bestPut = findClosestByStrike(puts, putTarget);
+        const bestCall = findClosestByStrike(calls, callTarget);
+        return {
+            distancePct: pct,
+            put: legToView(bestPut, stockPrice),
+            call: legToView(bestCall, stockPrice),
+        };
+    });
+}
+
+function legToView(leg: IProcessedOption | null, stockPrice: number): IStrikeByDistanceLeg | null {
+    if (!leg) return null;
+    return {
+        strike: leg.strike,
+        delta: leg.delta,
+        premium: leg.premium,
+        volume: leg.volume,
+        pctFromStock: ((leg.strike - stockPrice) / stockPrice) * 100,
+    };
+}
+
+function buildSuggestedTrades(
+    chartData: ISkewChartPoint[],
+    ivRank: number | null,
+    pcRatio: number | null,
+): ISuggestedTrades {
+    const insights: ISuggestedInsight[] = [];
+    const tenDeltaSkews = chartData
+        .map((d) => d.premiumSkew10Pct)
+        .filter((v): v is number => v !== null);
+    const avgSkew10 = tenDeltaSkews.length
+        ? tenDeltaSkews.reduce((a, b) => a + b, 0) / tenDeltaSkews.length
+        : null;
+
+    let assessment: ISuggestedTrades['assessment'] = 'Unknown';
+    if (avgSkew10 !== null) {
+        if (avgSkew10 > 20) {
+            assessment = 'Elevated Fear';
+            insights.push({ level: 'warning', text: `High put premium skew (+${avgSkew10.toFixed(1)}% avg). Significant downside hedging demand.` });
+        } else if (avgSkew10 > 5) {
+            assessment = 'Normal';
+            insights.push({ level: 'info', text: `Moderate put premium skew (+${avgSkew10.toFixed(1)}% avg). Normal hedging activity.` });
+        } else if (avgSkew10 > -5) {
+            assessment = 'Balanced';
+            insights.push({ level: 'neutral', text: `Balanced put/call premium (${avgSkew10 > 0 ? '+' : ''}${avgSkew10.toFixed(1)}% avg). Neutral sentiment.` });
+        } else {
+            assessment = 'Bullish';
+            insights.push({ level: 'success', text: `Calls richer than puts (${avgSkew10.toFixed(1)}% avg). Bullish sentiment.` });
+        }
     }
 
-    get hasFmpKey(): boolean {
-        return this.fmp.isConfigured;
+    if (ivRank !== null) {
+        if (ivRank >= 50) {
+            insights.push({ level: 'success', text: `IV rank at ${ivRank} — premium-selling environment (≥50). Iron condors / credit spreads favored.` });
+        } else if (ivRank >= 30) {
+            insights.push({ level: 'info', text: `IV rank at ${ivRank} — moderate. Prefer high-POP credit structures with wide wings.` });
+        } else {
+            insights.push({ level: 'warning', text: `IV rank at ${ivRank} — premium poor (<30). Consider waiting or debit/calendars.` });
+        }
     }
+
+    if (pcRatio !== null) {
+        if (pcRatio > 1.2) {
+            insights.push({ level: 'warning', text: `P/C ratio ${pcRatio.toFixed(2)} — bearish positioning (more put volume).` });
+        } else if (pcRatio < 0.8) {
+            insights.push({ level: 'success', text: `P/C ratio ${pcRatio.toFixed(2)} — bullish positioning (more call volume).` });
+        } else {
+            insights.push({ level: 'neutral', text: `P/C ratio ${pcRatio.toFixed(2)} — balanced volume.` });
+        }
+    }
+
+    return { assessment, insights };
+}
+
+function shortDate(iso: string): string {
+    const d = new Date(iso + 'T00:00:00');
+    return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
+}
+
+function isoDate(d: Date): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
 }

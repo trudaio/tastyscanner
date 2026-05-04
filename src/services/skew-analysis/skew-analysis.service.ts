@@ -8,6 +8,11 @@ import type {
     ISuggestedTrades,
     IStrikeByDistance,
     IStrikeByDistanceLeg,
+    IExpirationDetail,
+    IDeltaLevelDetail,
+    IStrikeRow,
+    ISkewSummary,
+    TermStructure,
 } from './skew-analysis.service.interface';
 import {
     PolygonClient,
@@ -24,6 +29,8 @@ import {
     isMonthlyExpiration,
     daysToExpiration,
     type IProcessedOption,
+    type IExpectedMove,
+    type IPCRatio,
 } from '../../utils/skew-math';
 
 const DELTAS = [10, 20, 30, 40] as const;
@@ -100,6 +107,17 @@ export class SkewAnalysisService implements ISkewAnalysisService {
                 : DISTANCE_PERCENTS.map((p) => ({ distancePct: p, put: null, call: null }));
             const suggestedTrades = buildSuggestedTrades(chartData, ivRank, putCallRatio?.ratio ?? null);
 
+            const expirationDetails = buildExpirationDetails(processed.byExp, stockPrice ?? 0);
+            const strikesByExpiration = buildStrikesByExpiration(processed.byExp);
+            const summary = buildSummary({
+                stockPrice: stockPrice ?? null,
+                expirationDetails,
+                allOptions,
+                maxPain,
+                expectedMove,
+                putCallRatio,
+            });
+
             const ivRankFromTT = toNumOrNull(marketMetrics?.impliedVolatilityIndexRank);
             const ivPercentileFromTT = toNumOrNull(marketMetrics?.impliedVolatilityPercentile);
             const ivIndexFromTT = toNumOrNull(marketMetrics?.impliedVolatilityIndex);
@@ -124,6 +142,9 @@ export class SkewAnalysisService implements ISkewAnalysisService {
                 byDistance,
                 basicTechnicals,
                 suggestedTrades,
+                expirationDetails,
+                strikesByExpiration,
+                summary,
             };
 
             runInAction(() => {
@@ -351,6 +372,138 @@ function buildSuggestedTrades(
     }
 
     return { assessment, insights };
+}
+
+function buildExpirationDetails(
+    byExp: Map<string, IExpirationGroup>,
+    stockPrice: number,
+): IExpirationDetail[] {
+    const sorted = Array.from(byExp.entries()).sort(([a], [b]) => a.localeCompare(b));
+    return sorted.map(([exp, group]) => {
+        const perDelta: IDeltaLevelDetail[] = DELTAS.map((d) => {
+            const putTarget = -d / 100;
+            const callTarget = d / 100;
+            const bestPut = findClosestByDelta(group.puts, putTarget);
+            const bestCall = findClosestByDelta(group.calls, callTarget);
+
+            const putDist = stockPrice && bestPut ? ((bestPut.strike - stockPrice) / stockPrice) * 100 : null;
+            const callDist = stockPrice && bestCall ? ((bestCall.strike - stockPrice) / stockPrice) * 100 : null;
+            const skewDollar = bestPut?.premium != null && bestCall?.premium != null
+                ? bestPut.premium - bestCall.premium
+                : null;
+            const skewPct = bestPut?.premium != null && bestCall?.premium != null && bestCall.premium > 0
+                ? ((bestPut.premium - bestCall.premium) / bestCall.premium) * 100
+                : null;
+            const imbalance = putDist != null && callDist != null && callDist !== 0
+                ? Math.abs(putDist / callDist)
+                : null;
+            return {
+                delta: d,
+                putStrike: bestPut?.strike ?? null,
+                putPremium: bestPut?.premium ?? null,
+                putDelta: bestPut?.delta ?? null,
+                putVolume: bestPut?.volume ?? 0,
+                putIv: bestPut?.iv ?? null,
+                putDistPct: putDist,
+                callStrike: bestCall?.strike ?? null,
+                callPremium: bestCall?.premium ?? null,
+                callDelta: bestCall?.delta ?? null,
+                callVolume: bestCall?.volume ?? 0,
+                callIv: bestCall?.iv ?? null,
+                callDistPct: callDist,
+                skewDollar,
+                skewPct,
+                imbalance,
+            };
+        });
+
+        const expOpts = [...group.puts, ...group.calls];
+        const putVolTotal = group.puts.reduce((a, b) => a + (b.volume || 0), 0);
+        const callVolTotal = group.calls.reduce((a, b) => a + (b.volume || 0), 0);
+        const expMaxPain = stockPrice ? calculateMaxPain(expOpts) : null;
+
+        return {
+            expiration: exp,
+            expirationLabel: shortDate(exp),
+            dte: daysToExpiration(exp),
+            isMonthly: group.isMonthly,
+            perDelta,
+            putVolumeTotal: putVolTotal,
+            callVolumeTotal: callVolTotal,
+            maxPain: expMaxPain,
+        };
+    });
+}
+
+function buildStrikesByExpiration(byExp: Map<string, IExpirationGroup>): Record<string, IStrikeRow[]> {
+    const out: Record<string, IStrikeRow[]> = {};
+    for (const [exp, group] of byExp.entries()) {
+        const rows: IStrikeRow[] = [];
+        for (const o of group.puts) {
+            rows.push({
+                strike: o.strike,
+                type: 'put',
+                premium: o.premium,
+                iv: o.iv,
+                delta: o.delta,
+                volume: o.volume,
+            });
+        }
+        for (const o of group.calls) {
+            rows.push({
+                strike: o.strike,
+                type: 'call',
+                premium: o.premium,
+                iv: o.iv,
+                delta: o.delta,
+                volume: o.volume,
+            });
+        }
+        out[exp] = rows;
+    }
+    return out;
+}
+
+function buildSummary(args: {
+    stockPrice: number | null;
+    expirationDetails: IExpirationDetail[];
+    allOptions: IProcessedOption[];
+    maxPain: number | null;
+    expectedMove: IExpectedMove | null;
+    putCallRatio: IPCRatio | null;
+}): ISkewSummary {
+    const { stockPrice, expirationDetails, maxPain, expectedMove, putCallRatio } = args;
+    const skews: number[] = [];
+    for (const d of expirationDetails) {
+        const ten = d.perDelta.find((x) => x.delta === 10);
+        if (ten?.skewPct != null && Number.isFinite(ten.skewPct)) skews.push(ten.skewPct);
+    }
+    const avgSkewPct10 = skews.length ? skews.reduce((a, b) => a + b, 0) / skews.length : null;
+
+    let termStructure: TermStructure = 'unknown';
+    const front = expirationDetails[0];
+    const back = expirationDetails[expirationDetails.length - 1];
+    if (front && back && front !== back) {
+        const f = front.perDelta.find((x) => x.delta === 10)?.skewPct ?? null;
+        const b = back.perDelta.find((x) => x.delta === 10)?.skewPct ?? null;
+        if (f != null && b != null) {
+            const diff = f - b;
+            if (Math.abs(diff) < 5) termStructure = 'flat';
+            else if (diff > 0) termStructure = 'backwardation'; // front more skewed
+            else termStructure = 'contango';
+        }
+    }
+
+    return {
+        stockPrice,
+        avgSkewPct10,
+        termStructure,
+        maxPain,
+        expectedMove,
+        putCallRatio,
+        totalPuts60d: putCallRatio?.putVolume ?? 0,
+        totalCalls60d: putCallRatio?.callVolume ?? 0,
+    };
 }
 
 function toNumOrNull(v: unknown): number | null {

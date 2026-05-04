@@ -23,6 +23,7 @@ import { SkewDeltaTable } from '../components/skew/skew-delta-table.component';
 import { SkewByDistanceTable } from '../components/skew/skew-by-distance-table.component';
 import { SkewOiByStrikes } from '../components/skew/skew-oi-by-strikes.component';
 import { SkewGexChart } from '../components/skew/skew-gex-chart.component';
+import { SkewVolSurface } from '../components/skew/skew-vol-surface.component';
 
 // ── v13-inspired palette ────────────────────────────────────────────────
 const C = {
@@ -538,6 +539,17 @@ const SnapshotView: React.FC<{ snapshot: ISkewSnapshot }> = ({ snapshot }) => {
                         expirations={expirationOptions}
                         defaultExpiration={defaultMonthly}
                         stockPrice={snapshot.stockPrice}
+                    />
+                </SkewErrorBoundary>
+            </Card>
+
+            <Card>
+                <SkewErrorBoundary fallbackTitle="Volatility Surface">
+                    <SkewVolSurface
+                        ticker={snapshot.ticker}
+                        stockPrice={snapshot.stockPrice}
+                        strikesByExpiration={snapshot.strikesByExpiration}
+                        expirations={expirationOptions}
                     />
                 </SkewErrorBoundary>
             </Card>

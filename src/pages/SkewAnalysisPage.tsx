@@ -175,16 +175,26 @@ function defaultDateRange(): { from: string; to: string } {
     return { from: isoDate(today), to: isoDate(ninety) };
 }
 
-function fmtNum(v: number | null | undefined, digits = 2): string {
-    return v == null ? '–' : v.toFixed(digits);
+function toNum(v: unknown): number | null {
+    if (v == null) return null;
+    const n = typeof v === 'number' ? v : Number(v);
+    return Number.isFinite(n) ? n : null;
 }
 
-function fmtPct(v: number | null | undefined, digits = 1): string {
-    return v == null ? '–' : `${v >= 0 ? '+' : ''}${v.toFixed(digits)}%`;
+function fmtNum(v: unknown, digits = 2): string {
+    const n = toNum(v);
+    return n == null ? '–' : n.toFixed(digits);
 }
 
-function fmtMoney(v: number | null | undefined): string {
-    return v == null ? '–' : `$${v.toFixed(2)}`;
+function fmtPct(v: unknown, digits = 1): string {
+    const n = toNum(v);
+    if (n == null) return '–';
+    return `${n >= 0 ? '+' : ''}${n.toFixed(digits)}%`;
+}
+
+function fmtMoney(v: unknown): string {
+    const n = toNum(v);
+    return n == null ? '–' : `$${n.toFixed(2)}`;
 }
 
 export const SkewAnalysisPage: React.FC = observer(() => {
@@ -321,7 +331,7 @@ const SnapshotView: React.FC<{ snapshot: ISkewSnapshot }> = ({ snapshot }) => {
                             </IonRow>
                             <IonRow>
                                 <IonCol>IV Index</IonCol>
-                                <IonCol style={{ textAlign: 'right' }}>{ivMetrics.ivIndex == null ? '–' : `${ivMetrics.ivIndex.toFixed(1)}%`}</IonCol>
+                                <IonCol style={{ textAlign: 'right' }}>{fmtPct(ivMetrics.ivIndex, 1)}</IonCol>
                             </IonRow>
                             <IonRow>
                                 <IonCol>Beta</IonCol>
@@ -350,16 +360,16 @@ const SnapshotView: React.FC<{ snapshot: ISkewSnapshot }> = ({ snapshot }) => {
                     <IonCardHeader>
                         <IonCardSubtitle>Expected Move</IonCardSubtitle>
                         <IonCardTitle>
-                            <Big>{expectedMove == null ? '–' : `±$${expectedMove.dollars.toFixed(2)}`}</Big>
+                            <Big>{expectedMove == null ? '–' : `±${fmtMoney(expectedMove.dollars)}`}</Big>
                             <span style={{ fontSize: 14, color: 'var(--ion-color-medium)', fontWeight: 400 }}>
-                                {expectedMove == null ? '' : ` ${expectedMove.percent.toFixed(2)}%`}
+                                {expectedMove == null ? '' : ` ${fmtPct(expectedMove.percent, 2)}`}
                             </span>
                         </IonCardTitle>
                     </IonCardHeader>
                     <IonCardContent>
                         {expectedMove ? (
                             <IonText>
-                                Range: ${expectedMove.lowerBound.toFixed(2)} → ${expectedMove.upperBound.toFixed(2)}
+                                Range: {fmtMoney(expectedMove.lowerBound)} → {fmtMoney(expectedMove.upperBound)}
                             </IonText>
                         ) : (
                             <IonText color="medium">No ATM straddle data.</IonText>
@@ -371,7 +381,7 @@ const SnapshotView: React.FC<{ snapshot: ISkewSnapshot }> = ({ snapshot }) => {
                     <IonCardHeader>
                         <IonCardSubtitle>P/C Ratio (60d volume)</IonCardSubtitle>
                         <IonCardTitle>
-                            <Big>{putCallRatio == null ? '–' : putCallRatio.ratio.toFixed(2)}</Big>
+                            <Big>{putCallRatio == null ? '–' : fmtNum(putCallRatio.ratio, 2)}</Big>
                         </IonCardTitle>
                     </IonCardHeader>
                     <IonCardContent>
@@ -455,11 +465,11 @@ const SnapshotView: React.FC<{ snapshot: ISkewSnapshot }> = ({ snapshot }) => {
                                 <tr key={row.distancePct}>
                                     <td><IonChip color="primary"><IonLabel>±{row.distancePct}%</IonLabel></IonChip></td>
                                     <td>{row.put ? fmtMoney(row.put.strike) : '–'}</td>
-                                    <td>{row.put?.delta == null ? '–' : row.put.delta.toFixed(2)}</td>
+                                    <td>{fmtNum(row.put?.delta, 2)}</td>
                                     <td>{row.put ? fmtMoney(row.put.premium) : '–'}</td>
                                     <td>{row.put ? row.put.volume.toLocaleString() : '–'}</td>
                                     <td>{row.call ? fmtMoney(row.call.strike) : '–'}</td>
-                                    <td>{row.call?.delta == null ? '–' : row.call.delta.toFixed(2)}</td>
+                                    <td>{fmtNum(row.call?.delta, 2)}</td>
                                     <td>{row.call ? fmtMoney(row.call.premium) : '–'}</td>
                                     <td>{row.call ? row.call.volume.toLocaleString() : '–'}</td>
                                 </tr>

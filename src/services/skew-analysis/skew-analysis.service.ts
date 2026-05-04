@@ -100,24 +100,23 @@ export class SkewAnalysisService implements ISkewAnalysisService {
                 : DISTANCE_PERCENTS.map((p) => ({ distancePct: p, put: null, call: null }));
             const suggestedTrades = buildSuggestedTrades(chartData, ivRank, putCallRatio?.ratio ?? null);
 
+            const ivRankFromTT = toNumOrNull(marketMetrics?.impliedVolatilityIndexRank);
+            const ivPercentileFromTT = toNumOrNull(marketMetrics?.impliedVolatilityPercentile);
+            const ivIndexFromTT = toNumOrNull(marketMetrics?.impliedVolatilityIndex);
+            const betaFromTT = toNumOrNull(marketMetrics?.beta);
+
             const snapshot: ISkewSnapshot = {
                 ticker: key,
                 fetchedAt: Date.now(),
                 fromDate,
                 toDate,
-                stockPrice: stockPrice ?? null,
+                stockPrice: toNumOrNull(stockPrice),
                 chartData,
                 ivMetrics: {
-                    ivRank: marketMetrics?.impliedVolatilityIndexRank != null
-                        ? Math.round(marketMetrics.impliedVolatilityIndexRank * 100)
-                        : ivRank,
-                    ivPercentile: marketMetrics?.impliedVolatilityPercentile != null
-                        ? Math.round(marketMetrics.impliedVolatilityPercentile * 100)
-                        : null,
-                    ivIndex: marketMetrics?.impliedVolatilityIndex != null
-                        ? Math.round(marketMetrics.impliedVolatilityIndex * 1000) / 10
-                        : null,
-                    beta: marketMetrics?.beta ?? null,
+                    ivRank: ivRankFromTT != null ? Math.round(ivRankFromTT * 100) : ivRank,
+                    ivPercentile: ivPercentileFromTT != null ? Math.round(ivPercentileFromTT * 100) : null,
+                    ivIndex: ivIndexFromTT != null ? Math.round(ivIndexFromTT * 1000) / 10 : null,
+                    beta: betaFromTT,
                 },
                 maxPain,
                 expectedMove,
@@ -352,6 +351,12 @@ function buildSuggestedTrades(
     }
 
     return { assessment, insights };
+}
+
+function toNumOrNull(v: unknown): number | null {
+    if (v == null) return null;
+    const n = typeof v === 'number' ? v : Number(v);
+    return Number.isFinite(n) ? n : null;
 }
 
 function shortDate(iso: string): string {

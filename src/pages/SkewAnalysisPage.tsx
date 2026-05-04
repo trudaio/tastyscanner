@@ -21,6 +21,7 @@ import { SkewPremiumSkewChart } from '../components/skew/skew-premium-skew-chart
 import { SkewScatterChart } from '../components/skew/skew-scatter.component';
 import { SkewDeltaTable } from '../components/skew/skew-delta-table.component';
 import { SkewByDistanceTable } from '../components/skew/skew-by-distance-table.component';
+import { SkewOiByStrikes } from '../components/skew/skew-oi-by-strikes.component';
 
 // ── v13-inspired palette ────────────────────────────────────────────────
 const C = {
@@ -536,6 +537,17 @@ const SnapshotView: React.FC<{ snapshot: ISkewSnapshot }> = ({ snapshot }) => {
                         expirations={expirationOptions}
                         defaultExpiration={defaultMonthly}
                         stockPrice={snapshot.stockPrice}
+                    />
+                </SkewErrorBoundary>
+            </Card>
+
+            <Card>
+                <SkewErrorBoundary fallbackTitle="Open Interest by Strikes">
+                    <SkewOiByStrikes
+                        ticker={snapshot.ticker}
+                        stockPrice={snapshot.stockPrice}
+                        strikesByExpiration={snapshot.strikesByExpiration}
+                        expirations={expirationOptions}
                     />
                 </SkewErrorBoundary>
             </Card>

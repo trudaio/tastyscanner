@@ -129,8 +129,10 @@ interface IDistRow {
     pct: number;
     putStrike: number | null;
     putDelta: number | null;
+    putVolume: number;
     callStrike: number | null;
     callDelta: number | null;
+    callVolume: number;
     deltaDiff: number | null;
     deltaDiffPct: number | null;
 }
@@ -161,8 +163,10 @@ function buildRows(
                 pct,
                 putStrike: bestPut?.strike ?? null,
                 putDelta,
+                putVolume: bestPut?.volume ?? 0,
                 callStrike: bestCall?.strike ?? null,
                 callDelta,
+                callVolume: bestCall?.volume ?? 0,
                 deltaDiff,
                 deltaDiffPct,
             });
@@ -233,7 +237,9 @@ export const SkewByDistanceTable: React.FC<IProps> = ({ ticker, stockPrice, stri
                             <th>Expiration</th>
                             <th>%</th>
                             <th className="put-group">Put Delta (Strike)</th>
+                            <th className="put-group">Put Vol</th>
                             <th className="call-group">Call Delta (Strike)</th>
+                            <th className="call-group">Call Vol</th>
                             <th>Δ Diff</th>
                             <th>Δ Diff %</th>
                         </tr>
@@ -252,9 +258,11 @@ export const SkewByDistanceTable: React.FC<IProps> = ({ ticker, stockPrice, stri
                                     <td className="put-cell">
                                         {fmtNum(r.putDelta, 2)} {r.putStrike != null && <span style={{ color: '#a0a0b0', fontWeight: 400 }}>(${r.putStrike.toFixed(2)})</span>}
                                     </td>
+                                    <td className="put-cell">{r.putVolume > 0 ? r.putVolume.toLocaleString() : '–'}</td>
                                     <td className="call-cell">
                                         {fmtNum(r.callDelta, 2)} {r.callStrike != null && <span style={{ color: '#a0a0b0', fontWeight: 400 }}>(${r.callStrike.toFixed(2)})</span>}
                                     </td>
+                                    <td className="call-cell">{r.callVolume > 0 ? r.callVolume.toLocaleString() : '–'}</td>
                                     <td style={{ color: r.deltaDiff == null ? undefined : r.deltaDiff > 0 ? '#ef4444' : r.deltaDiff < 0 ? '#22c55e' : '#a0a0b0' }}>
                                         {r.deltaDiff == null ? '–' : `${r.deltaDiff >= 0 ? '+' : ''}${r.deltaDiff.toFixed(2)}`}
                                     </td>

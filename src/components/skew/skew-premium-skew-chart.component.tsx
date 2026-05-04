@@ -5,6 +5,42 @@ import type {
     IExpirationDetail,
 } from '../../services/skew-analysis/skew-analysis.service.interface';
 
+const Wrapper = styled.div`
+  width: 100%;
+  position: relative;
+`;
+
+const TooltipBox = styled.div`
+  position: absolute;
+  pointer-events: none;
+  background: rgba(15, 15, 24, 0.97);
+  color: #f0f0f5;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  border: 1px solid #2a2a3a;
+  z-index: 10;
+  transform: translate(-50%, -100%);
+  min-width: 180px;
+`;
+
+const TooltipHeader = styled.div`
+  font-weight: 700;
+  border-bottom: 1px solid #2a2a3a;
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+  color: #f0f0f5;
+`;
+
+const TooltipLine = styled.div`
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+`;
+
 // Combined SVG: 4 colored lines (premium skew % at 10/20/30/40Δ) +
 // optional put/call volume bars per expiration. Filters: Monthly only,
 // Weekly only, show put vol bars, show call vol bars.
@@ -19,10 +55,6 @@ const PAD_L = 56;
 const PAD_R = 16;
 const PAD_T = 16;
 const PAD_B = 80;
-
-const Wrapper = styled.div`
-  width: 100%;
-`;
 
 const Svg = styled.svg`
   width: 100%;
@@ -88,6 +120,7 @@ export const SkewPremiumSkewChart: React.FC<IProps> = ({ chartData, expirationDe
     const [showWeekly, setShowWeekly] = useState(true);
     const [showPutVol, setShowPutVol] = useState(true);
     const [showCallVol, setShowCallVol] = useState(true);
+    const [hover, setHover] = useState<{ x: number; y: number; idx: number } | null>(null);
 
     const filtered = useMemo(() => {
         return expirationDetails.filter((d) => (d.isMonthly ? showMonthly : showWeekly));
@@ -172,6 +205,20 @@ export const SkewPremiumSkewChart: React.FC<IProps> = ({ chartData, expirationDe
         ? Math.max(4, Math.min(24, ((VW - PAD_L - PAD_R) / filtered.length) * 0.35))
         : 12;
 
+    const handleMove: React.MouseEventHandler<SVGRectElement> = (e) => {
+        const rect = (e.currentTarget as SVGRectElement).getBoundingClientRect();
+        const cx = e.clientX - rect.left;
+        const ratio = cx / rect.width;
+        const x = ratio * VW;
+        const n = filtered.length;
+        if (n === 0) return;
+        const idx = Math.max(0, Math.min(n - 1, Math.round((x - PAD_L) / (VW - PAD_L - PAD_R) * (n - 1))));
+        setHover({ x: e.clientX - rect.left, y: e.clientY - rect.top, idx });
+    };
+    const handleLeave = (): void => setHover(null);
+
+    const hoverPoint = hover ? filtered[hover.idx] : null;
+
     return (
         <Wrapper>
             <Svg viewBox={`0 0 ${VW} ${VH}`} preserveAspectRatio="none">
@@ -239,7 +286,76 @@ export const SkewPremiumSkewChart: React.FC<IProps> = ({ chartData, expirationDe
                         </text>
                     </g>
                 ))}
+
+                {/* Hover vertical line */}
+                {hoverPoint && (
+                    <line
+                        x1={xFor(hover!.idx)}
+                        x2={xFor(hover!.idx)}
+                        y1={PAD_T}
+                        y2={VH - PAD_B}
+                        stroke="#f0f0f5"
+                        strokeWidth={1}
+                        strokeDasharray="2 3"
+                        opacity={0.4}
+                    />
+                )}
+
+                {/* Hover dots on skew lines */}
+                {hoverPoint && skewLines.flatMap((ln) => {
+                    const pt = ln.pts.find((p) => Math.abs(p.x - xFor(hover!.idx)) < 0.5);
+                    if (!pt) return [];
+                    return [(
+                        <circle key={`hover-${ln.key}`} cx={pt.x} cy={pt.y} r={5} fill={ln.color} stroke="#0a0a0f" strokeWidth={1.5} />
+                    )];
+                })}
+
+                {/* Mouse-tracking overlay */}
+                <rect
+                    x={PAD_L}
+                    y={PAD_T}
+                    width={VW - PAD_L - PAD_R}
+                    height={VH - PAD_T - PAD_B}
+                    fill="transparent"
+                    onMouseMove={handleMove}
+                    onMouseLeave={handleLeave}
+                />
             </Svg>
+
+            {hoverPoint && (
+                <TooltipBox style={{ left: hover!.x, top: hover!.y - 12 }}>
+                    <TooltipHeader>
+                        {hoverPoint.expirationLabel} • {hoverPoint.dte} DTE
+                        {hoverPoint.isMonthly && ' • monthly'}
+                    </TooltipHeader>
+                    {hoverPoint.perDelta.map((lvl) => (
+                        lvl.skewPct != null && Number.isFinite(lvl.skewPct) ? (
+                            <TooltipLine key={`tl-${lvl.delta}`}>
+                                <span style={{ color: COLORS[lvl.delta as DeltaKey] }}>{lvl.delta}Δ</span>
+                                <span>{lvl.skewPct >= 0 ? '+' : ''}{lvl.skewPct.toFixed(1)}%</span>
+                            </TooltipLine>
+                        ) : null
+                    ))}
+                    <div style={{ borderTop: '1px solid #2a2a3a', marginTop: 4, paddingTop: 4 }}>
+                        <TooltipLine>
+                            <span style={{ color: '#ef4444' }}>Put Vol</span>
+                            <span>{hoverPoint.putVolumeTotal.toLocaleString()}</span>
+                        </TooltipLine>
+                        <TooltipLine>
+                            <span style={{ color: '#22c55e' }}>Call Vol</span>
+                            <span>{hoverPoint.callVolumeTotal.toLocaleString()}</span>
+                        </TooltipLine>
+                        <TooltipLine>
+                            <span style={{ color: '#a0a0b0' }}>P/C</span>
+                            <span>
+                                {hoverPoint.callVolumeTotal > 0
+                                    ? (hoverPoint.putVolumeTotal / hoverPoint.callVolumeTotal).toFixed(2)
+                                    : '–'}
+                            </span>
+                        </TooltipLine>
+                    </div>
+                </TooltipBox>
+            )}
 
             <Toolbar>
                 <Toggle $active={showMonthly} $color="#f59e0b" onClick={() => setShowMonthly((v) => !v)}>Monthly</Toggle>

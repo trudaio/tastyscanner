@@ -282,3 +282,38 @@ export function daysToExpiration(dateStr: string): number {
     today.setHours(0, 0, 0, 0);
     return Math.max(0, Math.round((exp - today.getTime()) / (24 * 60 * 60 * 1000)));
 }
+
+/** Compute the 3rd Friday of a given (year, monthIndex). */
+function thirdFridayOf(year: number, monthIndex: number): Date {
+    const first = new Date(year, monthIndex, 1);
+    const dayOfWeek = first.getDay();
+    let firstFridayDay: number;
+    if (dayOfWeek <= 5) firstFridayDay = 1 + (5 - dayOfWeek);
+    else firstFridayDay = 1 + (5 - dayOfWeek + 7);
+    return new Date(year, monthIndex, firstFridayDay + 14);
+}
+
+/**
+ * Returns the next N monthly expirations (3rd Fridays) on or after today,
+ * formatted as YYYY-MM-DD strings.
+ */
+export function getNextMonthlyExpirations(n: number): string[] {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const out: string[] = [];
+    let year = today.getFullYear();
+    let month = today.getMonth();
+    while (out.length < n) {
+        const tf = thirdFridayOf(year, month);
+        if (tf >= today) {
+            const y = tf.getFullYear();
+            const m = String(tf.getMonth() + 1).padStart(2, '0');
+            const d = String(tf.getDate()).padStart(2, '0');
+            out.push(`${y}-${m}-${d}`);
+        }
+        month += 1;
+        if (month > 11) { month = 0; year += 1; }
+        if (year - today.getFullYear() > 5) break;
+    }
+    return out;
+}

@@ -124,6 +124,20 @@ const Dot = styled.span<{ $color: string }>`
 const PUT_COLOR = '#ef4444';
 const CALL_COLOR = '#22c55e';
 
+type RangeFilter = 'pm10' | 'pm20' | 'pm50' | 'all';
+const RANGE_PCT: Record<RangeFilter, number | null> = {
+    pm10: 10,
+    pm20: 20,
+    pm50: 50,
+    all: null,
+};
+const RANGE_LABEL: Record<RangeFilter, string> = {
+    pm10: '±10%',
+    pm20: '±20%',
+    pm50: '±50%',
+    all: 'All',
+};
+
 interface IExpirationOption {
     expiration: string;
     isMonthly: boolean;
@@ -194,19 +208,26 @@ export const SkewOiByStrikes: React.FC<IProps> = ({ ticker, stockPrice, strikesB
     const [aggregate, setAggregate] = useState<boolean>(true);
     const fallbackExp = expirations.find((e) => e.isMonthly)?.expiration ?? expirations[0]?.expiration ?? '';
     const [selectedExp, setSelectedExp] = useState<string>(fallbackExp);
+    const [rangeFilter, setRangeFilter] = useState<RangeFilter>('pm20');
     const [hover, setHover] = useState<{ x: number; y: number; b: IBucket } | null>(null);
 
     const buckets = useMemo(() => {
+        const rangePct = RANGE_PCT[rangeFilter];
+        const lo = rangePct != null && stockPrice != null ? stockPrice * (1 - rangePct / 100) : -Infinity;
+        const hi = rangePct != null && stockPrice != null ? stockPrice * (1 + rangePct / 100) : Infinity;
+        const inRange = (r: IStrikeRow): boolean => r.strike >= lo && r.strike <= hi;
         if (aggregate) {
             const all: IStrikeRow[] = [];
             for (const e of expirations) {
                 const rows = strikesByExpiration[e.expiration];
-                if (rows) all.push(...rows);
+                if (!rows) continue;
+                for (const r of rows) if (inRange(r)) all.push(r);
             }
             return buildBuckets(all);
         }
-        return buildBuckets(strikesByExpiration[selectedExp] ?? []);
-    }, [aggregate, expirations, strikesByExpiration, selectedExp]);
+        const rows = strikesByExpiration[selectedExp] ?? [];
+        return buildBuckets(rows.filter(inRange));
+    }, [aggregate, expirations, strikesByExpiration, selectedExp, rangeFilter, stockPrice]);
 
     const interp = useMemo(() => buildInterpretation(buckets, stockPrice, ticker), [buckets, stockPrice, ticker]);
 
@@ -300,6 +321,11 @@ export const SkewOiByStrikes: React.FC<IProps> = ({ ticker, stockPrice, strikesB
                     <ToggleButton $active={aggregate} onClick={() => setAggregate(true)}>
                         Aggregate
                     </ToggleButton>
+                    <Select value={rangeFilter} onChange={(e) => setRangeFilter(e.target.value as RangeFilter)}>
+                        {(['pm10', 'pm20', 'pm50', 'all'] as RangeFilter[]).map((r) => (
+                            <option key={r} value={r}>Range: {RANGE_LABEL[r]}</option>
+                        ))}
+                    </Select>
                 </Controls>
             </TitleRow>
 

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, Suspense } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
     IonButtons,
     IonContent,
@@ -28,10 +28,7 @@ import styled from 'styled-components';
 import { useServices } from '../hooks/use-services.hook';
 import type { ISkewSnapshot, SuggestionLevel } from '../services/skew-analysis/skew-analysis.service.interface';
 import SkewErrorBoundary from '../components/skew/skew-error-boundary.component';
-
-// Lazy-load the chart so any runtime issue inside Recharts can't break the
-// page during eager module evaluation.
-const SkewChartComponent = React.lazy(() => import('../components/skew/skew-chart.component'));
+import { SkewChartComponent } from '../components/skew/skew-chart.component';
 
 const PageBox = styled.div`
   padding: 16px;
@@ -279,9 +276,7 @@ const SnapshotView: React.FC<{ snapshot: ISkewSnapshot }> = ({ snapshot }) => {
                 </IonCardHeader>
                 <IonCardContent>
                     <SkewErrorBoundary fallbackTitle="Skew chart">
-                        <Suspense fallback={<div style={{ height: 380, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><IonSpinner name="dots" /></div>}>
-                            <SkewChartComponent data={snapshot.chartData} />
-                        </Suspense>
+                        <SkewChartComponent data={snapshot.chartData.slice()} />
                     </SkewErrorBoundary>
                 </IonCardContent>
             </IonCard>

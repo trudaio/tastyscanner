@@ -100,8 +100,12 @@ export interface IStrikeRow {
     premium: number | null;
     iv: number | null; // 0..1 raw, page renders as %
     delta: number | null; // signed (-) for puts
+    gamma: number | null;
     volume: number;
     openInterest: number;
+    /** convenience: this strike's expiration so consumers can DTE-filter */
+    expiration: string;
+    dte: number;
 }
 
 export type TermStructure = 'backwardation' | 'contango' | 'flat' | 'unknown';

@@ -37,6 +37,7 @@ export interface IBasicTechnicals {
 export interface IProcessedOption {
     strike: number;
     delta: number | null;
+    gamma: number | null;
     iv: number | null;
     premium: number | null;
     type: 'put' | 'call';

@@ -25,6 +25,7 @@ import { SkewOiByStrikes } from '../components/skew/skew-oi-by-strikes.component
 import { SkewGexChart } from '../components/skew/skew-gex-chart.component';
 import { SkewVolSurface } from '../components/skew/skew-vol-surface.component';
 import { SkewFundamentalsChart } from '../components/skew/skew-fundamentals-chart.component';
+import { SkewCompanyEvaluation } from '../components/skew/skew-company-evaluation.component';
 
 // ── v13-inspired palette ────────────────────────────────────────────────
 const C = {
@@ -604,9 +605,18 @@ const SnapshotView: React.FC<{ snapshot: ISkewSnapshot }> = ({ snapshot }) => {
             }}>
                 <div style={{ fontSize: 18, fontWeight: 800, color: C.text, marginBottom: 4 }}>📈 Company Fundamentals</div>
                 <div style={{ fontSize: 12, color: C.textDim }}>
-                    Quarterly fundamentals from Polygon — price evolution, EPS, revenue, net income. Most useful for single-name stocks; ETFs typically return no data.
+                    Finviz-style company evaluation, plus quarterly fundamentals from Polygon (price evolution, EPS, revenue, net income). Most useful for single-name stocks; ETFs typically return partial data.
                 </div>
             </div>
+
+            <SkewErrorBoundary fallbackTitle="Company Evaluation">
+                <SkewCompanyEvaluation
+                    ticker={snapshot.ticker}
+                    stockPrice={snapshot.stockPrice}
+                    fmp={snapshot.fmpFundamentals}
+                    technicals={snapshot.basicTechnicals}
+                />
+            </SkewErrorBoundary>
 
             <Card>
                 <SkewErrorBoundary fallbackTitle="Stock price vs EPS">

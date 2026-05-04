@@ -24,6 +24,7 @@ import { SkewByDistanceTable } from '../components/skew/skew-by-distance-table.c
 import { SkewOiByStrikes } from '../components/skew/skew-oi-by-strikes.component';
 import { SkewGexChart } from '../components/skew/skew-gex-chart.component';
 import { SkewVolSurface } from '../components/skew/skew-vol-surface.component';
+import { SkewFundamentalsChart } from '../components/skew/skew-fundamentals-chart.component';
 
 // ── v13-inspired palette ────────────────────────────────────────────────
 const C = {
@@ -583,6 +584,29 @@ const SnapshotView: React.FC<{ snapshot: ISkewSnapshot }> = ({ snapshot }) => {
                     expirationDetails={snapshot.expirationDetails}
                 />
             </SkewErrorBoundary>
+
+            {/* ── Company Fundamentals section ──────────────────────── */}
+            <div style={{
+                marginTop: 8,
+                padding: '12px 16px',
+                background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(139, 92, 246, 0.08))',
+                border: '1px solid #2a2a3a',
+                borderRadius: 12,
+            }}>
+                <div style={{ fontSize: 18, fontWeight: 800, color: C.text, marginBottom: 4 }}>📈 Company Fundamentals</div>
+                <div style={{ fontSize: 12, color: C.textDim }}>
+                    Quarterly fundamentals from Polygon — price evolution, EPS, revenue, net income. Most useful for single-name stocks; ETFs typically return no data.
+                </div>
+            </div>
+
+            <Card>
+                <SkewErrorBoundary fallbackTitle="Stock price vs EPS">
+                    <SkewFundamentalsChart
+                        ticker={snapshot.ticker}
+                        points={snapshot.fundamentalsTimeSeries}
+                    />
+                </SkewErrorBoundary>
+            </Card>
 
             <MetricGrid>
                 <MetricCard>

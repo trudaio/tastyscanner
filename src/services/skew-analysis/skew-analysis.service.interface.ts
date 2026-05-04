@@ -169,6 +169,18 @@ export interface ISkewAnalysisService {
 
     loadSnapshot(ticker: string, fromDate: string, toDate: string): Promise<void>;
 
+    /**
+     * Lightweight loader used by the Company Evaluation page. Only fetches
+     * what the fundamentals view needs: FMP profile/quote/ratios + Polygon
+     * stock price + 3y price history (for basic technicals + matching EPS
+     * quarters with prices) + Polygon financials. Skips the heavy options
+     * chain snapshot — keeps Polygon free tier (5 req/min) happy.
+     *
+     * If a full snapshot already exists for this ticker, the existing one is
+     * preserved (we never downgrade richer → lighter).
+     */
+    loadCompanyOnly(ticker: string): Promise<void>;
+
     getSnapshot(ticker: string): ISkewSnapshot | null;
     isLoading(ticker: string): boolean;
     getError(ticker: string): string | null;

@@ -58,10 +58,145 @@ const SkewPageBackground = createGlobalStyle`
 const PageBox = styled.div`
   padding: 24px 20px;
   display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
   gap: 20px;
-  max-width: 1400px;
+  max-width: 1600px;
   margin: 0 auto;
   color: ${C.text};
+  align-items: start;
+  @media (max-width: 980px) { grid-template-columns: 1fr; }
+`;
+
+const Sidebar = styled.aside`
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: ${C.bgCard};
+  border: 1px solid ${C.border};
+  border-radius: 12px;
+  padding: 14px;
+  max-height: calc(100vh - 100px);
+  @media (max-width: 980px) {
+    position: static;
+    max-height: none;
+  }
+`;
+
+const SidebarTitle = styled.div`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${C.textDim};
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+`;
+
+const SidebarSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`;
+
+const FilterInput = styled.input`
+  background: ${C.bgCardElevated};
+  color: ${C.text};
+  border: 1px solid ${C.border};
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  letter-spacing: 0.02em;
+  &:focus { outline: 2px solid ${C.accent1}; outline-offset: -2px; }
+  &::placeholder { color: ${C.textMuted}; }
+`;
+
+const TickerList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  max-height: calc(100vh - 320px);
+  padding-right: 4px;
+  @media (max-width: 980px) {
+    max-height: 320px;
+  }
+  /* Scrollbar styling */
+  &::-webkit-scrollbar { width: 6px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb { background: ${C.border}; border-radius: 3px; }
+  &::-webkit-scrollbar-thumb:hover { background: ${C.textMuted}; }
+`;
+
+const TickerItem = styled.button<{ $active: boolean; $loading: boolean }>`
+  text-align: left;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: ${(p) => (p.$active ? `linear-gradient(90deg, ${C.accent1}, ${C.accent2})` : 'transparent')};
+  color: ${(p) => (p.$active ? 'white' : C.text)};
+  border: 1px solid ${(p) => (p.$active ? 'transparent' : 'transparent')};
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 13px;
+  font-weight: ${(p) => (p.$active ? 700 : 500)};
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  &:hover {
+    background: ${(p) => (p.$active ? `linear-gradient(90deg, ${C.accent1}, ${C.accent2})` : C.bgCardElevated)};
+  }
+  &:disabled { cursor: progress; opacity: 0.85; }
+`;
+
+const TickerCount = styled.span<{ $active: boolean }>`
+  font-size: 10px;
+  color: ${(p) => (p.$active ? 'rgba(255,255,255,0.85)' : C.textMuted)};
+  font-weight: 600;
+`;
+
+const SidebarMiniRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+`;
+
+const MiniEtfButton = styled.button<{ $active: boolean }>`
+  background: ${(p) => (p.$active ? C.accent1 : C.bgCardElevated)};
+  color: ${(p) => (p.$active ? 'white' : C.textDim)};
+  border: 1px solid ${(p) => (p.$active ? C.accent1 : C.border)};
+  border-radius: 5px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  &:hover { background: ${(p) => (p.$active ? C.accent1 : '#22222e')}; border-color: ${C.accent1}; }
+`;
+
+const SidebarAddRow = styled.div`
+  display: flex;
+  gap: 6px;
+`;
+
+const SmallButton = styled.button`
+  background: ${C.bgCardElevated};
+  color: ${C.text};
+  border: 1px solid ${C.border};
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  &:hover:not(:disabled) { border-color: ${C.accent1}; color: white; background: ${C.accent1}; }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+`;
+
+const MainContent = styled.div`
+  display: grid;
+  gap: 20px;
+  min-width: 0;
 `;
 
 const PageTitleRow = styled.div`
@@ -374,11 +509,13 @@ function fmtMarketCap(v: unknown): string {
 export const SkewAnalysisPage: React.FC = observer(() => {
     const services = useServices();
     const skew = services.skewAnalysis;
+    const watchlist = services.skewWatchlist;
 
     const [ticker, setTicker] = useState('SPY');
     const initialRange = useMemo(defaultDateRange, []);
     const [fromDate, setFromDate] = useState(initialRange.from);
     const [toDate, setToDate] = useState(initialRange.to);
+    const [filter, setFilter] = useState('');
 
     const symbol = ticker.toUpperCase();
     const snapshot = skew.getSnapshot(symbol);
@@ -395,6 +532,30 @@ export const SkewAnalysisPage: React.FC = observer(() => {
         void skew.loadSnapshot(etf, fromDate, toDate);
     }, [skew, fromDate, toDate]);
 
+    const handleSidebarPick = useCallback((t: string) => {
+        const upper = t.toUpperCase();
+        setTicker(upper);
+        void skew.loadSnapshot(upper, fromDate, toDate);
+    }, [skew, fromDate, toDate]);
+
+    const handleAddToWatchlist = useCallback(() => {
+        const t = ticker.trim().toUpperCase();
+        if (!t) return;
+        void watchlist.add(t);
+    }, [ticker, watchlist]);
+
+    const filteredTickers = useMemo(() => {
+        const f = filter.trim().toUpperCase();
+        const list = watchlist.tickers ?? [];
+        if (!f) return list;
+        return list.filter((t) => t.toUpperCase().includes(f));
+    }, [filter, watchlist.tickers]);
+
+    const inWatchlist = useMemo(
+        () => (watchlist.tickers ?? []).includes(symbol),
+        [watchlist.tickers, symbol],
+    );
+
     return (
         <IonPage className="skew-analysis-page">
             <SkewPageBackground />
@@ -408,75 +569,133 @@ export const SkewAnalysisPage: React.FC = observer(() => {
             </IonHeader>
             <IonContent fullscreen>
                 <PageBox>
-                    <PageTitleRow>
-                        <GradientTitle>Skew Analysis</GradientTitle>
-                        <SubTitle>Implied volatility skew across delta levels — Polygon.io chains + TastyTrade IV metrics</SubTitle>
-                    </PageTitleRow>
-
-                    <Card>
-                        <ControlsRow>
-                            <Field>
-                                <Label>Ticker</Label>
-                                <TextInput
-                                    value={ticker}
-                                    onChange={(e) => setTicker(e.target.value.toUpperCase())}
-                                    placeholder="SPY"
-                                    maxLength={6}
-                                />
-                            </Field>
-                            <Field>
-                                <Label>From</Label>
-                                <DateInput type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
-                            </Field>
-                            <Field>
-                                <Label>To</Label>
-                                <DateInput type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
-                            </Field>
-                            <PrimaryButton onClick={handleLoad} disabled={isLoading}>
-                                {isLoading ? <IonSpinner name="dots" style={{ height: 16 }} /> : 'Load Skew'}
-                            </PrimaryButton>
-                            <StatusBar style={{ marginLeft: 'auto' }}>
-                                <span>Polygon</span>
-                                <StatusPill $tone={skew.hasPolygonKey ? 'good' : 'bad'}>
-                                    {skew.hasPolygonKey ? 'configured' : 'missing'}
-                                </StatusPill>
-                                <span>FMP</span>
-                                <StatusPill $tone={skew.hasFmpKey ? 'good' : 'neutral'}>
-                                    {skew.hasFmpKey ? 'configured' : 'fallback'}
-                                </StatusPill>
-                            </StatusBar>
-                        </ControlsRow>
-
-                        <EtfRow>
-                            {TOP_ETFS.map((etf) => (
-                                <EtfButton
-                                    key={etf}
-                                    $active={ticker === etf}
-                                    onClick={() => handleEtfClick(etf)}
-                                    disabled={isLoading}
+                    <Sidebar>
+                        <SidebarSection>
+                            <SidebarTitle>Watchlist</SidebarTitle>
+                            <FilterInput
+                                value={filter}
+                                onChange={(e) => setFilter(e.target.value)}
+                                placeholder="Filter…"
+                            />
+                            <SidebarAddRow>
+                                <SmallButton
+                                    onClick={handleAddToWatchlist}
+                                    disabled={!ticker.trim() || inWatchlist}
+                                    title={inWatchlist ? 'Already in watchlist' : `Add ${symbol} to watchlist`}
                                 >
-                                    {etf}
-                                </EtfButton>
-                            ))}
-                        </EtfRow>
-                    </Card>
+                                    {inWatchlist ? '✓ in list' : `+ Add ${symbol}`}
+                                </SmallButton>
+                            </SidebarAddRow>
+                        </SidebarSection>
 
-                    {error && (
-                        <Card style={{ borderColor: C.danger, color: C.danger }}>
-                            <strong>Error:</strong> {error}
-                        </Card>
-                    )}
+                        <TickerList>
+                            {watchlist.isLoading && (watchlist.tickers ?? []).length === 0 && (
+                                <div style={{ color: C.textMuted, fontSize: 12, padding: '8px 4px' }}>Loading…</div>
+                            )}
+                            {!watchlist.isLoading && filteredTickers.length === 0 && (
+                                <div style={{ color: C.textMuted, fontSize: 12, padding: '8px 4px' }}>
+                                    {filter ? 'No matches' : 'Watchlist is empty'}
+                                </div>
+                            )}
+                            {filteredTickers.map((t) => {
+                                const upper = t.toUpperCase();
+                                const active = upper === symbol;
+                                const loadingThis = skew.isLoading(upper);
+                                return (
+                                    <TickerItem
+                                        key={upper}
+                                        $active={active}
+                                        $loading={loadingThis}
+                                        onClick={() => handleSidebarPick(upper)}
+                                        disabled={loadingThis}
+                                        title={`Load ${upper}`}
+                                    >
+                                        <span>{upper}</span>
+                                        {loadingThis ? (
+                                            <IonSpinner name="dots" style={{ height: 12, width: 18 }} />
+                                        ) : (
+                                            <TickerCount $active={active}>›</TickerCount>
+                                        )}
+                                    </TickerItem>
+                                );
+                            })}
+                        </TickerList>
 
-                    {snapshot && <SnapshotView snapshot={snapshot} />}
+                        <SidebarSection>
+                            <SidebarTitle>Quick ETFs</SidebarTitle>
+                            <SidebarMiniRow>
+                                {TOP_ETFS.map((etf) => (
+                                    <MiniEtfButton
+                                        key={etf}
+                                        $active={ticker === etf}
+                                        onClick={() => handleEtfClick(etf)}
+                                        disabled={isLoading}
+                                    >
+                                        {etf}
+                                    </MiniEtfButton>
+                                ))}
+                            </SidebarMiniRow>
+                        </SidebarSection>
+                    </Sidebar>
 
-                    {!snapshot && !isLoading && !error && (
+                    <MainContent>
+                        <PageTitleRow>
+                            <GradientTitle>Skew Analysis</GradientTitle>
+                            <SubTitle>Implied volatility skew across delta levels — Polygon.io chains + TastyTrade IV metrics</SubTitle>
+                        </PageTitleRow>
+
                         <Card>
-                            <CardTitle>Ready</CardTitle>
-                            <div style={{ color: C.textDim, fontSize: 14 }}>
-                                Pick a ticker above (or type one) and click <strong style={{ color: C.text }}>Load Skew</strong> to populate the chart, IV metrics, max pain, expected move, P/C ratio, basic technicals, suggested trades, and strike-by-distance.
-                            </div>
+                            <ControlsRow>
+                                <Field>
+                                    <Label>Ticker</Label>
+                                    <TextInput
+                                        value={ticker}
+                                        onChange={(e) => setTicker(e.target.value.toUpperCase())}
+                                        placeholder="SPY"
+                                        maxLength={6}
+                                    />
+                                </Field>
+                                <Field>
+                                    <Label>From</Label>
+                                    <DateInput type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+                                </Field>
+                                <Field>
+                                    <Label>To</Label>
+                                    <DateInput type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+                                </Field>
+                                <PrimaryButton onClick={handleLoad} disabled={isLoading}>
+                                    {isLoading ? <IonSpinner name="dots" style={{ height: 16 }} /> : 'Load Skew'}
+                                </PrimaryButton>
+                                <StatusBar style={{ marginLeft: 'auto' }}>
+                                    <span>Polygon</span>
+                                    <StatusPill $tone={skew.hasPolygonKey ? 'good' : 'bad'}>
+                                        {skew.hasPolygonKey ? 'configured' : 'missing'}
+                                    </StatusPill>
+                                    <span>FMP</span>
+                                    <StatusPill $tone={skew.hasFmpKey ? 'good' : 'neutral'}>
+                                        {skew.hasFmpKey ? 'configured' : 'fallback'}
+                                    </StatusPill>
+                                </StatusBar>
+                            </ControlsRow>
                         </Card>
-                    )}
+
+                        {error && (
+                            <Card style={{ borderColor: C.danger, color: C.danger }}>
+                                <strong>Error:</strong> {error}
+                            </Card>
+                        )}
+
+                        {snapshot && <SnapshotView snapshot={snapshot} />}
+
+                        {!snapshot && !isLoading && !error && (
+                            <Card>
+                                <CardTitle>Ready</CardTitle>
+                                <div style={{ color: C.textDim, fontSize: 14 }}>
+                                    Pick a company from the <strong style={{ color: C.text }}>watchlist on the left</strong>, or type a ticker above and click <strong style={{ color: C.text }}>Load Skew</strong>.
+                                </div>
+                            </Card>
+                        )}
+                    </MainContent>
                 </PageBox>
             </IonContent>
         </IonPage>

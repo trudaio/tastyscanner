@@ -22,7 +22,7 @@ export class SkewWatchlistService implements ISkewWatchlistService {
 
     constructor(_factory: IServiceFactory) {
         makeObservable(this, {
-            tickers: observable,
+            tickers: observable.ref,
             isLoading: observable,
             error: observable,
         });

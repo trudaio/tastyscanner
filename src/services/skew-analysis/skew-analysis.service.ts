@@ -43,9 +43,9 @@ export class SkewAnalysisService implements ISkewAnalysisService {
         this.polygon = new PolygonClient();
         this.fmp = new FmpClient();
         makeObservable(this, {
-            snapshotByTicker: observable,
-            loadingByTicker: observable,
-            errorByTicker: observable,
+            snapshotByTicker: observable.shallow,
+            loadingByTicker: observable.shallow,
+            errorByTicker: observable.shallow,
         });
     }
 

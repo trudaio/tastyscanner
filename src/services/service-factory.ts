@@ -42,6 +42,12 @@ import type { IScenarioStudyService } from './scenario-study/scenario-study.inte
 import { ScenarioStudyService } from './scenario-study/scenario-study.service';
 import type { ITradeJournalService } from './trade-journal/trade-journal.service.interface';
 import { TradeJournalService } from './trade-journal/trade-journal.service';
+import type { ISkewAnalysisService } from './skew-analysis/skew-analysis.service.interface';
+import { SkewAnalysisService } from './skew-analysis/skew-analysis.service';
+import type { ISkewScannerService } from './skew-scanner/skew-scanner.service.interface';
+import { SkewScannerService } from './skew-scanner/skew-scanner.service';
+import type { ISkewWatchlistService } from './skew-watchlist/skew-watchlist.service.interface';
+import { SkewWatchlistService } from './skew-watchlist/skew-watchlist.service';
 
 export class ServiceFactory implements IServiceFactory {
 
@@ -211,6 +217,21 @@ export class ServiceFactory implements IServiceFactory {
     private _tradeJournal: Lazy<ITradeJournalService> = new Lazy<ITradeJournalService>(() => new TradeJournalService(this));
     get tradeJournal(): ITradeJournalService {
         return this._tradeJournal.value;
+    }
+
+    private _skewAnalysis: Lazy<ISkewAnalysisService> = new Lazy<ISkewAnalysisService>(() => new SkewAnalysisService(this));
+    get skewAnalysis(): ISkewAnalysisService {
+        return this._skewAnalysis.value;
+    }
+
+    private _skewScanner: Lazy<ISkewScannerService> = new Lazy<ISkewScannerService>(() => new SkewScannerService(this));
+    get skewScanner(): ISkewScannerService {
+        return this._skewScanner.value;
+    }
+
+    private _skewWatchlist: Lazy<ISkewWatchlistService> = new Lazy<ISkewWatchlistService>(() => new SkewWatchlistService(this));
+    get skewWatchlist(): ISkewWatchlistService {
+        return this._skewWatchlist.value;
     }
 
 }

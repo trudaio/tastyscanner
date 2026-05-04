@@ -21,6 +21,9 @@ import { RiskExposerPage } from './pages/RiskExposerPage';
 import { IbkrCallbackPage } from './pages/IbkrCallbackPage';
 import { GuviduVsCatalinPage } from './pages/GuviduVsCatalinPage';
 import { GuviduVisualizationPage } from './pages/GuviduVisualizationPage';
+import { SkewAnalysisPage } from './pages/SkewAnalysisPage';
+import { SkewScannerPage } from './pages/SkewScannerPage';
+import { AppErrorBoundary } from './components/app-error-boundary.component';
 
 /* Core CSS required for Ionic components to work properly */
 import '@ionic/react/css/core.css';
@@ -78,6 +81,7 @@ const App: React.FC = () => {
 
     return (
         <IonApp>
+            <AppErrorBoundary>
             <IonReactRouter>
                 {/* Public routes — no sidebar */}
                 <Route path="/welcome" exact>
@@ -148,6 +152,12 @@ const App: React.FC = () => {
                                 <Route path="/guvid-visualization" exact={true}>
                                     <GuviduVisualizationPage />
                                 </Route>
+                                <Route path="/skew-analysis" exact={true}>
+                                    <SkewAnalysisPage />
+                                </Route>
+                                <Route path="/skew-scanner" exact={true}>
+                                    <SkewScannerPage />
+                                </Route>
                                 <Route path="/superadmin" exact={true}>
                                     <SuperAdminPage />
                                 </Route>
@@ -156,6 +166,7 @@ const App: React.FC = () => {
                     )}
                 </Route>
             </IonReactRouter>
+            </AppErrorBoundary>
         </IonApp>
     );
 };

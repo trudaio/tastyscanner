@@ -12,7 +12,6 @@ import {
     IonCardHeader,
     IonCardTitle,
     IonCardSubtitle,
-    IonInput,
     IonButton,
     IonSpinner,
     IonChip,
@@ -50,6 +49,29 @@ const Field = styled.div`
   flex-direction: column;
   min-width: 140px;
   ion-input { background: var(--ion-color-light); border-radius: 8px; --padding-start: 10px; }
+`;
+
+const DateInput = styled.input`
+  background: var(--ion-color-light);
+  color: var(--ion-text-color);
+  border: 1px solid var(--ion-color-light-shade);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  &:focus { outline: 2px solid var(--ion-color-primary); outline-offset: -2px; }
+`;
+
+const TextInput = styled.input`
+  background: var(--ion-color-light);
+  color: var(--ion-text-color);
+  border: 1px solid var(--ion-color-light-shade);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  text-transform: uppercase;
+  &:focus { outline: 2px solid var(--ion-color-primary); outline-offset: -2px; }
 `;
 
 const Label = styled.label`
@@ -201,19 +223,20 @@ export const SkewAnalysisPage: React.FC = observer(() => {
                             <ControlsRow>
                                 <Field>
                                     <Label>Ticker</Label>
-                                    <IonInput
+                                    <TextInput
                                         value={ticker}
-                                        onIonInput={(e) => setTicker(((e.detail.value ?? '') as string).toUpperCase())}
+                                        onChange={(e) => setTicker(e.target.value.toUpperCase())}
                                         placeholder="SPY"
+                                        maxLength={6}
                                     />
                                 </Field>
                                 <Field>
                                     <Label>From</Label>
-                                    <IonInput type="date" value={fromDate} onIonInput={(e) => setFromDate((e.detail.value ?? '') as string)} />
+                                    <DateInput type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
                                 </Field>
                                 <Field>
                                     <Label>To</Label>
-                                    <IonInput type="date" value={toDate} onIonInput={(e) => setToDate((e.detail.value ?? '') as string)} />
+                                    <DateInput type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
                                 </Field>
                                 <IonButton onClick={handleLoad} disabled={isLoading}>
                                     {isLoading ? <IonSpinner name="dots" /> : 'Load Skew'}

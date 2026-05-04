@@ -40,6 +40,19 @@ const Sub = styled.div`
   color: #a0a0b0;
 `;
 
+const Interp = styled.div`
+  margin-bottom: 10px;
+  padding: 10px 14px;
+  background: rgba(56, 189, 248, 0.06);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #cfd5e0;
+
+  strong { color: #38bdf8; }
+`;
+
 const Select = styled.select`
   background: #1a1a24;
   color: #f0f0f5;
@@ -136,18 +149,23 @@ export const SkewScatterChart: React.FC<IProps> = ({ mode, strikesByExpiration, 
 
     const yRange = useMemo(() => {
         if (points.length === 0) return { min: 0, max: 1 };
-        let min = Infinity;
-        let max = -Infinity;
-        for (const p of points) {
-            if (p.y < min) min = p.y;
-            if (p.y > max) max = p.y;
-        }
-        if (mode === 'bell') {
-            min = 0;
+        // Only consider points within the visible X domain so a deep-ITM
+        // outlier outside the chart can't push the Y scale.
+        const visible = points.filter((p) => p.x >= xRange.min && p.x <= xRange.max);
+        const sample = visible.length > 0 ? visible : points;
+        // Cap with the 95th percentile to be doubly defensive against single
+        // outliers that survive the visible filter.
+        const ys = sample.map((p) => p.y).sort((a, b) => a - b);
+        const p95 = ys[Math.floor(ys.length * 0.95)] ?? ys[ys.length - 1];
+        let min = ys[0];
+        let max = p95;
+        if (mode === 'bell') min = 0;
+        if (!Number.isFinite(min) || !Number.isFinite(max) || min >= max) {
+            return { min: 0, max: max || 1 };
         }
         const pad = (max - min) * 0.05 || 1;
         return { min: Math.max(0, min - pad), max: max + pad };
-    }, [points, mode]);
+    }, [points, xRange, mode]);
 
     const xFor = (v: number): number => {
         const ratio = (v - xRange.min) / (xRange.max - xRange.min);
@@ -188,6 +206,26 @@ export const SkewScatterChart: React.FC<IProps> = ({ mode, strikesByExpiration, 
         ? 'Delta on X-axis • Premium on Y-axis • Shows put/call skew distribution'
         : 'Strike Price on X-axis • Implied Volatility on Y-axis • Classic "smile" shape shows higher IV for OTM options';
 
+    const interp = mode === 'bell' ? (
+        <>
+            <strong>Reading this:</strong> each red dot is a put, each green dot is a call. The X-axis is delta — far-OTM
+            puts sit on the far left (-0.5), at-the-money (ATM) is the dashed orange line at delta = 0, and far-OTM calls
+            on the right (+0.5). The Y-axis is option premium in dollars. A symmetric &quot;V&quot; means balanced fear and
+            greed; if the put curve sits noticeably above the call curve at the same |delta|, traders are paying up for
+            downside protection (bearish skew). Use the dropdown to flip between expirations — front-monthly usually shows
+            sharper skew than far-dated.
+        </>
+    ) : (
+        <>
+            <strong>Reading this:</strong> each dot is a single contract — red for puts, green for calls — plotted at its
+            strike on the X-axis and implied volatility (IV) on the Y-axis. The dashed orange ATM line marks the current
+            stock price. A classic &quot;smile&quot; shape (higher IV at the wings) indicates the market is pricing in
+            fat tails — both crash and rally risk. A pronounced left wing only is &quot;volatility skew&quot; and signals
+            put-side hedging demand. Compare across expirations: a steep front-month smile that flattens further out is
+            normal; a flat front and steep back can mean event-driven concern beyond the next print.
+        </>
+    );
+
     return (
         <Wrapper>
             <TitleRow>
@@ -206,6 +244,8 @@ export const SkewScatterChart: React.FC<IProps> = ({ mode, strikesByExpiration, 
                     ))}
                 </Select>
             </TitleRow>
+
+            <Interp>{interp}</Interp>
 
             <Svg viewBox={`0 0 ${VW} ${VH}`} preserveAspectRatio="none">
                 {yTicks.map((t, i) => (
@@ -238,16 +278,18 @@ export const SkewScatterChart: React.FC<IProps> = ({ mode, strikesByExpiration, 
                 {/* X-axis label */}
                 <text x={(VW - PAD_L - PAD_R) / 2 + PAD_L} y={VH - 8} fontSize={11} fill="#a0a0b0" textAnchor="middle">{xLabel}</text>
 
-                {points.map((p, i) => (
-                    <circle
-                        key={i}
-                        cx={xFor(p.x)}
-                        cy={yFor(p.y)}
-                        r={3}
-                        fill={p.type === 'put' ? PUT_COLOR : CALL_COLOR}
-                        opacity={0.85}
-                    />
-                ))}
+                {points
+                    .filter((p) => p.x >= xRange.min && p.x <= xRange.max && p.y >= yRange.min && p.y <= yRange.max)
+                    .map((p, i) => (
+                        <circle
+                            key={i}
+                            cx={xFor(p.x)}
+                            cy={yFor(p.y)}
+                            r={3}
+                            fill={p.type === 'put' ? PUT_COLOR : CALL_COLOR}
+                            opacity={0.85}
+                        />
+                    ))}
             </Svg>
 
             <LegendRow>

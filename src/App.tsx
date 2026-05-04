@@ -23,6 +23,7 @@ import { GuviduVsCatalinPage } from './pages/GuviduVsCatalinPage';
 import { GuviduVisualizationPage } from './pages/GuviduVisualizationPage';
 import { SkewAnalysisPage } from './pages/SkewAnalysisPage';
 import { SkewScannerPage } from './pages/SkewScannerPage';
+import { CompanyEvaluationPage } from './pages/CompanyEvaluationPage';
 import { AppErrorBoundary } from './components/app-error-boundary.component';
 
 /* Core CSS required for Ionic components to work properly */
@@ -157,6 +158,9 @@ const App: React.FC = () => {
                                 </Route>
                                 <Route path="/skew-scanner" exact={true}>
                                     <SkewScannerPage />
+                                </Route>
+                                <Route path="/company-evaluation" exact={true}>
+                                    <CompanyEvaluationPage />
                                 </Route>
                                 <Route path="/superadmin" exact={true}>
                                     <SuperAdminPage />

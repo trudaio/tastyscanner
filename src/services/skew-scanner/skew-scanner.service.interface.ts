@@ -11,14 +11,21 @@ export type ScannerRowStatus = 'pending' | 'scanning' | 'done' | 'error' | 'rate
 export interface IScannerRow {
     ticker: string;
     status: ScannerRowStatus;
+    /** stock last close, populated after scan */
+    price: number | null;
+    /** TastyTrade IV rank (0..100) */
     ivRank: number | null;
-    skewPercent: number | null;
+    /** Skew % per next-3 monthly expirations, keyed by YYYY-MM-DD */
+    skewByMonth: Record<string, number | null>;
+    /** Convenience: average of populated monthly skews */
+    avgSkewPct: number | null;
     lastUpdate: number | null;
     errorMessage: string | null;
 }
 
 export interface ISkewScannerService {
     rows: Map<string, IScannerRow>;
+    monthlies: string[];
     isRunning: boolean;
     delayMs: number;
     progress: { done: number; total: number };

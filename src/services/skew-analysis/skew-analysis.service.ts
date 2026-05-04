@@ -447,6 +447,7 @@ function buildStrikesByExpiration(byExp: Map<string, IExpirationGroup>): Record<
                 iv: o.iv,
                 delta: o.delta,
                 volume: o.volume,
+                openInterest: o.openInterest,
             });
         }
         for (const o of group.calls) {
@@ -457,6 +458,7 @@ function buildStrikesByExpiration(byExp: Map<string, IExpirationGroup>): Record<
                 iv: o.iv,
                 delta: o.delta,
                 volume: o.volume,
+                openInterest: o.openInterest,
             });
         }
         out[exp] = rows;

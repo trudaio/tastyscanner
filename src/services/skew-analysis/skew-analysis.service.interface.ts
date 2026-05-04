@@ -101,6 +101,7 @@ export interface IStrikeRow {
     iv: number | null; // 0..1 raw, page renders as %
     delta: number | null; // signed (-) for puts
     volume: number;
+    openInterest: number;
 }
 
 export type TermStructure = 'backwardation' | 'contango' | 'flat' | 'unknown';

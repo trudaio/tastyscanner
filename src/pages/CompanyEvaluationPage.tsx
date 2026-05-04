@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
     IonButtons,
     IonContent,
@@ -139,27 +139,12 @@ const PrimaryButton = styled.button`
   &:disabled { opacity: 0.5; cursor: not-allowed; }
 `;
 
-function isoDate(d: Date): string {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-}
-
-function defaultDateRange(): { from: string; to: string } {
-    const today = new Date();
-    const ninety = new Date();
-    ninety.setDate(ninety.getDate() + 90);
-    return { from: isoDate(today), to: isoDate(ninety) };
-}
-
 export const CompanyEvaluationPage: React.FC = observer(() => {
     const services = useServices();
     const skew = services.skewAnalysis;
 
     const [ticker, setTicker] = useState('AAPL');
     const symbol = ticker.toUpperCase();
-    const range = useMemo(defaultDateRange, []);
 
     const snapshot = skew.getSnapshot(symbol);
     const isLoading = skew.isLoading(symbol);
@@ -169,13 +154,13 @@ export const CompanyEvaluationPage: React.FC = observer(() => {
         const target = (t ?? ticker).trim().toUpperCase();
         if (!target) return;
         setTicker(target);
-        void skew.loadSnapshot(target, range.from, range.to);
-    }, [skew, ticker, range.from, range.to]);
+        void skew.loadCompanyOnly(target);
+    }, [skew, ticker]);
 
     // Auto-load default ticker on mount if we don't have a snapshot yet
     useEffect(() => {
         if (!snapshot && !isLoading && !error) {
-            void skew.loadSnapshot(symbol, range.from, range.to);
+            void skew.loadCompanyOnly(symbol);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);

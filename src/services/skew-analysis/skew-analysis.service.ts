@@ -175,6 +175,94 @@ export class SkewAnalysisService implements ISkewAnalysisService {
         }
     }
 
+    /**
+     * Lightweight company-only loader. Hits ~3 Polygon endpoints + 5 FMP
+     * endpoints (FMP has 250/day rate limit, no concern there). Designed to
+     * stay under Polygon free tier 5 req/min.
+     *
+     * Preserves an existing full snapshot if one is already cached for this
+     * ticker — we never downgrade to a lighter snapshot.
+     */
+    async loadCompanyOnly(ticker: string): Promise<void> {
+        const key = ticker.toUpperCase();
+
+        const existing = this.snapshotByTicker.get(key);
+        if (existing && existing.chartData.length > 0) {
+            // Full snapshot exists — nothing to do, render uses the same data.
+            return;
+        }
+
+        runInAction(() => {
+            this.loadingByTicker.set(key, true);
+            this.errorByTicker.set(key, null);
+        });
+        try {
+            if (!this.polygon.isConfigured) {
+                throw new Error('Polygon API key missing — set VITE_POLYGON_API_KEY');
+            }
+
+            const todayIsoStr = isoDate(new Date());
+            const threeYearsAgo = new Date();
+            threeYearsAgo.setDate(threeYearsAgo.getDate() - 365 * 3);
+            const threeYearsAgoIso = isoDate(threeYearsAgo);
+
+            const [stockPrice, longPriceHistory, fundamentalsRaw, fmpFundamentals] = await Promise.all([
+                this.polygon.getStockPrice(key),
+                this.polygon.getPriceHistory(key, threeYearsAgoIso, todayIsoStr).catch(() => [] as IPolygonAggregateBar[]),
+                this.polygon.getFinancials(key, 12).catch(() => []),
+                this.fmp.getFundamentals(key).catch(() => null),
+            ]);
+
+            const fundamentalsTimeSeries = buildFundamentalsTimeSeries(fundamentalsRaw, longPriceHistory);
+            const basicTechnicals = stockPrice
+                ? calculateBasicTechnicals(longPriceHistory, stockPrice)
+                : calculateBasicTechnicals(longPriceHistory, longPriceHistory[longPriceHistory.length - 1]?.c ?? 0);
+
+            // Empty placeholders for options-related fields — Company Evaluation
+            // page doesn't read them, but the shared snapshot type requires them.
+            const snapshot: ISkewSnapshot = {
+                ticker: key,
+                fetchedAt: Date.now(),
+                fromDate: threeYearsAgoIso,
+                toDate: todayIsoStr,
+                stockPrice: toNumOrNull(stockPrice),
+                chartData: [],
+                ivMetrics: { ivRank: null, ivPercentile: null, ivIndex: null, beta: null },
+                maxPain: null,
+                expectedMove: null,
+                putCallRatio: null,
+                byDistance: [],
+                basicTechnicals,
+                suggestedTrades: { assessment: 'Unknown', insights: [] },
+                expirationDetails: [],
+                strikesByExpiration: {},
+                summary: {
+                    stockPrice: toNumOrNull(stockPrice),
+                    avgSkewPct10: null,
+                    termStructure: 'unknown',
+                    maxPain: null,
+                    expectedMove: null,
+                    putCallRatio: null,
+                    totalPuts60d: 0,
+                    totalCalls60d: 0,
+                },
+                fundamentalsTimeSeries,
+                fmpFundamentals,
+            };
+
+            runInAction(() => {
+                this.snapshotByTicker.set(key, snapshot);
+                this.loadingByTicker.set(key, false);
+            });
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : 'Unknown error';
+            runInAction(() => {
+                this.loadingByTicker.set(key, false);
+                this.errorByTicker.set(key, msg);
+            });
+        }
+    }
+
     getSnapshot(ticker: string): ISkewSnapshot | null {
         return this.snapshotByTicker.get(ticker.toUpperCase()) ?? null;
     }

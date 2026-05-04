@@ -7,34 +7,99 @@ import {
     IonPage,
     IonTitle,
     IonToolbar,
-    IonCard,
-    IonCardContent,
-    IonCardHeader,
-    IonCardTitle,
-    IonCardSubtitle,
-    IonButton,
     IonSpinner,
-    IonChip,
-    IonLabel,
     IonNote,
-    IonText,
-    IonGrid,
-    IonRow,
-    IonCol,
 } from '@ionic/react';
 import { observer } from 'mobx-react-lite';
-import styled from 'styled-components';
+import styled, { createGlobalStyle } from 'styled-components';
 import { useServices } from '../hooks/use-services.hook';
 import type { ISkewSnapshot, SuggestionLevel } from '../services/skew-analysis/skew-analysis.service.interface';
 import SkewErrorBoundary from '../components/skew/skew-error-boundary.component';
 import { SkewChartComponent } from '../components/skew/skew-chart.component';
 
+// ── v13-inspired palette ────────────────────────────────────────────────
+const C = {
+    bgPage: '#0a0a0f',
+    bgCard: '#12121a',
+    bgCardElevated: '#1a1a24',
+    border: '#2a2a3a',
+    text: '#f0f0f5',
+    textDim: '#a0a0b0',
+    textMuted: '#606070',
+    accent1: '#3b82f6', // blue (10Δ)
+    accent2: '#8b5cf6', // purple (20Δ)
+    accent3: '#06b6d4', // cyan (30Δ)
+    accent4: '#f59e0b', // orange (40Δ)
+    success: '#22c55e',
+    warning: '#facc15',
+    danger: '#ef4444',
+    info: '#38bdf8',
+} as const;
+
+const TOP_ETFS: readonly string[] = ['SPY', 'QQQ', 'IWM', 'GLD', 'SLV', 'DIA', 'VTI', 'VOO', 'EEM', 'XLF'];
+
+// Override Ionic content background only on this page (scoped by IonPage class).
+const SkewPageBackground = createGlobalStyle`
+  ion-page.skew-analysis-page ion-content::part(background) {
+    background: ${C.bgPage};
+  }
+`;
+
 const PageBox = styled.div`
-  padding: 16px;
+  padding: 24px 20px;
   display: grid;
-  gap: 16px;
+  gap: 20px;
   max-width: 1400px;
   margin: 0 auto;
+  color: ${C.text};
+`;
+
+const PageTitleRow = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`;
+
+const GradientTitle = styled.h1`
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  background: linear-gradient(135deg, ${C.accent1}, ${C.accent2});
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0;
+`;
+
+const SubTitle = styled.p`
+  font-size: 13px;
+  color: ${C.textDim};
+  margin: 0;
+`;
+
+const Card = styled.div`
+  background: ${C.bgCard};
+  border: 1px solid ${C.border};
+  border-radius: 12px;
+  padding: 18px 20px;
+`;
+
+const CardTitle = styled.div`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${C.textDim};
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 10px;
+`;
+
+const SectionHeading = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
 `;
 
 const ControlsRow = styled.div`
@@ -48,109 +113,210 @@ const Field = styled.div`
   display: flex;
   flex-direction: column;
   min-width: 140px;
-  ion-input { background: var(--ion-color-light); border-radius: 8px; --padding-start: 10px; }
-`;
-
-const DateInput = styled.input`
-  background: var(--ion-color-light);
-  color: var(--ion-text-color);
-  border: 1px solid var(--ion-color-light-shade);
-  border-radius: 8px;
-  padding: 10px 12px;
-  font-size: 14px;
-  font-family: inherit;
-  &:focus { outline: 2px solid var(--ion-color-primary); outline-offset: -2px; }
-`;
-
-const TextInput = styled.input`
-  background: var(--ion-color-light);
-  color: var(--ion-text-color);
-  border: 1px solid var(--ion-color-light-shade);
-  border-radius: 8px;
-  padding: 10px 12px;
-  font-size: 14px;
-  font-family: inherit;
-  text-transform: uppercase;
-  &:focus { outline: 2px solid var(--ion-color-primary); outline-offset: -2px; }
 `;
 
 const Label = styled.label`
-  font-size: 12px;
-  color: var(--ion-color-medium);
+  font-size: 11px;
+  color: ${C.textMuted};
   font-weight: 600;
   text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding-bottom: 6px;
+`;
+
+const DateInput = styled.input`
+  background: ${C.bgCardElevated};
+  color: ${C.text};
+  border: 1px solid ${C.border};
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  color-scheme: dark;
+  &:focus { outline: 2px solid ${C.accent1}; outline-offset: -2px; }
+`;
+
+const TextInput = styled.input`
+  background: ${C.bgCardElevated};
+  color: ${C.text};
+  border: 1px solid ${C.border};
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  text-transform: uppercase;
+  font-weight: 700;
   letter-spacing: 0.04em;
-  padding-left: 4px;
-  padding-bottom: 4px;
+  &:focus { outline: 2px solid ${C.accent1}; outline-offset: -2px; }
+`;
+
+const PrimaryButton = styled.button`
+  background: linear-gradient(135deg, ${C.accent1}, ${C.accent2});
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 11px 22px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: opacity 0.15s, transform 0.15s;
+  &:hover:not(:disabled) { opacity: 0.92; }
+  &:active:not(:disabled) { transform: translateY(1px); }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+`;
+
+const EtfRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+`;
+
+const EtfButton = styled.button<{ $active: boolean }>`
+  background: ${(p) => (p.$active ? C.accent1 : C.bgCardElevated)};
+  color: ${(p) => (p.$active ? 'white' : C.text)};
+  border: 1px solid ${(p) => (p.$active ? C.accent1 : C.border)};
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  &:hover { background: ${(p) => (p.$active ? C.accent1 : '#22222e')}; border-color: ${C.accent1}; }
 `;
 
 const MetricGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px;
+  gap: 16px;
 `;
 
-const Big = styled.div`
-  font-size: 28px;
+const MetricCard = styled(Card)`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`;
+
+const MetricValue = styled.div`
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: ${C.text};
+`;
+
+const MetricSub = styled.div`
+  font-size: 12px;
+  color: ${C.textDim};
+`;
+
+const StatusBar = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  font-size: 13px;
+  color: ${C.textDim};
+`;
+
+const StatusPill = styled.span<{ $tone: 'good' | 'warn' | 'bad' | 'neutral' }>`
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
   font-weight: 700;
-  line-height: 1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: white;
+  background: ${(p) => {
+    if (p.$tone === 'good') return C.success;
+    if (p.$tone === 'warn') return C.warning;
+    if (p.$tone === 'bad') return C.danger;
+    return C.textMuted;
+}};
 `;
 
 const TwoCol = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
-  @media (max-width: 900px) { grid-template-columns: 1fr; }
-`;
-
-interface PillProps { $tone: 'good' | 'warn' | 'bad' | 'neutral'; }
-const Pill = styled.span<PillProps>`
-  display: inline-block;
-  padding: 2px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  color: white;
-  background: ${(p) => {
-    if (p.$tone === 'good') return 'var(--ion-color-success)';
-    if (p.$tone === 'bad') return 'var(--ion-color-danger)';
-    if (p.$tone === 'warn') return 'var(--ion-color-warning)';
-    return 'var(--ion-color-medium)';
-}};
+  @media (max-width: 980px) { grid-template-columns: 1fr; }
 `;
 
 const Table = styled.table`
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
+  color: ${C.text};
 
   th, td {
-    padding: 8px 10px;
+    padding: 10px 12px;
     text-align: right;
-    border-bottom: 1px solid var(--ion-color-light-shade);
+    border-bottom: 1px solid ${C.border};
   }
   th:first-child, td:first-child { text-align: left; }
-  th { font-weight: 600; color: var(--ion-color-medium); text-transform: uppercase; font-size: 11px; letter-spacing: 0.04em; }
+  th {
+    font-weight: 700;
+    color: ${C.textMuted};
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid ${C.border};
+  }
+  tr:last-child td { border-bottom: none; }
 `;
 
-interface InsightRowProps { $tone: SuggestionLevel; }
-const InsightRow = styled.div<InsightRowProps>`
-  padding: 10px 12px;
+const KvRow = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 13px;
+  &:not(:last-child) { border-bottom: 1px solid ${C.border}; }
+`;
+
+const KvLabel = styled.span`
+  color: ${C.textDim};
+`;
+
+const KvValue = styled.span`
+  color: ${C.text};
+  font-weight: 600;
+`;
+
+const InsightRow = styled.div<{ $tone: SuggestionLevel }>`
+  padding: 10px 14px;
   border-radius: 8px;
   background: ${(p) => {
-    if (p.$tone === 'success') return 'rgba(45, 211, 111, 0.12)';
-    if (p.$tone === 'warning') return 'rgba(255, 196, 9, 0.12)';
-    if (p.$tone === 'info') return 'rgba(56, 128, 255, 0.12)';
-    return 'rgba(146, 148, 156, 0.12)';
+    if (p.$tone === 'success') return 'rgba(34, 197, 94, 0.10)';
+    if (p.$tone === 'warning') return 'rgba(250, 204, 21, 0.10)';
+    if (p.$tone === 'info') return 'rgba(56, 189, 248, 0.10)';
+    return 'rgba(160, 160, 176, 0.08)';
 }};
   border-left: 3px solid ${(p) => {
-    if (p.$tone === 'success') return 'var(--ion-color-success)';
-    if (p.$tone === 'warning') return 'var(--ion-color-warning)';
-    if (p.$tone === 'info') return 'var(--ion-color-primary)';
-    return 'var(--ion-color-medium)';
+    if (p.$tone === 'success') return C.success;
+    if (p.$tone === 'warning') return C.warning;
+    if (p.$tone === 'info') return C.info;
+    return C.textMuted;
 }};
-  font-size: 14px;
+  font-size: 13px;
   margin-bottom: 8px;
+  &:last-child { margin-bottom: 0; }
+`;
+
+const DistChip = styled.span`
+  display: inline-block;
+  background: ${C.accent1};
+  color: white;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 `;
 
 const ASSESSMENT_TONE: Record<string, 'good' | 'warn' | 'bad' | 'neutral'> = {
@@ -216,8 +382,14 @@ export const SkewAnalysisPage: React.FC = observer(() => {
         void skew.loadSnapshot(ticker.trim().toUpperCase(), fromDate, toDate);
     }, [skew, ticker, fromDate, toDate]);
 
+    const handleEtfClick = useCallback((etf: string) => {
+        setTicker(etf);
+        void skew.loadSnapshot(etf, fromDate, toDate);
+    }, [skew, fromDate, toDate]);
+
     return (
-        <IonPage>
+        <IonPage className="skew-analysis-page">
+            <SkewPageBackground />
             <IonHeader>
                 <IonToolbar>
                     <IonButtons slot="start">
@@ -228,67 +400,74 @@ export const SkewAnalysisPage: React.FC = observer(() => {
             </IonHeader>
             <IonContent fullscreen>
                 <PageBox>
-                    <IonCard>
-                        <IonCardContent>
-                            <ControlsRow>
-                                <Field>
-                                    <Label>Ticker</Label>
-                                    <TextInput
-                                        value={ticker}
-                                        onChange={(e) => setTicker(e.target.value.toUpperCase())}
-                                        placeholder="SPY"
-                                        maxLength={6}
-                                    />
-                                </Field>
-                                <Field>
-                                    <Label>From</Label>
-                                    <DateInput type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
-                                </Field>
-                                <Field>
-                                    <Label>To</Label>
-                                    <DateInput type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
-                                </Field>
-                                <IonButton onClick={handleLoad} disabled={isLoading}>
-                                    {isLoading ? <IonSpinner name="dots" /> : 'Load Skew'}
-                                </IonButton>
-                                {!skew.hasPolygonKey && (
-                                    <IonNote color="danger" style={{ alignSelf: 'center' }}>
-                                        Polygon API key missing
-                                    </IonNote>
-                                )}
-                                {!skew.hasFmpKey && (
-                                    <IonNote color="medium" style={{ alignSelf: 'center' }}>
-                                        FMP key missing — fundamentals fallback
-                                    </IonNote>
-                                )}
-                            </ControlsRow>
-                        </IonCardContent>
-                    </IonCard>
+                    <PageTitleRow>
+                        <GradientTitle>Skew Analysis</GradientTitle>
+                        <SubTitle>Implied volatility skew across delta levels — Polygon.io chains + TastyTrade IV metrics</SubTitle>
+                    </PageTitleRow>
+
+                    <Card>
+                        <ControlsRow>
+                            <Field>
+                                <Label>Ticker</Label>
+                                <TextInput
+                                    value={ticker}
+                                    onChange={(e) => setTicker(e.target.value.toUpperCase())}
+                                    placeholder="SPY"
+                                    maxLength={6}
+                                />
+                            </Field>
+                            <Field>
+                                <Label>From</Label>
+                                <DateInput type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+                            </Field>
+                            <Field>
+                                <Label>To</Label>
+                                <DateInput type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+                            </Field>
+                            <PrimaryButton onClick={handleLoad} disabled={isLoading}>
+                                {isLoading ? <IonSpinner name="dots" style={{ height: 16 }} /> : 'Load Skew'}
+                            </PrimaryButton>
+                            <StatusBar style={{ marginLeft: 'auto' }}>
+                                <span>Polygon</span>
+                                <StatusPill $tone={skew.hasPolygonKey ? 'good' : 'bad'}>
+                                    {skew.hasPolygonKey ? 'configured' : 'missing'}
+                                </StatusPill>
+                                <span>FMP</span>
+                                <StatusPill $tone={skew.hasFmpKey ? 'good' : 'neutral'}>
+                                    {skew.hasFmpKey ? 'configured' : 'fallback'}
+                                </StatusPill>
+                            </StatusBar>
+                        </ControlsRow>
+
+                        <EtfRow>
+                            {TOP_ETFS.map((etf) => (
+                                <EtfButton
+                                    key={etf}
+                                    $active={ticker === etf}
+                                    onClick={() => handleEtfClick(etf)}
+                                    disabled={isLoading}
+                                >
+                                    {etf}
+                                </EtfButton>
+                            ))}
+                        </EtfRow>
+                    </Card>
 
                     {error && (
-                        <IonCard color="danger">
-                            <IonCardContent>
-                                <strong>Error:</strong> {error}
-                            </IonCardContent>
-                        </IonCard>
+                        <Card style={{ borderColor: C.danger, color: C.danger }}>
+                            <strong>Error:</strong> {error}
+                        </Card>
                     )}
 
                     {snapshot && <SnapshotView snapshot={snapshot} />}
 
                     {!snapshot && !isLoading && !error && (
-                        <IonCard>
-                            <IonCardHeader>
-                                <IonCardSubtitle>Ready</IonCardSubtitle>
-                                <IonCardTitle>Pick a ticker and click Load Skew</IonCardTitle>
-                            </IonCardHeader>
-                            <IonCardContent>
-                                <IonText color="medium">
-                                    Default range covers the next 90 days of expirations. The page will
-                                    populate the skew chart, IV metrics, max pain, expected move, P/C
-                                    ratio, basic technicals, suggested trades and strike-by-distance.
-                                </IonText>
-                            </IonCardContent>
-                        </IonCard>
+                        <Card>
+                            <CardTitle>Ready</CardTitle>
+                            <div style={{ color: C.textDim, fontSize: 14 }}>
+                                Pick a ticker above (or type one) and click <strong style={{ color: C.text }}>Load Skew</strong> to populate the chart, IV metrics, max pain, expected move, P/C ratio, basic technicals, suggested trades, and strike-by-distance.
+                            </div>
+                        </Card>
                     )}
                 </PageBox>
             </IonContent>
@@ -302,182 +481,141 @@ const SnapshotView: React.FC<{ snapshot: ISkewSnapshot }> = ({ snapshot }) => {
 
     return (
         <>
-            <IonCard>
-                <IonCardHeader>
-                    <IonCardSubtitle>{snapshot.ticker} • last close {fmtMoney(snapshot.stockPrice)}</IonCardSubtitle>
-                    <IonCardTitle>Skew Chart — IV by delta level</IonCardTitle>
-                </IonCardHeader>
-                <IonCardContent>
-                    <SkewErrorBoundary fallbackTitle="Skew chart">
-                        <SkewChartComponent data={snapshot.chartData.slice()} />
-                    </SkewErrorBoundary>
-                </IonCardContent>
-            </IonCard>
+            <Card>
+                <SectionHeading>
+                    <div>
+                        <CardTitle>{snapshot.ticker} • last close {fmtMoney(snapshot.stockPrice)}</CardTitle>
+                        <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>
+                            Skew Chart — IV by delta level
+                        </div>
+                    </div>
+                    <MetricSub>
+                        {snapshot.chartData.length} expirations • range {snapshot.fromDate} → {snapshot.toDate}
+                    </MetricSub>
+                </SectionHeading>
+                <SkewErrorBoundary fallbackTitle="Skew chart">
+                    <SkewChartComponent data={snapshot.chartData.slice()} />
+                </SkewErrorBoundary>
+            </Card>
 
             <MetricGrid>
-                <IonCard>
-                    <IonCardHeader>
-                        <IonCardSubtitle>IV Metrics</IonCardSubtitle>
-                        <IonCardTitle>
-                            <Big>{ivMetrics.ivRank == null ? '–' : ivMetrics.ivRank}</Big>
-                            <span style={{ fontSize: 14, color: 'var(--ion-color-medium)', fontWeight: 400 }}> IV Rank</span>
-                        </IonCardTitle>
-                    </IonCardHeader>
-                    <IonCardContent>
-                        <IonGrid>
-                            <IonRow>
-                                <IonCol>IV Percentile</IonCol>
-                                <IonCol style={{ textAlign: 'right' }}>{ivMetrics.ivPercentile == null ? '–' : `${ivMetrics.ivPercentile}`}</IonCol>
-                            </IonRow>
-                            <IonRow>
-                                <IonCol>IV Index</IonCol>
-                                <IonCol style={{ textAlign: 'right' }}>{fmtPct(ivMetrics.ivIndex, 1)}</IonCol>
-                            </IonRow>
-                            <IonRow>
-                                <IonCol>Beta</IonCol>
-                                <IonCol style={{ textAlign: 'right' }}>{fmtNum(ivMetrics.beta, 2)}</IonCol>
-                            </IonRow>
-                        </IonGrid>
-                    </IonCardContent>
-                </IonCard>
+                <MetricCard>
+                    <CardTitle>IV Metrics</CardTitle>
+                    <MetricValue>{ivMetrics.ivRank == null ? '–' : ivMetrics.ivRank}</MetricValue>
+                    <MetricSub>IV Rank</MetricSub>
+                    <KvRow><KvLabel>IV Percentile</KvLabel><KvValue>{ivMetrics.ivPercentile == null ? '–' : ivMetrics.ivPercentile}</KvValue></KvRow>
+                    <KvRow><KvLabel>IV Index</KvLabel><KvValue>{fmtPct(ivMetrics.ivIndex, 1)}</KvValue></KvRow>
+                    <KvRow><KvLabel>Beta</KvLabel><KvValue>{fmtNum(ivMetrics.beta, 2)}</KvValue></KvRow>
+                </MetricCard>
 
-                <IonCard>
-                    <IonCardHeader>
-                        <IonCardSubtitle>Max Pain</IonCardSubtitle>
-                        <IonCardTitle>
-                            <Big>{maxPain == null ? '–' : `$${maxPain}`}</Big>
-                        </IonCardTitle>
-                    </IonCardHeader>
-                    <IonCardContent>
-                        <IonText color="medium">
-                            Strike where aggregate option holder losses are maximised across the
-                            front-monthly chain. Used as a magnet level into expiration.
-                        </IonText>
-                    </IonCardContent>
-                </IonCard>
+                <MetricCard>
+                    <CardTitle>Max Pain</CardTitle>
+                    <MetricValue>{maxPain == null ? '–' : `$${maxPain}`}</MetricValue>
+                    <MetricSub>Strike where aggregate option holders maximize losses across the front-monthly chain</MetricSub>
+                </MetricCard>
 
-                <IonCard>
-                    <IonCardHeader>
-                        <IonCardSubtitle>Expected Move</IonCardSubtitle>
-                        <IonCardTitle>
-                            <Big>{expectedMove == null ? '–' : `±${fmtMoney(expectedMove.dollars)}`}</Big>
-                            <span style={{ fontSize: 14, color: 'var(--ion-color-medium)', fontWeight: 400 }}>
-                                {expectedMove == null ? '' : ` ${fmtPct(expectedMove.percent, 2)}`}
-                            </span>
-                        </IonCardTitle>
-                    </IonCardHeader>
-                    <IonCardContent>
-                        {expectedMove ? (
-                            <IonText>
-                                Range: {fmtMoney(expectedMove.lowerBound)} → {fmtMoney(expectedMove.upperBound)}
-                            </IonText>
-                        ) : (
-                            <IonText color="medium">No ATM straddle data.</IonText>
-                        )}
-                    </IonCardContent>
-                </IonCard>
+                <MetricCard>
+                    <CardTitle>Expected Move</CardTitle>
+                    <MetricValue>{expectedMove == null ? '–' : `±${fmtMoney(expectedMove.dollars)}`}</MetricValue>
+                    <MetricSub>{expectedMove == null ? 'no ATM straddle' : `${fmtPct(expectedMove.percent, 2)} of price`}</MetricSub>
+                    {expectedMove && (
+                        <KvRow><KvLabel>Range</KvLabel><KvValue>{fmtMoney(expectedMove.lowerBound)} → {fmtMoney(expectedMove.upperBound)}</KvValue></KvRow>
+                    )}
+                </MetricCard>
 
-                <IonCard>
-                    <IonCardHeader>
-                        <IonCardSubtitle>P/C Ratio (60d volume)</IonCardSubtitle>
-                        <IonCardTitle>
-                            <Big>{putCallRatio == null ? '–' : fmtNum(putCallRatio.ratio, 2)}</Big>
-                        </IonCardTitle>
-                    </IonCardHeader>
-                    <IonCardContent>
-                        {putCallRatio ? (
-                            <IonText color="medium">
-                                Puts: {putCallRatio.putVolume.toLocaleString()} • Calls: {putCallRatio.callVolume.toLocaleString()}
-                            </IonText>
-                        ) : (
-                            <IonText color="medium">No volume data.</IonText>
-                        )}
-                    </IonCardContent>
-                </IonCard>
+                <MetricCard>
+                    <CardTitle>P/C Ratio (60d volume)</CardTitle>
+                    <MetricValue>{putCallRatio == null ? '–' : fmtNum(putCallRatio.ratio, 2)}</MetricValue>
+                    {putCallRatio ? (
+                        <MetricSub>
+                            puts {putCallRatio.putVolume.toLocaleString()} • calls {putCallRatio.callVolume.toLocaleString()}
+                        </MetricSub>
+                    ) : (
+                        <MetricSub>no volume data</MetricSub>
+                    )}
+                </MetricCard>
             </MetricGrid>
 
             <TwoCol>
-                <IonCard>
-                    <IonCardHeader>
-                        <IonCardSubtitle>Basic Technicals (Polygon)</IonCardSubtitle>
-                        <IonCardTitle>Fundamentals</IonCardTitle>
-                    </IonCardHeader>
-                    <IonCardContent>
-                        <Table>
-                            <tbody>
-                                <tr><td>RSI(14)</td><td>{fmtNum(basicTechnicals.rsi14)}</td></tr>
-                                <tr><td>ATR(14)</td><td>{fmtNum(basicTechnicals.atr14)}</td></tr>
-                                <tr><td>Historical Vol (30d)</td><td>{fmtPct(basicTechnicals.historicalVolatility30, 1)}</td></tr>
-                                <tr><td>52W High</td><td>{fmtMoney(basicTechnicals.week52High)}</td></tr>
-                                <tr><td>52W Low</td><td>{fmtMoney(basicTechnicals.week52Low)}</td></tr>
-                                <tr><td>52W Position</td><td>{fmtNum(basicTechnicals.week52RangePct, 0)}%</td></tr>
-                                <tr><td>YTD Return</td><td>{fmtPct(basicTechnicals.ytdReturnPct, 1)}</td></tr>
-                                <tr><td>QTD Return</td><td>{fmtPct(basicTechnicals.qtdReturnPct, 1)}</td></tr>
-                            </tbody>
-                        </Table>
-                        <IonNote color="medium" style={{ display: 'block', marginTop: 8 }}>
-                            Add VITE_FMP_API_KEY for P/E, EPS, market cap, dividend, beta and more.
-                        </IonNote>
-                    </IonCardContent>
-                </IonCard>
-
-                <IonCard>
-                    <IonCardHeader>
-                        <IonCardSubtitle>
-                            Assessment <Pill $tone={tone}>{suggestedTrades.assessment}</Pill>
-                        </IonCardSubtitle>
-                        <IonCardTitle>Suggested Trades</IonCardTitle>
-                    </IonCardHeader>
-                    <IonCardContent>
-                        {suggestedTrades.insights.length === 0 ? (
-                            <IonText color="medium">No insights available.</IonText>
-                        ) : (
-                            suggestedTrades.insights.map((ins, i) => (
-                                <InsightRow key={i} $tone={ins.level}>{ins.text}</InsightRow>
-                            ))
-                        )}
-                    </IonCardContent>
-                </IonCard>
-            </TwoCol>
-
-            <IonCard>
-                <IonCardHeader>
-                    <IonCardSubtitle>Front monthly expiration</IonCardSubtitle>
-                    <IonCardTitle>Strike by Distance</IonCardTitle>
-                </IonCardHeader>
-                <IonCardContent>
+                <Card>
+                    <CardTitle>Basic Technicals (Polygon)</CardTitle>
                     <Table>
-                        <thead>
-                            <tr>
-                                <th>Distance</th>
-                                <th>Put Strike</th>
-                                <th>Put Δ</th>
-                                <th>Put Premium</th>
-                                <th>Put Volume</th>
-                                <th>Call Strike</th>
-                                <th>Call Δ</th>
-                                <th>Call Premium</th>
-                                <th>Call Volume</th>
-                            </tr>
-                        </thead>
                         <tbody>
-                            {snapshot.byDistance.map((row) => (
-                                <tr key={row.distancePct}>
-                                    <td><IonChip color="primary"><IonLabel>±{row.distancePct}%</IonLabel></IonChip></td>
-                                    <td>{row.put ? fmtMoney(row.put.strike) : '–'}</td>
-                                    <td>{fmtNum(row.put?.delta, 2)}</td>
-                                    <td>{row.put ? fmtMoney(row.put.premium) : '–'}</td>
-                                    <td>{row.put ? row.put.volume.toLocaleString() : '–'}</td>
-                                    <td>{row.call ? fmtMoney(row.call.strike) : '–'}</td>
-                                    <td>{fmtNum(row.call?.delta, 2)}</td>
-                                    <td>{row.call ? fmtMoney(row.call.premium) : '–'}</td>
-                                    <td>{row.call ? row.call.volume.toLocaleString() : '–'}</td>
-                                </tr>
-                            ))}
+                            <tr><td>RSI(14)</td><td>{fmtNum(basicTechnicals.rsi14, 2)}</td></tr>
+                            <tr><td>ATR(14)</td><td>{fmtNum(basicTechnicals.atr14, 2)}</td></tr>
+                            <tr><td>Historical Vol (30d)</td><td>{fmtPct(basicTechnicals.historicalVolatility30, 1)}</td></tr>
+                            <tr><td>52W High</td><td>{fmtMoney(basicTechnicals.week52High)}</td></tr>
+                            <tr><td>52W Low</td><td>{fmtMoney(basicTechnicals.week52Low)}</td></tr>
+                            <tr><td>52W Position</td><td>{fmtNum(basicTechnicals.week52RangePct, 0)}%</td></tr>
+                            <tr><td>YTD Return</td><td>{fmtPct(basicTechnicals.ytdReturnPct, 1)}</td></tr>
+                            <tr><td>QTD Return</td><td>{fmtPct(basicTechnicals.qtdReturnPct, 1)}</td></tr>
                         </tbody>
                     </Table>
-                </IonCardContent>
-            </IonCard>
+                    <div style={{ marginTop: 10, fontSize: 11, color: C.textMuted }}>
+                        Add VITE_FMP_API_KEY for P/E, EPS, market cap, dividend, beta, and ratios.
+                    </div>
+                </Card>
+
+                <Card>
+                    <SectionHeading>
+                        <CardTitle>Suggested Trades</CardTitle>
+                        <StatusPill $tone={tone}>{suggestedTrades.assessment}</StatusPill>
+                    </SectionHeading>
+                    {suggestedTrades.insights.length === 0 ? (
+                        <MetricSub>No insights available.</MetricSub>
+                    ) : (
+                        suggestedTrades.insights.map((ins, i) => (
+                            <InsightRow key={i} $tone={ins.level}>{ins.text}</InsightRow>
+                        ))
+                    )}
+                </Card>
+            </TwoCol>
+
+            <Card>
+                <CardTitle>Strike by Distance — front monthly</CardTitle>
+                <Table>
+                    <thead>
+                        <tr>
+                            <th>Distance</th>
+                            <th>Put Strike</th>
+                            <th>Put Δ</th>
+                            <th>Put Premium</th>
+                            <th>Put Volume</th>
+                            <th>Call Strike</th>
+                            <th>Call Δ</th>
+                            <th>Call Premium</th>
+                            <th>Call Volume</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {snapshot.byDistance.map((row) => (
+                            <tr key={row.distancePct}>
+                                <td><DistChip>±{row.distancePct}%</DistChip></td>
+                                <td>{row.put ? fmtMoney(row.put.strike) : '–'}</td>
+                                <td>{fmtNum(row.put?.delta, 2)}</td>
+                                <td>{row.put ? fmtMoney(row.put.premium) : '–'}</td>
+                                <td>{row.put ? row.put.volume.toLocaleString() : '–'}</td>
+                                <td>{row.call ? fmtMoney(row.call.strike) : '–'}</td>
+                                <td>{fmtNum(row.call?.delta, 2)}</td>
+                                <td>{row.call ? fmtMoney(row.call.premium) : '–'}</td>
+                                <td>{row.call ? row.call.volume.toLocaleString() : '–'}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </Table>
+            </Card>
+
+            {!skew_hasFmpKeyHint() && (
+                <IonNote color="medium" style={{ display: 'block', textAlign: 'center', fontSize: 12 }}>
+                    Tip: add VITE_FMP_API_KEY to .env.local to populate the full fundamentals row when you need it.
+                </IonNote>
+            )}
         </>
     );
 };
+
+// Tiny helper just so the ".env" hint above renders without requiring the
+// service handle in SnapshotView.
+function skew_hasFmpKeyHint(): boolean {
+    return Boolean((import.meta.env as Record<string, string | undefined>).VITE_FMP_API_KEY);
+}

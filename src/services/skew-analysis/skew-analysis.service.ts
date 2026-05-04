@@ -202,6 +202,7 @@ function processOptions(raw: IPolygonOptionSnapshot[], stockPrice: number | null
         const record: IProcessedOption = {
             strike,
             delta: opt.greeks?.delta ?? null,
+            gamma: opt.greeks?.gamma ?? null,
             iv: iv ?? null,
             premium: extractPremium(opt),
             type,
@@ -439,6 +440,7 @@ function buildStrikesByExpiration(byExp: Map<string, IExpirationGroup>): Record<
     const out: Record<string, IStrikeRow[]> = {};
     for (const [exp, group] of byExp.entries()) {
         const rows: IStrikeRow[] = [];
+        const dte = daysToExpiration(exp);
         for (const o of group.puts) {
             rows.push({
                 strike: o.strike,
@@ -446,8 +448,11 @@ function buildStrikesByExpiration(byExp: Map<string, IExpirationGroup>): Record<
                 premium: o.premium,
                 iv: o.iv,
                 delta: o.delta,
+                gamma: o.gamma,
                 volume: o.volume,
                 openInterest: o.openInterest,
+                expiration: exp,
+                dte,
             });
         }
         for (const o of group.calls) {
@@ -457,8 +462,11 @@ function buildStrikesByExpiration(byExp: Map<string, IExpirationGroup>): Record<
                 premium: o.premium,
                 iv: o.iv,
                 delta: o.delta,
+                gamma: o.gamma,
                 volume: o.volume,
                 openInterest: o.openInterest,
+                expiration: exp,
+                dte,
             });
         }
         out[exp] = rows;

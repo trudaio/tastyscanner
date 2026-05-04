@@ -22,7 +22,8 @@ const Svg = styled.svg`
   width: 100%;
   height: auto;
   display: block;
-  background: var(--ion-color-light);
+  background: #1a1a24;
+  border: 1px solid #2a2a3a;
   border-radius: 8px;
 `;
 
@@ -44,10 +45,10 @@ const TooltipBox = styled.div`
 const Legend = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 8px;
+  gap: 14px;
+  margin-top: 12px;
   font-size: 12px;
-  color: var(--ion-color-medium);
+  color: #a0a0b0;
 `;
 
 const LegendDot = styled.span<{ $color: string; $dashed?: boolean }>`
@@ -198,8 +199,8 @@ export const SkewChartComponent: React.FC<IProps> = ({ data }) => {
                 {/* Y-grid */}
                 {yTicks.map((t, i) => (
                     <g key={`yt-${i}`}>
-                        <line x1={PAD_L} x2={VW - PAD_R} y1={t.y} y2={t.y} stroke="#cfd5e0" strokeWidth={1} strokeDasharray="3 3" />
-                        <text x={PAD_L - 8} y={t.y + 4} fontSize={11} fill="#6b7280" textAnchor="end">
+                        <line x1={PAD_L} x2={VW - PAD_R} y1={t.y} y2={t.y} stroke="#2a2a3a" strokeWidth={1} strokeDasharray="3 3" />
+                        <text x={PAD_L - 8} y={t.y + 4} fontSize={11} fill="#a0a0b0" textAnchor="end">
                             {t.v.toFixed(0)}%
                         </text>
                     </g>
@@ -208,8 +209,8 @@ export const SkewChartComponent: React.FC<IProps> = ({ data }) => {
                 {/* X-axis labels */}
                 {xTicks.map((t, i) => (
                     <g key={`xt-${i}`}>
-                        <line x1={t.x} x2={t.x} y1={VH - PAD_B} y2={VH - PAD_B + 4} stroke="#9ca3af" strokeWidth={1} />
-                        <text x={t.x} y={VH - PAD_B + 18} fontSize={11} fill="#6b7280" textAnchor="middle">
+                        <line x1={t.x} x2={t.x} y1={VH - PAD_B} y2={VH - PAD_B + 4} stroke="#606070" strokeWidth={1} />
+                        <text x={t.x} y={VH - PAD_B + 18} fontSize={11} fill="#a0a0b0" textAnchor="middle">
                             {t.label}
                         </text>
                         {data[t.idx].isMonthly && (
@@ -239,7 +240,7 @@ export const SkewChartComponent: React.FC<IProps> = ({ data }) => {
                         x2={xFor(hover.idx)}
                         y1={PAD_T}
                         y2={VH - PAD_B}
-                        stroke="#9ca3af"
+                        stroke="#606070"
                         strokeWidth={1}
                         strokeDasharray="2 3"
                     />

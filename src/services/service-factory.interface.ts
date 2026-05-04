@@ -18,6 +18,9 @@ import type { IDeltaAlertService } from './delta-alert/delta-alert.interface';
 import type { ITechnicalsService } from './technicals/technicals.service.interface';
 import type { IScenarioStudyService } from './scenario-study/scenario-study.interface';
 import type { ITradeJournalService } from './trade-journal/trade-journal.service.interface';
+import type { ISkewAnalysisService } from './skew-analysis/skew-analysis.service.interface';
+import type { ISkewScannerService } from './skew-scanner/skew-scanner.service.interface';
+import type { ISkewWatchlistService } from './skew-watchlist/skew-watchlist.service.interface';
 
 export interface IServiceFactory {
     readonly tickers: ITickersService;
@@ -40,6 +43,9 @@ export interface IServiceFactory {
     readonly technicals: ITechnicalsService;
     readonly scenarioStudy: IScenarioStudyService;
     readonly tradeJournal: ITradeJournalService;
+    readonly skewAnalysis: ISkewAnalysisService;
+    readonly skewScanner: ISkewScannerService;
+    readonly skewWatchlist: ISkewWatchlistService;
     readonly isInitialized: boolean;
     /** Initialize with a broker credentials object (multi-broker). */
     initialize(credentials: IBrokerCredentials): void;

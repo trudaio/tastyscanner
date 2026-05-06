@@ -8,7 +8,7 @@
  */
 
 import type { IBasicTechnicals, IExpectedMove, IPCRatio } from '../../utils/skew-math';
-import type { IFmpFundamentals } from '../api-clients/fmp.client';
+import type { IFmpFundamentals, IHistoricalFinancials } from '../api-clients/fmp.client';
 
 export interface ISkewChartPoint {
     expiration: string;
@@ -149,6 +149,8 @@ export interface ISkewSnapshot {
     fundamentalsTimeSeries: IFundamentalsPoint[];
     /** Snapshot of TTM/profile fundamentals from FMP. null when key missing or fetch failed. */
     fmpFundamentals: IFmpFundamentals | null;
+    /** Annual + quarterly income-statement history for the financials charts. null when unavailable. */
+    historicalFinancials: IHistoricalFinancials | null;
 }
 
 /** One quarter of fundamentals + matched stock price at quarter end. */

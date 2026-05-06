@@ -15,6 +15,7 @@ import { useServices } from '../hooks/use-services.hook';
 import { SkewWatchlistSidebar } from '../components/skew/skew-watchlist-sidebar.component';
 import { SkewCompanyEvaluation } from '../components/skew/skew-company-evaluation.component';
 import { SkewFundamentalsChart } from '../components/skew/skew-fundamentals-chart.component';
+import { SkewFinancialsCharts } from '../components/skew/skew-financials-charts.component';
 import SkewErrorBoundary from '../components/skew/skew-error-boundary.component';
 
 const C = {
@@ -238,6 +239,10 @@ export const CompanyEvaluationPage: React.FC = observer(() => {
                                         />
                                     </SkewErrorBoundary>
                                 </Card>
+
+                                <SkewErrorBoundary fallbackTitle="Financials">
+                                    <SkewFinancialsCharts data={snapshot.historicalFinancials} />
+                                </SkewErrorBoundary>
                             </>
                         )}
 

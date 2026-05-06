@@ -8,7 +8,6 @@ import {
     IonTitle,
     IonToolbar,
     IonSpinner,
-    IonNote,
 } from '@ionic/react';
 import { observer } from 'mobx-react-lite';
 import styled, { createGlobalStyle } from 'styled-components';
@@ -24,7 +23,6 @@ import { SkewByDistanceTable } from '../components/skew/skew-by-distance-table.c
 import { SkewOiByStrikes } from '../components/skew/skew-oi-by-strikes.component';
 import { SkewGexChart } from '../components/skew/skew-gex-chart.component';
 import { SkewVolSurface } from '../components/skew/skew-vol-surface.component';
-import { SkewFundamentalsChart } from '../components/skew/skew-fundamentals-chart.component';
 
 // ── v13-inspired palette ────────────────────────────────────────────────
 const C = {
@@ -361,15 +359,6 @@ function fmtMoney(v: unknown): string {
     return n == null ? '–' : `$${n.toFixed(2)}`;
 }
 
-function fmtMarketCap(v: unknown): string {
-    const n = toNum(v);
-    if (n == null) return '–';
-    if (Math.abs(n) >= 1e12) return `$${(n / 1e12).toFixed(2)}T`;
-    if (Math.abs(n) >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
-    if (Math.abs(n) >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
-    return `$${n.toFixed(0)}`;
-}
-
 export const SkewAnalysisPage: React.FC = observer(() => {
     const services = useServices();
     const skew = services.skewAnalysis;
@@ -594,28 +583,6 @@ const SnapshotView: React.FC<{ snapshot: ISkewSnapshot }> = ({ snapshot }) => {
                 />
             </SkewErrorBoundary>
 
-            {/* ── Company Fundamentals section ──────────────────────── */}
-            <div style={{
-                marginTop: 8,
-                padding: '12px 16px',
-                background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(139, 92, 246, 0.08))',
-                border: '1px solid #2a2a3a',
-                borderRadius: 12,
-            }}>
-                <div style={{ fontSize: 18, fontWeight: 800, color: C.text, marginBottom: 4 }}>📈 Company Fundamentals</div>
-                <div style={{ fontSize: 12, color: C.textDim }}>
-                    Quarterly fundamentals from Polygon — price evolution, EPS, revenue, net income. Most useful for single-name stocks; ETFs typically return no data.
-                </div>
-            </div>
-
-            <Card>
-                <SkewErrorBoundary fallbackTitle="Stock price vs EPS">
-                    <SkewFundamentalsChart
-                        ticker={snapshot.ticker}
-                        points={snapshot.fundamentalsTimeSeries}
-                    />
-                </SkewErrorBoundary>
-            </Card>
 
             <MetricGrid>
                 <MetricCard>
@@ -630,12 +597,7 @@ const SnapshotView: React.FC<{ snapshot: ISkewSnapshot }> = ({ snapshot }) => {
 
             <TwoCol>
                 <Card>
-                    <CardTitle>Technicals + Fundamentals</CardTitle>
-                    {snapshot.fmpFundamentals && (snapshot.fmpFundamentals.companyName || snapshot.fmpFundamentals.sector) && (
-                        <div style={{ fontSize: 12, color: C.textDim, marginBottom: 8 }}>
-                            {snapshot.fmpFundamentals.companyName} {snapshot.fmpFundamentals.sector ? `• ${snapshot.fmpFundamentals.sector}` : ''} {snapshot.fmpFundamentals.industry ? `• ${snapshot.fmpFundamentals.industry}` : ''}
-                        </div>
-                    )}
+                    <CardTitle>Technicals</CardTitle>
                     <Table>
                         <tbody>
                             <tr><td>RSI(14)</td><td>{fmtNum(basicTechnicals.rsi14, 2)}</td></tr>
@@ -646,30 +608,8 @@ const SnapshotView: React.FC<{ snapshot: ISkewSnapshot }> = ({ snapshot }) => {
                             <tr><td>52W Position</td><td>{fmtNum(basicTechnicals.week52RangePct, 0)}%</td></tr>
                             <tr><td>YTD Return</td><td>{fmtPct(basicTechnicals.ytdReturnPct, 1)}</td></tr>
                             <tr><td>QTD Return</td><td>{fmtPct(basicTechnicals.qtdReturnPct, 1)}</td></tr>
-                            {snapshot.fmpFundamentals && (
-                                <>
-                                    <tr style={{ borderTop: `2px solid ${C.border}` }}><td colSpan={2} style={{ paddingTop: 10, color: C.textDim, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Fundamentals (FMP)</td></tr>
-                                    <tr><td>P/E (TTM)</td><td>{fmtNum(snapshot.fmpFundamentals.pe, 2)}</td></tr>
-                                    <tr><td>EPS (TTM proxy)</td><td>{fmtMoney(snapshot.fmpFundamentals.eps)}</td></tr>
-                                    <tr><td>Market Cap</td><td>{fmtMarketCap(snapshot.fmpFundamentals.marketCap)}</td></tr>
-                                    <tr><td>P/S (TTM)</td><td>{fmtNum(snapshot.fmpFundamentals.priceToSales, 2)}</td></tr>
-                                    <tr><td>P/B (TTM)</td><td>{fmtNum(snapshot.fmpFundamentals.priceToBook, 2)}</td></tr>
-                                    <tr><td>ROE (TTM)</td><td>{fmtPct(snapshot.fmpFundamentals.roe, 1)}</td></tr>
-                                    <tr><td>ROIC (TTM)</td><td>{fmtPct(snapshot.fmpFundamentals.roic, 1)}</td></tr>
-                                    <tr><td>LT Debt/Equity</td><td>{fmtNum(snapshot.fmpFundamentals.longTermDebtToEquity, 2)}</td></tr>
-                                    <tr><td>Beta (FMP)</td><td>{fmtNum(snapshot.fmpFundamentals.beta, 2)}</td></tr>
-                                    <tr><td>Dividend / Yield</td><td>{snapshot.fmpFundamentals.dividend != null ? `${fmtMoney(snapshot.fmpFundamentals.dividend)} / ${fmtPct(snapshot.fmpFundamentals.dividendYield, 2)}` : '–'}</td></tr>
-                                    <tr><td>EPS Q/Q growth</td><td>{fmtPct(snapshot.fmpFundamentals.epsGrowthQuarterly, 1)}</td></tr>
-                                    <tr><td>Sales Q/Q growth</td><td>{fmtPct(snapshot.fmpFundamentals.salesGrowthQuarterly, 1)}</td></tr>
-                                </>
-                            )}
                         </tbody>
                     </Table>
-                    {!snapshot.fmpFundamentals && (
-                        <div style={{ marginTop: 10, fontSize: 11, color: C.textMuted }}>
-                            FMP key configured but returned no data — common for ETFs / indices.
-                        </div>
-                    )}
                 </Card>
 
                 <Card>
@@ -695,18 +635,6 @@ const SnapshotView: React.FC<{ snapshot: ISkewSnapshot }> = ({ snapshot }) => {
                     expirations={expirationOptions}
                 />
             </SkewErrorBoundary>
-
-            {!skew_hasFmpKeyHint() && (
-                <IonNote color="medium" style={{ display: 'block', textAlign: 'center', fontSize: 12 }}>
-                    Tip: add VITE_FMP_API_KEY to .env.local to populate the full fundamentals row when you need it.
-                </IonNote>
-            )}
         </>
     );
 };
-
-// Tiny helper just so the ".env" hint above renders without requiring the
-// service handle in SnapshotView.
-function skew_hasFmpKeyHint(): boolean {
-    return Boolean((import.meta.env as Record<string, string | undefined>).VITE_FMP_API_KEY);
-}

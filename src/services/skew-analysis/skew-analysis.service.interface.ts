@@ -8,7 +8,13 @@
  */
 
 import type { IBasicTechnicals, IExpectedMove, IPCRatio } from '../../utils/skew-math';
-import type { IFmpFundamentals } from '../api-clients/fmp.client';
+import type {
+    IFmpFundamentals,
+    IGradeChange,
+    IGradesConsensus,
+    IHistoricalFinancials,
+    IInsiderTrade,
+} from '../api-clients/fmp.client';
 
 export interface ISkewChartPoint {
     expiration: string;
@@ -149,6 +155,14 @@ export interface ISkewSnapshot {
     fundamentalsTimeSeries: IFundamentalsPoint[];
     /** Snapshot of TTM/profile fundamentals from FMP. null when key missing or fetch failed. */
     fmpFundamentals: IFmpFundamentals | null;
+    /** Annual + quarterly income-statement history for the financials charts. null when unavailable. */
+    historicalFinancials: IHistoricalFinancials | null;
+    /** Wall St. Ratings card — current consensus across all covering analysts. null when no coverage. */
+    analystConsensus: IGradesConsensus | null;
+    /** Recent rating-change events feeding the table + 90-day donut. Empty when no coverage. */
+    analystHistory: IGradeChange[];
+    /** Recent Form 4 insider transactions. Empty when none reported. */
+    insiderTrades: IInsiderTrade[];
 }
 
 /** One quarter of fundamentals + matched stock price at quarter end. */
@@ -168,6 +182,18 @@ export interface ISkewAnalysisService {
     errorByTicker: Map<string, string | null>;
 
     loadSnapshot(ticker: string, fromDate: string, toDate: string): Promise<void>;
+
+    /**
+     * Lightweight loader used by the Company Evaluation page. Only fetches
+     * what the fundamentals view needs: FMP profile/quote/ratios + Polygon
+     * stock price + 3y price history (for basic technicals + matching EPS
+     * quarters with prices) + Polygon financials. Skips the heavy options
+     * chain snapshot — keeps Polygon free tier (5 req/min) happy.
+     *
+     * If a full snapshot already exists for this ticker, the existing one is
+     * preserved (we never downgrade richer → lighter).
+     */
+    loadCompanyOnly(ticker: string): Promise<void>;
 
     getSnapshot(ticker: string): ISkewSnapshot | null;
     isLoading(ticker: string): boolean;

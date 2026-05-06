@@ -21,7 +21,13 @@ import {
     type IPolygonAggregateBar,
     type IPolygonFinancials,
 } from '../api-clients/polygon.client';
-import { FmpClient } from '../api-clients/fmp.client';
+import {
+    FmpClient,
+    type IFinancialsPoint,
+    type IGradeChange,
+    type IHistoricalFinancials,
+    type IInsiderTrade,
+} from '../api-clients/fmp.client';
 import {
     extractPremium,
     calculateIVRank,
@@ -88,15 +94,32 @@ export class SkewAnalysisService implements ISkewAnalysisService {
             threeYearsAgo.setDate(threeYearsAgo.getDate() - 365 * 3);
             const threeYearsAgoIso = isoDate(threeYearsAgo);
 
-            const [chainRaw, priceHistory, stockPrice, marketMetrics, fundamentalsRaw, longPriceHistory, fmpFundamentals] = await Promise.all([
+            const [
+                chainRaw,
+                priceHistory,
+                stockPrice,
+                marketMetrics,
+                fundamentalsRaw,
+                annualFinancials,
+                longPriceHistory,
+                fmpFundamentals,
+                analystConsensus,
+                analystHistory,
+                insiderTrades,
+            ] = await Promise.all([
                 this.polygon.getOptionsChainSnapshot(key, fromDate, toDate),
                 this.polygon.getPriceHistory(key, yearAgoIso, todayIsoStr),
                 this.polygon.getStockPrice(key),
                 this.factory.marketDataProvider.getSymbolMetrics(key).catch(() => null),
-                this.polygon.getFinancials(key, 12).catch(() => []),
+                this.polygon.getFinancials(key, 12, 'quarterly').catch(() => []),
+                this.polygon.getFinancials(key, 10, 'annual').catch(() => []),
                 this.polygon.getPriceHistory(key, threeYearsAgoIso, todayIsoStr).catch(() => [] as IPolygonAggregateBar[]),
                 this.fmp.getFundamentals(key).catch(() => null),
+                this.fmp.getGradesConsensus(key).catch(() => null),
+                this.fmp.getGradesHistorical(key, 25).catch(() => [] as IGradeChange[]),
+                this.fmp.getInsiderTrades(key, 30).catch(() => [] as IInsiderTrade[]),
             ]);
+            const historicalFinancials = buildHistoricalFinancials(annualFinancials, fundamentalsRaw);
 
             const fundamentalsTimeSeries = buildFundamentalsTimeSeries(fundamentalsRaw, longPriceHistory);
 
@@ -160,6 +183,116 @@ export class SkewAnalysisService implements ISkewAnalysisService {
                 summary,
                 fundamentalsTimeSeries,
                 fmpFundamentals,
+                historicalFinancials,
+                analystConsensus,
+                analystHistory,
+                insiderTrades,
+            };
+
+            runInAction(() => {
+                this.snapshotByTicker.set(key, snapshot);
+                this.loadingByTicker.set(key, false);
+            });
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : 'Unknown error';
+            runInAction(() => {
+                this.loadingByTicker.set(key, false);
+                this.errorByTicker.set(key, msg);
+            });
+        }
+    }
+
+    /**
+     * Lightweight company-only loader. Hits ~3 Polygon endpoints + 5 FMP
+     * endpoints (FMP has 250/day rate limit, no concern there). Designed to
+     * stay under Polygon free tier 5 req/min.
+     *
+     * Preserves an existing full snapshot if one is already cached for this
+     * ticker — we never downgrade to a lighter snapshot.
+     */
+    async loadCompanyOnly(ticker: string): Promise<void> {
+        const key = ticker.toUpperCase();
+
+        const existing = this.snapshotByTicker.get(key);
+        if (existing && existing.chartData.length > 0) {
+            // Full snapshot exists — nothing to do, render uses the same data.
+            return;
+        }
+
+        runInAction(() => {
+            this.loadingByTicker.set(key, true);
+            this.errorByTicker.set(key, null);
+        });
+        try {
+            if (!this.polygon.isConfigured) {
+                throw new Error('Polygon API key missing — set VITE_POLYGON_API_KEY');
+            }
+
+            const todayIsoStr = isoDate(new Date());
+            const threeYearsAgo = new Date();
+            threeYearsAgo.setDate(threeYearsAgo.getDate() - 365 * 3);
+            const threeYearsAgoIso = isoDate(threeYearsAgo);
+
+            const [
+                stockPrice,
+                longPriceHistory,
+                fundamentalsRaw,
+                annualFinancials,
+                fmpFundamentals,
+                analystConsensus,
+                analystHistory,
+                insiderTrades,
+            ] = await Promise.all([
+                this.polygon.getStockPrice(key),
+                this.polygon.getPriceHistory(key, threeYearsAgoIso, todayIsoStr).catch(() => [] as IPolygonAggregateBar[]),
+                this.polygon.getFinancials(key, 12, 'quarterly').catch(() => []),
+                this.polygon.getFinancials(key, 10, 'annual').catch(() => []),
+                this.fmp.getFundamentals(key).catch(() => null),
+                this.fmp.getGradesConsensus(key).catch(() => null),
+                this.fmp.getGradesHistorical(key, 25).catch(() => [] as IGradeChange[]),
+                this.fmp.getInsiderTrades(key, 30).catch(() => [] as IInsiderTrade[]),
+            ]);
+            const historicalFinancials = buildHistoricalFinancials(annualFinancials, fundamentalsRaw);
+
+            const fundamentalsTimeSeries = buildFundamentalsTimeSeries(fundamentalsRaw, longPriceHistory);
+            const basicTechnicals = stockPrice
+                ? calculateBasicTechnicals(longPriceHistory, stockPrice)
+                : calculateBasicTechnicals(longPriceHistory, longPriceHistory[longPriceHistory.length - 1]?.c ?? 0);
+
+            // Empty placeholders for options-related fields — Company Evaluation
+            // page doesn't read them, but the shared snapshot type requires them.
+            const snapshot: ISkewSnapshot = {
+                ticker: key,
+                fetchedAt: Date.now(),
+                fromDate: threeYearsAgoIso,
+                toDate: todayIsoStr,
+                stockPrice: toNumOrNull(stockPrice),
+                chartData: [],
+                ivMetrics: { ivRank: null, ivPercentile: null, ivIndex: null, beta: null },
+                maxPain: null,
+                expectedMove: null,
+                putCallRatio: null,
+                byDistance: [],
+                basicTechnicals,
+                suggestedTrades: { assessment: 'Unknown', insights: [] },
+                expirationDetails: [],
+                strikesByExpiration: {},
+                summary: {
+                    stockPrice: toNumOrNull(stockPrice),
+                    avgSkewPct10: null,
+                    termStructure: 'unknown',
+                    maxPain: null,
+                    expectedMove: null,
+                    putCallRatio: null,
+                    totalPuts60d: 0,
+                    totalCalls60d: 0,
+                },
+                fundamentalsTimeSeries,
+                fmpFundamentals,
+                historicalFinancials,
+                analystConsensus,
+                analystHistory,
+                insiderTrades,
             };
 
             runInAction(() => {
@@ -555,6 +688,42 @@ function buildFundamentalsTimeSeries(
             netIncome: f.netIncome,
         };
     });
+}
+
+/**
+ * Build the {annual, quarterly} structure consumed by SkewFinancialsCharts.
+ * Both arrays are returned oldest → newest so bars render left-to-right.
+ */
+function buildHistoricalFinancials(
+    annual: IPolygonFinancials[],
+    quarterly: IPolygonFinancials[],
+): IHistoricalFinancials | null {
+    const a = annual
+        .filter((r) => r.periodEndDate)
+        .map((r) => polygonToFinancialsPoint(r, 'annual'))
+        .sort((x, y) => x.periodEndDate.localeCompare(y.periodEndDate));
+    const q = quarterly
+        .filter((r) => r.periodEndDate)
+        .map((r) => polygonToFinancialsPoint(r, 'quarter'))
+        .sort((x, y) => x.periodEndDate.localeCompare(y.periodEndDate));
+    if (a.length === 0 && q.length === 0) return null;
+    return { annual: a, quarterly: q };
+}
+
+function polygonToFinancialsPoint(r: IPolygonFinancials, kind: 'annual' | 'quarter'): IFinancialsPoint {
+    const yr = r.fiscalYear || (r.periodEndDate.length >= 4 ? r.periodEndDate.slice(0, 4) : '');
+    const fp = r.fiscalPeriod || '';
+    const fiscalPeriod = kind === 'annual'
+        ? (yr || fp)
+        : (fp ? `${fp.toUpperCase()} ${yr}`.trim() : yr);
+    return {
+        fiscalPeriod,
+        periodEndDate: r.periodEndDate,
+        eps: r.eps,
+        epsDiluted: r.epsDiluted,
+        revenue: r.revenue,
+        sharesOutstanding: r.basicAverageShares,
+    };
 }
 
 function nearestClose(bars: IPolygonAggregateBar[], targetMs: number): number | null {

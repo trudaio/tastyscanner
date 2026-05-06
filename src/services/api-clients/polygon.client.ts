@@ -58,6 +58,8 @@ export interface IPolygonFinancials {
     epsDiluted: number | null;
     revenue: number | null;
     netIncome: number | null;
+    basicAverageShares: number | null;
+    dilutedAverageShares: number | null;
 }
 
 interface IPolygonFinancialsResponse {
@@ -72,6 +74,8 @@ interface IPolygonFinancialsResponse {
                 diluted_earnings_per_share?: { value?: number };
                 revenues?: { value?: number };
                 net_income_loss?: { value?: number };
+                basic_average_shares?: { value?: number };
+                diluted_average_shares?: { value?: number };
             };
         };
     }>;
@@ -138,16 +142,17 @@ export class PolygonClient {
     }
 
     /**
-     * Quarterly financials. Returns most-recent first; caller should sort if a
+     * Income-statement history. Returns most-recent first; caller should sort if a
      * chronological order is desired.
      */
     async getFinancials(
         ticker: string,
         limit = 12,
+        timeframe: 'quarterly' | 'annual' = 'quarterly',
         signal?: AbortSignal,
     ): Promise<IPolygonFinancials[]> {
         if (!this.isConfigured) return [];
-        const url = `${this.baseUrl}/vX/reference/financials?ticker=${encodeURIComponent(ticker)}&timeframe=quarterly&order=desc&limit=${limit}&apiKey=${this.apiKey}`;
+        const url = `${this.baseUrl}/vX/reference/financials?ticker=${encodeURIComponent(ticker)}&timeframe=${timeframe}&order=desc&limit=${limit}&apiKey=${this.apiKey}`;
         const res = await fetch(url, { signal });
         if (!res.ok) {
             if (res.status === 429) throw new PolygonRateLimitError('Polygon rate limit hit (429)');
@@ -165,6 +170,8 @@ export class PolygonClient {
                 epsDiluted: inc?.diluted_earnings_per_share?.value ?? null,
                 revenue: inc?.revenues?.value ?? null,
                 netIncome: inc?.net_income_loss?.value ?? null,
+                basicAverageShares: inc?.basic_average_shares?.value ?? null,
+                dilutedAverageShares: inc?.diluted_average_shares?.value ?? null,
             };
         });
     }

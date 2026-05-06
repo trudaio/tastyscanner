@@ -148,8 +148,24 @@ interface IFmpIncomeStatement {
     netIncome?: number;
     period?: string;
     date?: string;
+    calendarYear?: string | number;
     weightedAverageShsOut?: number;
     weightedAverageShsOutDil?: number;
+}
+
+/** One annual or quarterly period of income-statement data, normalized for charts. */
+export interface IFinancialsPoint {
+    fiscalPeriod: string;       // "2024" or "Q3 2024"
+    periodEndDate: string;      // ISO date
+    eps: number | null;
+    epsDiluted: number | null;
+    revenue: number | null;             // raw $
+    sharesOutstanding: number | null;   // raw count (basic)
+}
+
+export interface IHistoricalFinancials {
+    annual: IFinancialsPoint[];     // oldest → newest
+    quarterly: IFinancialsPoint[];  // oldest → newest
 }
 
 async function fetchWithTimeout<T>(url: string): Promise<T | null> {
@@ -302,5 +318,8 @@ export class FmpClient {
             earningsYield: keyMetrics?.earningsYieldTTM != null ? keyMetrics.earningsYieldTTM * 100 : null,
         };
     }
+
+    // (Free-tier FMP caps `limit` at 5 for income-statement, so we source the
+    // historical financials from Polygon instead — see SkewAnalysisService.)
 }
 

@@ -8,7 +8,13 @@
  */
 
 import type { IBasicTechnicals, IExpectedMove, IPCRatio } from '../../utils/skew-math';
-import type { IFmpFundamentals, IHistoricalFinancials } from '../api-clients/fmp.client';
+import type {
+    IFmpFundamentals,
+    IGradeChange,
+    IGradesConsensus,
+    IHistoricalFinancials,
+    IInsiderTrade,
+} from '../api-clients/fmp.client';
 
 export interface ISkewChartPoint {
     expiration: string;
@@ -151,6 +157,12 @@ export interface ISkewSnapshot {
     fmpFundamentals: IFmpFundamentals | null;
     /** Annual + quarterly income-statement history for the financials charts. null when unavailable. */
     historicalFinancials: IHistoricalFinancials | null;
+    /** Wall St. Ratings card — current consensus across all covering analysts. null when no coverage. */
+    analystConsensus: IGradesConsensus | null;
+    /** Recent rating-change events feeding the table + 90-day donut. Empty when no coverage. */
+    analystHistory: IGradeChange[];
+    /** Recent Form 4 insider transactions. Empty when none reported. */
+    insiderTrades: IInsiderTrade[];
 }
 
 /** One quarter of fundamentals + matched stock price at quarter end. */

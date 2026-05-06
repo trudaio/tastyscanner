@@ -21,7 +21,13 @@ import {
     type IPolygonAggregateBar,
     type IPolygonFinancials,
 } from '../api-clients/polygon.client';
-import { FmpClient, type IFinancialsPoint, type IHistoricalFinancials } from '../api-clients/fmp.client';
+import {
+    FmpClient,
+    type IFinancialsPoint,
+    type IGradeChange,
+    type IHistoricalFinancials,
+    type IInsiderTrade,
+} from '../api-clients/fmp.client';
 import {
     extractPremium,
     calculateIVRank,
@@ -88,7 +94,19 @@ export class SkewAnalysisService implements ISkewAnalysisService {
             threeYearsAgo.setDate(threeYearsAgo.getDate() - 365 * 3);
             const threeYearsAgoIso = isoDate(threeYearsAgo);
 
-            const [chainRaw, priceHistory, stockPrice, marketMetrics, fundamentalsRaw, annualFinancials, longPriceHistory, fmpFundamentals] = await Promise.all([
+            const [
+                chainRaw,
+                priceHistory,
+                stockPrice,
+                marketMetrics,
+                fundamentalsRaw,
+                annualFinancials,
+                longPriceHistory,
+                fmpFundamentals,
+                analystConsensus,
+                analystHistory,
+                insiderTrades,
+            ] = await Promise.all([
                 this.polygon.getOptionsChainSnapshot(key, fromDate, toDate),
                 this.polygon.getPriceHistory(key, yearAgoIso, todayIsoStr),
                 this.polygon.getStockPrice(key),
@@ -97,6 +115,9 @@ export class SkewAnalysisService implements ISkewAnalysisService {
                 this.polygon.getFinancials(key, 10, 'annual').catch(() => []),
                 this.polygon.getPriceHistory(key, threeYearsAgoIso, todayIsoStr).catch(() => [] as IPolygonAggregateBar[]),
                 this.fmp.getFundamentals(key).catch(() => null),
+                this.fmp.getGradesConsensus(key).catch(() => null),
+                this.fmp.getGradesHistorical(key, 25).catch(() => [] as IGradeChange[]),
+                this.fmp.getInsiderTrades(key, 30).catch(() => [] as IInsiderTrade[]),
             ]);
             const historicalFinancials = buildHistoricalFinancials(annualFinancials, fundamentalsRaw);
 
@@ -163,6 +184,9 @@ export class SkewAnalysisService implements ISkewAnalysisService {
                 fundamentalsTimeSeries,
                 fmpFundamentals,
                 historicalFinancials,
+                analystConsensus,
+                analystHistory,
+                insiderTrades,
             };
 
             runInAction(() => {
@@ -209,12 +233,24 @@ export class SkewAnalysisService implements ISkewAnalysisService {
             threeYearsAgo.setDate(threeYearsAgo.getDate() - 365 * 3);
             const threeYearsAgoIso = isoDate(threeYearsAgo);
 
-            const [stockPrice, longPriceHistory, fundamentalsRaw, annualFinancials, fmpFundamentals] = await Promise.all([
+            const [
+                stockPrice,
+                longPriceHistory,
+                fundamentalsRaw,
+                annualFinancials,
+                fmpFundamentals,
+                analystConsensus,
+                analystHistory,
+                insiderTrades,
+            ] = await Promise.all([
                 this.polygon.getStockPrice(key),
                 this.polygon.getPriceHistory(key, threeYearsAgoIso, todayIsoStr).catch(() => [] as IPolygonAggregateBar[]),
                 this.polygon.getFinancials(key, 12, 'quarterly').catch(() => []),
                 this.polygon.getFinancials(key, 10, 'annual').catch(() => []),
                 this.fmp.getFundamentals(key).catch(() => null),
+                this.fmp.getGradesConsensus(key).catch(() => null),
+                this.fmp.getGradesHistorical(key, 25).catch(() => [] as IGradeChange[]),
+                this.fmp.getInsiderTrades(key, 30).catch(() => [] as IInsiderTrade[]),
             ]);
             const historicalFinancials = buildHistoricalFinancials(annualFinancials, fundamentalsRaw);
 
@@ -254,6 +290,9 @@ export class SkewAnalysisService implements ISkewAnalysisService {
                 fundamentalsTimeSeries,
                 fmpFundamentals,
                 historicalFinancials,
+                analystConsensus,
+                analystHistory,
+                insiderTrades,
             };
 
             runInAction(() => {

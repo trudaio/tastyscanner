@@ -17,6 +17,7 @@ import { SkewCompanyEvaluation } from '../components/skew/skew-company-evaluatio
 import { SkewFundamentalsChart } from '../components/skew/skew-fundamentals-chart.component';
 import { SkewFinancialsCharts } from '../components/skew/skew-financials-charts.component';
 import SkewErrorBoundary from '../components/skew/skew-error-boundary.component';
+import { AnalystInsiderSection } from '../components/analyst-insider/analyst-insider.section';
 
 const C = {
     bgPage: '#0a0a0f',
@@ -242,6 +243,14 @@ export const CompanyEvaluationPage: React.FC = observer(() => {
 
                                 <SkewErrorBoundary fallbackTitle="Financials">
                                     <SkewFinancialsCharts data={snapshot.historicalFinancials} />
+                                </SkewErrorBoundary>
+
+                                <SkewErrorBoundary fallbackTitle="Analyst & Insider Activity">
+                                    <AnalystInsiderSection
+                                        consensus={snapshot.analystConsensus}
+                                        history={snapshot.analystHistory}
+                                        insiderTrades={snapshot.insiderTrades}
+                                    />
                                 </SkewErrorBoundary>
                             </>
                         )}

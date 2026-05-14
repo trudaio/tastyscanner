@@ -1,494 +1,472 @@
-import { initializeApp, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import TastytradeClient, { MarketDataSubscriptionType } from '@tastytrade/api';
+/**
+ * Guvid Agent — Morning Scan (10:30 AM ET)
+ * Uses @tastytrade/api v6 + firebase-admin
+ */
 
-// ─── Firebase init ────────────────────────────────────────────────────────────
-const sa = JSON.parse(process.env.FIREBASE_SA || '{}');
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+
+const { initializeApp, cert } = require('firebase-admin/app');
+const { getFirestore } = require('firebase-admin/firestore');
+const TastyTradeClient = require('@tastytrade/api').default;
+const { MarketDataSubscriptionType } = require('@tastytrade/api');
+
+// ── Firebase init ─────────────────────────────────────────────────────────────
+const sa = require(process.env.GOOGLE_APPLICATION_CREDENTIALS || '/tmp/firebase-sa.json');
 initializeApp({ credential: cert(sa) });
 const db = getFirestore();
 
-const TODAY = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const today = () => new Date().toISOString().slice(0, 10);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-// ─── Firestore helpers ────────────────────────────────────────────────────────
-async function getTastyCredentials() {
-  const usersSnap = await db.collection('users').get();
-  if (usersSnap.empty) throw new Error('No users found in Firestore');
-
-  for (const userDoc of usersSnap.docs) {
-    const accountsSnap = await db
-      .collection('users')
-      .doc(userDoc.id)
-      .collection('brokerAccounts')
-      .get();
-
-    for (const acctDoc of accountsSnap.docs) {
-      const data = acctDoc.data();
-      if (data.credentials?.clientSecret && data.credentials?.refreshToken) {
-        console.log(`[Firestore] Found credentials for user ${userDoc.id}`);
-        return {
-          clientSecret: data.credentials.clientSecret,
-          refreshToken: data.credentials.refreshToken,
-        };
-      }
-    }
-  }
-  throw new Error('No TastyTrade credentials found in Firestore');
-}
-
-// ─── Streamer helpers ─────────────────────────────────────────────────────────
-function collectStreamData(client, symbols, waitMs = 12000) {
-  return new Promise((resolve) => {
-    const quotes = {};
-    const greeks = {};
-
-    const handler = (records) => {
-      for (const r of records) {
-        if (r.eventType === 'Quote') quotes[r.eventSymbol] = r;
-        else if (r.eventType === 'Greeks') greeks[r.eventSymbol] = r;
-      }
-    };
-
-    const removeListener = client.quoteStreamer.addEventListener(handler);
-
-    client.quoteStreamer.subscribe(symbols, [
-      MarketDataSubscriptionType.Quote,
-      MarketDataSubscriptionType.Greeks,
-    ]);
-
-    setTimeout(() => {
-      removeListener();
-      client.quoteStreamer.unsubscribe(symbols);
-      resolve({ quotes, greeks });
-    }, waitMs);
-  });
-}
-
-// ─── IC Profiles ─────────────────────────────────────────────────────────────
+// ── Profiles ──────────────────────────────────────────────────────────────────
 const PROFILES = {
   conservative: {
-    deltaMin: 11, deltaMax: 16, dteMin: 30, dteMax: 47,
-    wings: 10, minPOP: 80, maxRR: 4, minCredit: 1.0,
-    weights: { pop: 0.70, ev: 0.20, alpha: 0.10 },
+    deltaMin: 0.11, deltaMax: 0.16,
+    dteMin: 30, dteMax: 47,
+    wings: 10, minPOP: 80,
+    score: (pop, ev, alpha) => pop * 0.70 + ev * 0.20 + alpha * 0.10,
   },
   neutral: {
-    deltaMin: 11, deltaMax: 24, dteMin: 19, dteMax: 47,
-    wings: 10, minPOP: 60, maxRR: 4, minCredit: 1.0,
-    weights: { pop: 0.60, ev: 0.25, alpha: 0.15 },
+    deltaMin: 0.11, deltaMax: 0.24,
+    dteMin: 19, dteMax: 47,
+    wings: 10, minPOP: 60,
+    score: (pop, ev, alpha) => pop * 0.60 + ev * 0.25 + alpha * 0.15,
   },
   aggressive: {
-    deltaMin: 15, deltaMax: 24, dteMin: 19, dteMax: 35,
-    wings: 5, minPOP: 60, maxRR: 4, minCredit: 1.0,
-    weights: { pop: 0.40, ev: 0.35, alpha: 0.25 },
+    deltaMin: 0.15, deltaMax: 0.24,
+    dteMin: 19, dteMax: 35,
+    wings: 5, minPOP: 60,
+    score: (pop, ev, alpha) => pop * 0.40 + ev * 0.35 + alpha * 0.25,
   },
 };
 
-function calcDTE(expirationDate) {
-  const exp = new Date(expirationDate + 'T16:00:00-05:00');
-  return Math.round((exp - Date.now()) / 86400000);
-}
+const MAX_RR = 4;
+const MIN_CREDIT = 1.0;
+const SPREAD_PCT = 0.08;
 
-function buildICs(options, expirationDate, profile, underlyingPrice) {
-  const d = calcDTE(expirationDate);
-  if (d < profile.dteMin || d > profile.dteMax) return [];
+// ── Read TastyTrade credentials from Firestore ────────────────────────────────
+async function readCredentials() {
+  console.log('\n📋 Reading TastyTrade credentials from Firestore...');
+  const usersSnap = await db.collection('users').get();
+  if (usersSnap.empty) throw new Error('No users in Firestore');
 
-  const puts = options.filter(o => o.optionType === 'P' && o.delta != null && o.mid > 0);
-  const calls = options.filter(o => o.optionType === 'C' && o.delta != null && o.mid > 0);
-
-  // Filter by delta range (delta 0-1, abs value scaled to 0-100)
-  const validPuts = puts.filter(o => {
-    const absDelta = Math.abs(o.delta) * 100;
-    return absDelta >= profile.deltaMin && absDelta <= profile.deltaMax;
-  });
-  const validCalls = calls.filter(o => {
-    const absDelta = Math.abs(o.delta) * 100;
-    return absDelta >= profile.deltaMin && absDelta <= profile.deltaMax;
-  });
-
-  if (!validPuts.length || !validCalls.length) return [];
-
-  // Group by abs(round(delta*100)), keep highest mid
-  const putMap = new Map();
-  for (const p of validPuts) {
-    const key = Math.round(Math.abs(p.delta) * 100);
-    if (!putMap.has(key) || p.mid > putMap.get(key).mid) putMap.set(key, p);
-  }
-  const callMap = new Map();
-  for (const c of validCalls) {
-    const key = Math.round(Math.abs(c.delta) * 100);
-    if (!callMap.has(key) || c.mid > callMap.get(key).mid) callMap.set(key, c);
-  }
-
-  // Sort keys descending, pair by index (symmetric delta pairing)
-  const putKeys = [...putMap.keys()].sort((a, b) => b - a);
-  const callKeys = [...callMap.keys()].sort((a, b) => b - a);
-  const pairCount = Math.min(putKeys.length, callKeys.length);
-
-  const candidates = [];
-
-  for (let i = 0; i < pairCount; i++) {
-    const stoP = putMap.get(putKeys[i]);
-    const stoC = callMap.get(callKeys[i]);
-
-    // 8%/leg spread check
-    const stoPStrike = parseFloat(stoP.strikePrice);
-    const stoCStrike = parseFloat(stoC.strikePrice);
-    if (Math.abs(stoPStrike - underlyingPrice) / underlyingPrice > 0.08) continue;
-    if (Math.abs(stoCStrike - underlyingPrice) / underlyingPrice > 0.08) continue;
-
-    // Find BTO legs at wing width
-    const btoPTarget = stoPStrike - profile.wings;
-    const btoCTarget = stoCStrike + profile.wings;
-
-    const btoP = puts.reduce((best, o) => {
-      const s = parseFloat(o.strikePrice);
-      if (!best) return o;
-      return Math.abs(s - btoPTarget) < Math.abs(parseFloat(best.strikePrice) - btoPTarget) ? o : best;
-    }, null);
-    const btoC = calls.reduce((best, o) => {
-      const s = parseFloat(o.strikePrice);
-      if (!best) return o;
-      return Math.abs(s - btoCTarget) < Math.abs(parseFloat(best.strikePrice) - btoCTarget) ? o : best;
-    }, null);
-
-    if (!btoP || !btoC) continue;
-
-    const credit = stoP.mid + stoC.mid - btoP.mid - btoC.mid;
-    if (credit < profile.minCredit) continue;
-
-    const actualWings = Math.min(
-      Math.abs(stoPStrike - parseFloat(btoP.strikePrice)),
-      Math.abs(parseFloat(btoC.strikePrice) - stoCStrike)
-    );
-    const rr = (actualWings - credit) / credit;
-    if (rr > profile.maxRR) continue;
-
-    // POP = 100 - max(STO put delta %, STO call delta %)
-    const putBEDelta = Math.abs(stoP.delta) * 100;
-    const callBEDelta = Math.abs(stoC.delta) * 100;
-    const pop = 100 - Math.max(putBEDelta, callBEDelta);
-    if (pop < profile.minPOP) continue;
-
-    // EV
-    const ev = credit * (pop / 100) - (actualWings - credit) * (1 - pop / 100);
-
-    // Alpha: theta/vega ratio as IV proxy
-    const theta = (stoP.theta || 0) + (stoC.theta || 0) - (btoP.theta || 0) - (btoC.theta || 0);
-    const vega = Math.abs((stoP.vega || 0) + (stoC.vega || 0) - (btoP.vega || 0) - (btoC.vega || 0));
-    const alpha = vega > 0 ? Math.min(100, Math.abs(theta / vega) * 100) : 0;
-
-    const { pop: wp, ev: we, alpha: wa } = profile.weights;
-    const score = (pop / 100) * wp * 100 + ev * we + alpha * wa;
-
-    candidates.push({
-      expiration: expirationDate,
-      dte: d,
-      stoP: { symbol: stoP.streamerSymbol, strike: stoPStrike, mid: Math.round(stoP.mid * 100) / 100, delta: stoP.delta },
-      btoP: { symbol: btoP.streamerSymbol, strike: parseFloat(btoP.strikePrice), mid: Math.round(btoP.mid * 100) / 100, delta: btoP.delta },
-      stoC: { symbol: stoC.streamerSymbol, strike: stoCStrike, mid: Math.round(stoC.mid * 100) / 100, delta: stoC.delta },
-      btoC: { symbol: btoC.streamerSymbol, strike: parseFloat(btoC.strikePrice), mid: Math.round(btoC.mid * 100) / 100, delta: btoC.delta },
-      credit: Math.round(credit * 100) / 100,
-      rr: Math.round(rr * 100) / 100,
-      pop: Math.round(pop * 100) / 100,
-      ev: Math.round(ev * 100) / 100,
-      alpha: Math.round(alpha * 100) / 100,
-      wings: actualWings,
-      score: Math.round(score * 100) / 100,
-      theta: Math.round(theta * 100) / 100,
-    });
-  }
-
-  return candidates.sort((a, b) => b.score - a.score);
-}
-
-// ─── Scan one ticker across all profiles ─────────────────────────────────────
-async function scanTicker(client, ticker, underlyingPrice) {
-  console.log(`\n[Scan] ${ticker} @ $${underlyingPrice.toFixed(2)}`);
-  const profileResults = { conservative: [], neutral: [], aggressive: [] };
-
-  let chainData;
-  try {
-    chainData = await client.instrumentsService.getNestedOptionChain(ticker);
-  } catch (e) {
-    console.error(`[Scan] Failed to get chain for ${ticker}: ${e.message}`);
-    return profileResults;
-  }
-
-  // Flatten all expirations across all chain entries
-  const expirations = [];
-  for (const chain of chainData) {
-    for (const exp of (chain.expirations || [])) {
-      expirations.push(exp);
+  for (const userDoc of usersSnap.docs) {
+    const brokerSnap = await db
+      .collection('users').doc(userDoc.id)
+      .collection('brokerAccounts').limit(1).get();
+    if (brokerSnap.empty) continue;
+    const data = brokerSnap.docs[0].data();
+    const creds = data?.credentials;
+    if (creds?.clientSecret && creds?.refreshToken) {
+      console.log(`   ✓ Credentials found for user ${userDoc.id}`);
+      return { userId: userDoc.id, clientSecret: creds.clientSecret, refreshToken: creds.refreshToken };
     }
   }
-
-  // Filter to DTE range covering all profiles (19-47)
-  const validExps = expirations.filter(exp => {
-    const d = calcDTE(exp['expiration-date']);
-    return d >= 19 && d <= 47;
-  });
-
-  console.log(`  ${validExps.length} valid expirations (DTE 19-47)`);
-
-  for (const exp of validExps) {
-    const expDate = exp['expiration-date'];
-    const d = calcDTE(expDate);
-    const strikes = exp['strikes'] || [];
-
-    // Collect streamer symbols
-    const streamerSymbols = strikes.flatMap(s => [
-      s['call-streamer-symbol'],
-      s['put-streamer-symbol'],
-    ].filter(Boolean));
-
-    if (!streamerSymbols.length) continue;
-
-    console.log(`  [${expDate}] DTE=${d}, ${streamerSymbols.length} symbols — subscribing...`);
-
-    const { quotes, greeks } = await collectStreamData(client, streamerSymbols, 12000);
-
-    const gotQuotes = Object.keys(quotes).length;
-    const gotGreeks = Object.keys(greeks).length;
-    console.log(`  [${expDate}] Received: ${gotQuotes} quotes, ${gotGreeks} greeks`);
-
-    if (!gotQuotes && !gotGreeks) continue;
-
-    // Build enriched options list
-    const options = strikes.flatMap(s => {
-      const result = [];
-      for (const [type, sym] of [['C', s['call-streamer-symbol']], ['P', s['put-streamer-symbol']]]) {
-        if (!sym) continue;
-        const q = quotes[sym] || {};
-        const g = greeks[sym] || {};
-        const bid = q.bidPrice ?? 0;
-        const ask = q.askPrice ?? 0;
-        const mid = (bid + ask) / 2;
-        if (mid <= 0) continue;
-        result.push({
-          optionType: type,
-          strikePrice: s['strike-price'],
-          streamerSymbol: sym,
-          mid,
-          delta: g.delta ?? null,
-          theta: g.theta ?? null,
-          vega: g.vega ?? null,
-          gamma: g.gamma ?? null,
-        });
-      }
-      return result;
-    }).filter(o => o.delta !== null);
-
-    if (!options.length) continue;
-
-    // Run each profile
-    for (const [profileName, profile] of Object.entries(PROFILES)) {
-      const ics = buildICs(options, expDate, profile, underlyingPrice);
-      if (ics.length > 0) {
-        const best = ics[0];
-        console.log(`  [${expDate}/${profileName}] Best: credit=$${best.credit} POP=${best.pop}% RR=${best.rr} score=${best.score}`);
-        profileResults[profileName].push(best);
-      }
-    }
-  }
-
-  // Sort each profile by score
-  for (const p of Object.keys(profileResults)) {
-    profileResults[p].sort((a, b) => b.score - a.score);
-  }
-
-  return profileResults;
+  throw new Error('No valid TastyTrade credentials found in Firestore');
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
-async function main() {
-  console.log(`\n${'='.repeat(60)}`);
-  console.log(`GUVID MORNING SCAN — ${TODAY} — 10:30 AM ET`);
-  console.log(`${'='.repeat(60)}\n`);
-
-  // Step 1: Credentials
-  console.log('[Step 1] Reading TastyTrade credentials from Firestore...');
-  const creds = await getTastyCredentials();
-
-  // Step 2: Connect
-  console.log('[Step 2] Connecting to TastyTrade...');
-  const client = new TastytradeClient({
-    ...TastytradeClient.ProdConfig,
+// ── Build TastyTrade client ───────────────────────────────────────────────────
+const { LogLevel } = require('@tastytrade/api');
+function buildClient(creds) {
+  return new TastyTradeClient({
+    ...TastyTradeClient.ProdConfig,
     clientSecret: creds.clientSecret,
     refreshToken: creds.refreshToken,
     oauthScopes: ['read', 'trade'],
+    logLevel: LogLevel.ERROR,
   });
+}
 
-  await client.quoteStreamer.connect();
-  console.log('[Auth] Streamer connected');
+// ── Fetch account number ──────────────────────────────────────────────────────
+async function getAccountNumber(client) {
+  const accounts = await client.accountsAndCustomersService.getCustomerAccounts();
+  if (!accounts?.length) throw new Error('No accounts found');
+  return accounts[0].account['account-number'];
+}
 
-  // Step 3: Morning snapshots
-  console.log('\n[Step 3] Capturing morning snapshots...');
-  let morningNetLiq = null;
-  let morningVix = null;
+// ── Fetch net liq ─────────────────────────────────────────────────────────────
+async function getNetLiq(client, accountNumber) {
+  const resp = await client.balancesAndPositionsService.getAccountBalanceValues(accountNumber);
+  // API returns nested: { data: { ... } } or flat
+  const balances = resp?.data ?? resp;
+  if (process.env.DEBUG_BALANCE) console.log('   Raw balances:', JSON.stringify(balances).slice(0, 300));
+  const netLiq = balances?.['net-liquidating-value'] ?? balances?.['net-liq'] ?? '0';
+  return parseFloat(netLiq) || 0;
+}
 
-  try {
-    const accounts = await client.accountsAndCustomersService.getCustomerAccounts();
-    if (accounts && accounts.length > 0) {
-      const acctNum = accounts[0].account?.['account-number'] || accounts[0]['account-number'];
-      console.log(`[Snapshot] Using account: ${acctNum}`);
-      const balances = await client.balancesAndPositionsService.getAccountBalanceValues(acctNum);
-      morningNetLiq = parseFloat(balances['net-liquidating-value'] || '0');
-      console.log(`[Snapshot] Net Liq: $${morningNetLiq.toFixed(2)}`);
+// ── Fetch options chain (nested format) ──────────────────────────────────────
+async function fetchChain(client, ticker) {
+  const chains = await client.instrumentsService.getNestedOptionChain(ticker);
+  if (!chains?.length) return [];
+  return chains[0].expirations || [];
+}
+
+// ── Subscribe and collect quotes + greeks (chunked to avoid rate limit) ───────
+async function collectMarketData(client, symbols, waitMs = 12000, chunkSize = 500) {
+  const quotes = {};
+  const greeks = {};
+  const trades = {};
+  const summaries = {};
+
+  const handler = records => {
+    for (const r of records) {
+      if (r.eventType === 'Quote') {
+        const bid = r.bidPrice ?? 0;
+        const ask = r.askPrice ?? 0;
+        if (bid > 0 || ask > 0) {
+          quotes[r.eventSymbol] = { bid, ask, mid: bid > 0 && ask > 0 ? (bid + ask) / 2 : bid || ask };
+        }
+      } else if (r.eventType === 'Greeks') {
+        greeks[r.eventSymbol] = { delta: r.delta ?? 0, theta: r.theta ?? 0, vega: r.vega ?? 0 };
+      } else if (r.eventType === 'Trade') {
+        if ((r.price ?? 0) > 0) trades[r.eventSymbol] = { price: r.price };
+      } else if (r.eventType === 'Summary') {
+        const p = r.prevDayClosePrice ?? r.dayClosePrice ?? r.lastPrice ?? 0;
+        if (p > 0) summaries[r.eventSymbol] = { price: p };
+      }
     }
-  } catch (e) {
-    console.warn(`[Snapshot] Net liq error: ${e.message}`);
+  };
+
+  const unsub = client.quoteStreamer.addEventListener(handler);
+
+  for (let i = 0; i < symbols.length; i += chunkSize) {
+    const chunk = symbols.slice(i, i + chunkSize);
+    client.quoteStreamer.subscribe(chunk, [
+      MarketDataSubscriptionType.Quote,
+      MarketDataSubscriptionType.Greeks,
+      MarketDataSubscriptionType.Trade,
+      MarketDataSubscriptionType.Summary,
+    ]);
+    if (i + chunkSize < symbols.length) await sleep(200);
   }
 
-  // VIX via streamer
-  try {
-    morningVix = await new Promise((resolve) => {
-      let captured = null;
-      const handler = (records) => {
-        for (const r of records) {
-          if (r.eventType === 'Quote' && r.eventSymbol === '$VIX.X') {
-            captured = (r.bidPrice + r.askPrice) / 2;
+  await sleep(waitMs);
+
+  unsub();
+  client.quoteStreamer.unsubscribe(symbols);
+
+  // Merge trade/summary prices for indices that lack bid/ask Quote events
+  for (const [sym, t] of Object.entries(trades)) {
+    if (!(quotes[sym]?.mid > 0)) quotes[sym] = { bid: t.price, ask: t.price, mid: t.price };
+  }
+  for (const [sym, s] of Object.entries(summaries)) {
+    if (!(quotes[sym]?.mid > 0)) quotes[sym] = { bid: s.price, ask: s.price, mid: s.price };
+  }
+
+  return { quotes, greeks };
+}
+
+// ── DTE calculator ────────────────────────────────────────────────────────────
+function calcDte(expDateStr) {
+  const exp = new Date(expDateStr + 'T16:00:00-05:00');
+  return Math.round((exp - Date.now()) / 86400000);
+}
+
+// ── Build iron condors for one ticker/profile ─────────────────────────────────
+function buildICs(expirations, quotes, greeks, profileName, profile, underlyingPrice) {
+  const bestByExp = {};
+
+  for (const exp of expirations) {
+    const expDate = exp['expiration-date'];
+    const days = exp['days-to-expiration'] != null ? exp['days-to-expiration'] : calcDte(expDate);
+    if (days < profile.dteMin || days > profile.dteMax) continue;
+
+    const strikes = exp.strikes || [];
+    const puts = [];
+    const calls = [];
+
+    for (const strike of strikes) {
+      const sp = parseFloat(strike['strike-price']);
+      const putSym = strike['put-streamer-symbol'];
+      const callSym = strike['call-streamer-symbol'];
+
+      if (putSym) {
+        const g = greeks[putSym];
+        const q = quotes[putSym];
+        if (g && q) {
+          const absDelta = Math.abs(g.delta);
+          if (absDelta >= profile.deltaMin && absDelta <= profile.deltaMax) {
+            puts.push({ strikePrice: sp, sym: putSym, delta: absDelta, mid: q.mid });
           }
         }
-      };
-      const removeListener = client.quoteStreamer.addEventListener(handler);
-      client.quoteStreamer.subscribe(['$VIX.X'], [MarketDataSubscriptionType.Quote]);
-      setTimeout(() => {
-        removeListener();
-        client.quoteStreamer.unsubscribe(['$VIX.X']);
-        resolve(captured);
-      }, 6000);
-    });
-    console.log(`[Snapshot] VIX: ${morningVix?.toFixed(2) ?? 'N/A'}`);
-  } catch (e) {
-    console.warn(`[Snapshot] VIX error: ${e.message}`);
-  }
-
-  // Save snapshot — guvid-agent/daily/{date} path requires 4 segments (col/doc/col/doc)
-  await db.collection('guvid-agent').doc('daily').collection('entries').doc(TODAY).set({
-    morningNetLiq,
-    morningVix,
-    timestamp: new Date().toISOString(),
-    date: TODAY,
-  }, { merge: true });
-  console.log('[Firestore] Morning snapshot saved');
-
-  // Step 4: Get underlying prices
-  console.log('\n[Step 4] Getting underlying prices...');
-  let spxPrice = 5600, qqPrice = 470; // fallbacks
-
-  try {
-    const prices = await new Promise((resolve) => {
-      const collected = {};
-      const handler = (records) => {
-        for (const r of records) {
-          if (r.eventType === 'Quote') {
-            if (r.eventSymbol === '$SPX.X' || r.eventSymbol === '$SPX') {
-              collected.SPX = (r.bidPrice + r.askPrice) / 2;
-            } else if (r.eventSymbol === 'QQQ') {
-              collected.QQQ = (r.bidPrice + r.askPrice) / 2;
-            }
+      }
+      if (callSym) {
+        const g = greeks[callSym];
+        const q = quotes[callSym];
+        if (g && q) {
+          const absDelta = Math.abs(g.delta);
+          if (absDelta >= profile.deltaMin && absDelta <= profile.deltaMax) {
+            calls.push({ strikePrice: sp, sym: callSym, delta: absDelta, mid: q.mid });
           }
         }
+      }
+    }
+
+    if (!puts.length || !calls.length) continue;
+
+    // Symmetric delta pairing: sort desc, pair by index
+    puts.sort((a, b) => b.delta - a.delta);
+    calls.sort((a, b) => b.delta - a.delta);
+
+    let bestIC = null;
+    const pairCount = Math.min(puts.length, calls.length);
+
+    for (let i = 0; i < pairCount; i++) {
+      const shortPut = puts[i];
+      const shortCall = calls[i];
+
+      // Wing legs: closest available strike at ±wings distance
+      const longPutLeg = strikes
+        .filter(s => s['put-streamer-symbol'] && quotes[s['put-streamer-symbol']])
+        .map(s => ({ sp: parseFloat(s['strike-price']), sym: s['put-streamer-symbol'] }))
+        .filter(s => s.sp < shortPut.strikePrice)
+        .sort((a, b) => Math.abs(a.sp - (shortPut.strikePrice - profile.wings)) - Math.abs(b.sp - (shortPut.strikePrice - profile.wings)))[0];
+
+      const longCallLeg = strikes
+        .filter(s => s['call-streamer-symbol'] && quotes[s['call-streamer-symbol']])
+        .map(s => ({ sp: parseFloat(s['strike-price']), sym: s['call-streamer-symbol'] }))
+        .filter(s => s.sp > shortCall.strikePrice)
+        .sort((a, b) => Math.abs(a.sp - (shortCall.strikePrice + profile.wings)) - Math.abs(b.sp - (shortCall.strikePrice + profile.wings)))[0];
+
+      if (!longPutLeg || !longCallLeg) continue;
+
+      const longPutQ = quotes[longPutLeg.sym];
+      const longCallQ = quotes[longCallLeg.sym];
+      if (!longPutQ || !longCallQ) continue;
+
+      const credit = shortPut.mid + shortCall.mid - longPutQ.mid - longCallQ.mid;
+      if (credit < MIN_CREDIT) continue;
+
+      const wings = Math.min(shortPut.strikePrice - longPutLeg.sp, longCallLeg.sp - shortCall.strikePrice);
+      const rr = (wings - credit) / credit;
+      if (rr > MAX_RR) continue;
+
+      if (shortPut.mid / underlyingPrice > SPREAD_PCT || shortCall.mid / underlyingPrice > SPREAD_PCT) continue;
+
+      const pop = 100 - Math.max(shortPut.delta, shortCall.delta) * 100;
+      if (pop < profile.minPOP) continue;
+
+      const maxLoss = wings - credit;
+      const ev = (pop / 100) * credit - (1 - pop / 100) * maxLoss;
+      const alpha = credit / wings;
+      const scoreVal = profile.score(pop, ev, alpha);
+
+      const ic = {
+        expiration: expDate,
+        dte: days,
+        shortPut: { strike: shortPut.strikePrice, symbol: shortPut.sym, delta: +shortPut.delta.toFixed(4), mid: +shortPut.mid.toFixed(2) },
+        longPut: { strike: longPutLeg.sp, symbol: longPutLeg.sym, mid: +longPutQ.mid.toFixed(2) },
+        shortCall: { strike: shortCall.strikePrice, symbol: shortCall.sym, delta: +shortCall.delta.toFixed(4), mid: +shortCall.mid.toFixed(2) },
+        longCall: { strike: longCallLeg.sp, symbol: longCallLeg.sym, mid: +longCallQ.mid.toFixed(2) },
+        credit: +credit.toFixed(2),
+        rr: +rr.toFixed(2),
+        pop: +pop.toFixed(1),
+        ev: +ev.toFixed(2),
+        alpha: +alpha.toFixed(4),
+        wings,
+        score: +scoreVal.toFixed(4),
+        profile: profileName,
+        putBE: +(shortPut.strikePrice - credit / 2).toFixed(2),
+        callBE: +(shortCall.strikePrice + credit / 2).toFixed(2),
       };
-      const removeListener = client.quoteStreamer.addEventListener(handler);
-      client.quoteStreamer.subscribe(['$SPX.X', 'QQQ'], [MarketDataSubscriptionType.Quote]);
-      setTimeout(() => {
-        removeListener();
-        client.quoteStreamer.unsubscribe(['$SPX.X', 'QQQ']);
-        resolve(collected);
-      }, 6000);
-    });
-    if (prices.SPX) spxPrice = prices.SPX;
-    if (prices.QQQ) qqPrice = prices.QQQ;
-    console.log(`[Prices] SPX: $${spxPrice.toFixed(2)}, QQQ: $${qqPrice.toFixed(2)}`);
-  } catch (e) {
-    console.warn(`[Prices] Error: ${e.message} — using fallbacks`);
+
+      if (!bestIC || ic.score > bestIC.score) bestIC = ic;
+    }
+
+    if (bestIC) bestByExp[expDate] = bestIC;
   }
 
-  // Step 5: Scan
-  console.log('\n[Step 5] Scanning SPX + QQQ...');
+  return Object.values(bestByExp).sort((a, b) => b.score - a.score);
+}
+
+// ── MAIN ───────────────────────────────────────────────────────────────────────
+async function main() {
+  const date = today();
+  console.log(`\n🦅 Guvid Agent — Morning Scan [${date}]`);
+  console.log('='.repeat(60));
+
+  // Step 1: Credentials
+  const creds = await readCredentials();
+
+  // Step 2: Connect
+  console.log('\n🔑 Connecting to TastyTrade...');
+  const client = buildClient(creds);
+  await client.quoteStreamer.connect();
+  console.log('   ✓ WebSocket connected');
+
+  // Step 3: Account info + net liq
+  console.log('\n💰 Fetching account info...');
+  const accountNumber = await getAccountNumber(client);
+  console.log(`   Account: ${accountNumber}`);
+  const morningNetLiq = await getNetLiq(client, accountNumber);
+  console.log(`   Net Liq: $${morningNetLiq.toFixed(2)}`);
+
+  // Step 4: VIX quote — try streamer first, fall back to market metrics
+  console.log('\n📊 Fetching VIX...');
+  const { quotes: vixQuotes } = await collectMarketData(client, ['$VIX.X', 'VIX', '^VIX'], 8000);
+  let morningVix = vixQuotes['$VIX.X']?.mid ?? vixQuotes['VIX']?.mid ?? vixQuotes['^VIX']?.mid ?? null;
+  if (!(morningVix > 0)) {
+    try {
+      const metrics = await client.marketMetricsService.getMarketMetrics({ symbols: ['VIX'] });
+      const m = Array.isArray(metrics) ? metrics[0] : metrics;
+      const iv = parseFloat(m?.['implied-volatility'] ?? m?.['implied-volatility-30-day'] ?? 0);
+      if (iv > 0) morningVix = iv * 100; // Convert to VIX-like scale if needed
+    } catch { /* ignore */ }
+  }
+  console.log(`   VIX: ${morningVix != null && morningVix > 0 ? morningVix.toFixed(2) : 'N/A'}`);
+
+  // Save morning snapshot
+  console.log('\n💾 Saving morning snapshot...');
+  await db.collection('guvid-daily').doc(date).set(
+    { morningNetLiq, morningVix, timestamp: new Date().toISOString(), date },
+    { merge: true }
+  );
+  console.log('   ✓ Snapshot saved');
+
+  // Step 5: Scan SPX and QQQ
+  const tickers = ['SPX', 'QQQ'];
   const scanResults = {};
-  scanResults['SPX'] = await scanTicker(client, 'SPX', spxPrice);
-  scanResults['QQQ'] = await scanTicker(client, 'QQQ', qqPrice);
 
-  // Step 6: Save to Firestore
-  console.log('\n[Step 6] Saving to Firestore...');
+  for (const ticker of tickers) {
+    console.log(`\n${'─'.repeat(60)}`);
+    console.log(`🔍 Scanning ${ticker}...`);
 
-  await db.collection('guvid-agent').doc('scans').collection('entries').doc(TODAY).set({
-    date: TODAY,
-    timestamp: new Date().toISOString(),
-    type: 'morning',
-    SPX: scanResults['SPX'],
-    QQQ: scanResults['QQQ'],
-  });
-  console.log('[Firestore] Scan saved to guvid-agent/scans/entries/' + TODAY);
+    const expirations = await fetchChain(client, ticker);
+    console.log(`   ${expirations.length} expirations in chain`);
 
-  // Save best IC per ticker+profile as position
-  const posCol = db.collection('guvid-agent').doc('positions').collection('items');
+    const underlyingStreamer = ticker === 'SPX' ? '$SPX.X' : ticker;
+    const symbols = [underlyingStreamer];
+
+    for (const exp of expirations) {
+      const days = exp['days-to-expiration'] != null ? exp['days-to-expiration'] : calcDte(exp['expiration-date']);
+      if (days < 15 || days > 55) continue;
+      for (const s of (exp.strikes || [])) {
+        if (s['put-streamer-symbol']) symbols.push(s['put-streamer-symbol']);
+        if (s['call-streamer-symbol']) symbols.push(s['call-streamer-symbol']);
+      }
+    }
+
+    console.log(`   Subscribing to ${symbols.length} symbols, waiting 12s...`);
+    const { quotes, greeks } = await collectMarketData(client, symbols, 12000);
+    console.log(`   Received: ${Object.keys(quotes).length} quotes, ${Object.keys(greeks).length} greeks`);
+
+    let underlyingPrice = quotes[underlyingStreamer]?.mid ?? 0;
+    if (!(underlyingPrice > 0)) {
+      // Index underlyings (SPX) may not emit Quote events — try Trade/Summary first
+      for (const alt of [ticker, `$${ticker}.X`, `/${ticker}`]) {
+        if (quotes[alt]?.mid > 0) { underlyingPrice = quotes[alt].mid; break; }
+      }
+    }
+    if (!(underlyingPrice > 0)) {
+      // Last resort: infer from nearest-to-ATM put strike (abs(delta) closest to 0.50)
+      const allPutGreeks = Object.entries(greeks)
+        .filter(([sym]) => sym.includes('P') && greeks[sym] && Math.abs(greeks[sym].delta) > 0)
+        .map(([sym, g]) => ({ sym, absDelta: Math.abs(g.delta) }))
+        .sort((a, b) => Math.abs(a.absDelta - 0.5) - Math.abs(b.absDelta - 0.5));
+      if (allPutGreeks.length) {
+        // Extract strike from symbol like .SPXW260529P7475
+        const atmSym = allPutGreeks[0].sym;
+        const m = atmSym.match(/[PC](\d+)$/);
+        if (m) {
+          underlyingPrice = parseInt(m[1], 10);
+          console.log(`   [inferred] ${ticker} price ≈ $${underlyingPrice} from ATM strike ${atmSym} (Δ≈${allPutGreeks[0].absDelta.toFixed(3)})`);
+        }
+      }
+    }
+    console.log(`   ${ticker} @ $${underlyingPrice.toFixed(2)}`);
+
+    let ivRank = null;
+    try {
+      const metrics = await client.marketMetricsService.getMarketMetrics({ symbols: [ticker] });
+      const m = Array.isArray(metrics) ? metrics[0] : metrics;
+      ivRank = parseFloat(m?.['iv-rank'] ?? m?.['implied-volatility-index-rank'] ?? 0) || null;
+    } catch { /* non-critical */ }
+
+    const tickerResults = {};
+    for (const [profileName, profile] of Object.entries(PROFILES)) {
+      const ics = buildICs(expirations, quotes, greeks, profileName, profile, underlyingPrice);
+      tickerResults[profileName] = ics;
+      console.log(`   ${profileName.padEnd(14)}: ${ics.length} IC(s)`);
+      for (const ic of ics.slice(0, 2)) {
+        console.log(`     DTE:${ic.dte} ${ic.longPut.strike}/${ic.shortPut.strike}P-${ic.shortCall.strike}/${ic.longCall.strike}C Cr:$${ic.credit} POP:${ic.pop}% R/R:${ic.rr} Score:${ic.score}`);
+      }
+    }
+
+    scanResults[ticker] = { tickerResults, underlyingPrice, ivRank };
+  }
+
+  // Step 6: Save scan to Firestore
+  console.log('\n💾 Saving scan results...');
+  const scanDoc = { date, timestamp: new Date().toISOString(), type: 'morning', morningVix, morningNetLiq };
+  for (const ticker of tickers) {
+    const tr = scanResults[ticker]?.tickerResults ?? {};
+    scanDoc[ticker] = {
+      underlyingPrice: scanResults[ticker]?.underlyingPrice ?? null,
+      ivRank: scanResults[ticker]?.ivRank ?? null,
+      conservative: tr.conservative ?? [],
+      neutral: tr.neutral ?? [],
+      aggressive: tr.aggressive ?? [],
+    };
+  }
+  await db.collection('guvid-scans').doc(date).set(scanDoc, { merge: true });
+  console.log('   ✓ Scan saved to guvid-scans/' + date);
+
+  // Step 7: Save best positions
+  console.log('\n💾 Saving best positions...');
+  const posCol = db.collection('guvid-agent-positions');
   let positionsSaved = 0;
 
-  for (const [ticker, profiles] of Object.entries(scanResults)) {
-    const underlyingPrice = ticker === 'SPX' ? spxPrice : qqPrice;
-    for (const [profileName, ics] of Object.entries(profiles)) {
-      if (!ics.length) continue;
-      const best = ics[0];
-      await posCol.add({
-        ticker,
-        profile: profileName,
-        ic: best,
-        openDate: TODAY,
-        expiration: best.expiration,
-        credit: best.credit,
-        pop: best.pop,
-        ev: best.ev,
-        alpha: best.alpha,
-        rr: best.rr,
-        wings: best.wings,
-        status: 'open',
-        dailyChecks: [],
-        marketContext: {
-          underlyingPrice,
-          vix: morningVix,
-          ivRank: null,
-        },
-      });
-      positionsSaved++;
-    }
-  }
-  console.log(`[Firestore] ${positionsSaved} positions saved`);
+  for (const ticker of tickers) {
+    const tr = scanResults[ticker]?.tickerResults ?? {};
+    const underlyingPrice = scanResults[ticker]?.underlyingPrice ?? 0;
+    const ivRank = scanResults[ticker]?.ivRank ?? null;
 
-  client.quoteStreamer.disconnect();
-
-  // Summary
-  console.log(`\n${'='.repeat(60)}`);
-  console.log(`MORNING SCAN SUMMARY — ${TODAY}`);
-  console.log(`${'='.repeat(60)}`);
-  console.log(`Net Liq : $${(morningNetLiq || 0).toFixed(2)}`);
-  console.log(`VIX     : ${morningVix?.toFixed(2) ?? 'N/A'}`);
-  console.log(`SPX     : $${spxPrice.toFixed(2)}`);
-  console.log(`QQQ     : $${qqPrice.toFixed(2)}`);
-  console.log();
-
-  for (const [ticker, profiles] of Object.entries(scanResults)) {
-    for (const [profileName, ics] of Object.entries(profiles)) {
-      console.log(`${ticker} — ${profileName.toUpperCase()}: ${ics.length} candidates`);
-      if (ics.length > 0) {
-        const b = ics[0];
-        console.log(`  Best  : exp=${b.expiration} DTE=${b.dte} credit=$${b.credit} POP=${b.pop}% RR=${b.rr} score=${b.score}`);
-        console.log(`  Legs  : ${b.btoP.strike}P / ${b.stoP.strike}P | ${b.stoC.strike}C / ${b.btoC.strike}C`);
+    for (const [profileName, ics] of Object.entries(tr)) {
+      for (const ic of ics) {
+        await posCol.add({
+          ticker, profile: profileName, ic,
+          openDate: date, expiration: ic.expiration,
+          credit: ic.credit, pop: ic.pop, ev: ic.ev,
+          alpha: ic.alpha, rr: ic.rr, wings: ic.wings,
+          status: 'open', dailyChecks: [],
+          marketContext: { underlyingPrice, vix: morningVix, ivRank },
+        });
+        positionsSaved++;
       }
     }
   }
+  console.log(`   ✓ ${positionsSaved} positions saved`);
 
-  console.log(`\n${'='.repeat(60)}`);
-  console.log('Scan complete.');
-  console.log(`${'='.repeat(60)}\n`);
+  // Summary
+  console.log('\n' + '='.repeat(60));
+  console.log('✅ MORNING SCAN COMPLETE');
+  console.log(`   Date:     ${date}`);
+  console.log(`   VIX:      ${morningVix != null ? morningVix.toFixed(2) : 'N/A'}`);
+  console.log(`   Net Liq:  $${morningNetLiq.toFixed(2)}`);
+
+  for (const ticker of tickers) {
+    const tr = scanResults[ticker]?.tickerResults ?? {};
+    const up = scanResults[ticker]?.underlyingPrice ?? 0;
+    const ivr = scanResults[ticker]?.ivRank;
+    console.log(`\n   ${ticker} @ $${up.toFixed(2)}${ivr != null ? `  IVR: ${ivr.toFixed(0)}` : ''}`);
+    for (const [p, ics] of Object.entries(tr)) {
+      if (ics.length) {
+        const best = ics[0];
+        console.log(`     ${p.padEnd(14)}: DTE:${best.dte}  Cr:$${best.credit}  POP:${best.pop}%  R/R:${best.rr}  Score:${best.score}`);
+      } else {
+        console.log(`     ${p.padEnd(14)}: no candidates`);
+      }
+    }
+  }
+  console.log('='.repeat(60));
+
+  client.quoteStreamer.disconnect();
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((e) => {
-    console.error('[FATAL]', e.stack || e);
-    process.exit(1);
-  });
+main().then(() => process.exit(0)).catch(err => {
+  console.error('\n❌ Fatal:', err.message);
+  console.error(err.stack);
+  process.exit(1);
+});

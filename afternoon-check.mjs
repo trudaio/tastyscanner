@@ -57,12 +57,12 @@ async function getDxLinkToken(token) {
 }
 
 // ── WebSocket streaming ────────────────────────────────────────────────────────
+// DXLink protocol: client sends SETUP first on open, then AUTH immediately.
 async function streamQuotes(dxToken, wsUrl, symbols, waitMs = 12000) {
   return new Promise((resolve) => {
     const data = {};
     symbols.forEach(s => { data[s] = {}; });
     const ws = new WebSocket(wsUrl);
-    let authDone = false;
     let channelReady = false;
     const ch = 1;
     const finish = () => { try { ws.close(); } catch (_) {} resolve(data); };
@@ -70,13 +70,17 @@ async function streamQuotes(dxToken, wsUrl, symbols, waitMs = 12000) {
 
     ws.on('error', () => { clearTimeout(timer); resolve(data); });
     ws.on('close', () => { clearTimeout(timer); resolve(data); });
+
+    ws.on('open', () => {
+      // Client initiates the DXLink handshake
+      ws.send(JSON.stringify({ type: 'SETUP', channel: 0, version: '0.1-DXF-JS/0.3.0', keepaliveTimeout: 60, acceptKeepaliveTimeout: 60 }));
+      ws.send(JSON.stringify({ type: 'AUTH', channel: 0, token: dxToken }));
+    });
+
     ws.on('message', (raw) => {
       let msg;
       try { msg = JSON.parse(raw.toString()); } catch { return; }
-      if (msg.type === 'SETUP') {
-        ws.send(JSON.stringify({ type: 'AUTH', channel: 0, token: dxToken }));
-      } else if (msg.type === 'AUTH_STATE' && msg.state === 'AUTHORIZED' && !authDone) {
-        authDone = true;
+      if (msg.type === 'AUTH_STATE' && msg.state === 'AUTHORIZED') {
         ws.send(JSON.stringify({ type: 'CHANNEL_REQUEST', channel: ch, service: 'FEED', parameters: { contract: 'AUTO' } }));
       } else if (msg.type === 'CHANNEL_OPENED' && msg.channel === ch && !channelReady) {
         channelReady = true;
@@ -94,25 +98,23 @@ async function streamQuotes(dxToken, wsUrl, symbols, waitMs = 12000) {
       } else if (msg.type === 'FEED_DATA' && msg.channel === ch) {
         const events = msg.data;
         if (!Array.isArray(events)) return;
-        let i = 0;
-        while (i < events.length) {
-          const evType = events[i++];
-          if (typeof evType !== 'string') continue;
-          const ev = events[i++];
-          if (!ev || typeof ev !== 'object') continue;
+        // FULL format: flat array of event objects [{eventSymbol, bidPrice, askPrice, ...}, ...]
+        for (const ev of events) {
+          if (!ev || typeof ev !== 'object' || Array.isArray(ev)) continue;
           const sym = ev.eventSymbol;
           if (!sym || !data[sym]) continue;
-          if (evType === 'Quote' && ev.bidPrice != null && ev.askPrice != null) {
-            data[sym].bid = ev.bidPrice;
-            data[sym].ask = ev.askPrice;
-            data[sym].mid = (ev.bidPrice + ev.askPrice) / 2;
-          } else if (evType === 'Greeks') {
-            data[sym].delta = ev.delta;
-            data[sym].theta = ev.theta;
-            data[sym].gamma = ev.gamma;
-            data[sym].vega = ev.vega;
+          if (ev.bidPrice != null && ev.askPrice != null) {
+            data[sym].bid = parseFloat(ev.bidPrice);
+            data[sym].ask = parseFloat(ev.askPrice);
+            data[sym].mid = (parseFloat(ev.bidPrice) + parseFloat(ev.askPrice)) / 2;
           }
+          if (ev.delta != null) data[sym].delta = ev.delta;
+          if (ev.theta != null) data[sym].theta = ev.theta;
+          if (ev.gamma != null) data[sym].gamma = ev.gamma;
+          if (ev.vega  != null) data[sym].vega  = ev.vega;
         }
+      } else if (msg.type === 'KEEPALIVE') {
+        ws.send(JSON.stringify({ type: 'KEEPALIVE', channel: 0 }));
       }
     });
   });
@@ -139,8 +141,8 @@ async function main() {
 
   // VIX
   console.log('Fetching VIX (12s)...');
-  const vixData = await streamQuotes(dxToken, wsUrl, ['$VIX.X'], 12000);
-  const vix = vixData['$VIX.X']?.mid ?? null;
+  const vixData = await streamQuotes(dxToken, wsUrl, ['$VIX.X', 'VIX'], 12000);
+  const vix = vixData['$VIX.X']?.mid ?? vixData['VIX']?.mid ?? null;
   console.log(`VIX: ${vix != null ? vix.toFixed(2) : 'N/A'}`);
 
   // Morning comparison

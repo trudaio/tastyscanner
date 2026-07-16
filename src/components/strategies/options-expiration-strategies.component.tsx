@@ -51,13 +51,25 @@ const ExpirationHeaderItemContentBox = styled.div`
      
 `
 
-const StrategiesCountBox = styled(IonChip)`
-    --background: var(--ion-color-tertiary);
-    --color: var(--ion-color-tertiary-contrast);
+const StrategiesCountBox = styled(IonChip)<{ $empty?: boolean }>`
+    --background: ${props => props.$empty ? 'var(--ion-color-medium)' : 'var(--ion-color-tertiary)'};
+    --color: ${props => props.$empty ? 'var(--ion-color-medium-contrast)' : 'var(--ion-color-tertiary-contrast)'};
     min-width: 50px;
     text-align: center;
     justify-content: center;
 
+`
+
+const EmptyExpirationHintBox = styled.span`
+    color: var(--ion-color-medium);
+    font-size: 0.8em;
+    font-style: italic;
+`
+
+const NoStrategiesMessageBox = styled.div`
+    padding: 16px;
+    color: var(--ion-color-medium);
+    font-size: 0.9em;
 `
 
 const PositionsCountBox = styled(IonChip)`
@@ -93,6 +105,8 @@ export const OptionsExpirationStrategiesComponent: React.FC<OptionsExpirationStr
     const services = useServices();
 
     const strategies = props.strategies;
+    const isEmpty = strategies.length === 0;
+    const isWaitingForData = isEmpty && !props.expiration.hasStreamingData;
     const bestPop = Math.max(...strategies.map(strategy => strategy.pop));
     const bestRiskReward = Math.min(...strategies.map(strategy => strategy.riskRewardRatio));
     const positionCount = services.positions.getPositionsForExpiration(props.expiration.expirationDate).length;
@@ -126,8 +140,8 @@ export const OptionsExpirationStrategiesComponent: React.FC<OptionsExpirationStr
 
                 <ExpirationHeaderItemBox slot="header" $expirationType={props.expiration.expirationType}>
                     <ExpirationHeaderItemContentBox>
-                        <StrategiesCountBox>
-                            {strategies.length}
+                        <StrategiesCountBox $empty={isEmpty}>
+                            {isWaitingForData ? '…' : strategies.length}
                         </StrategiesCountBox>
                         {positionCount > 0 && (
                             <PositionsCountBox>
@@ -137,16 +151,29 @@ export const OptionsExpirationStrategiesComponent: React.FC<OptionsExpirationStr
                         <IonLabel>
                             {label}
                         </IonLabel>
+                        {isEmpty && (
+                            <EmptyExpirationHintBox>
+                                {isWaitingForData ? 'loading quotes…' : 'no match for current filters'}
+                            </EmptyExpirationHintBox>
+                        )}
 
                     </ExpirationHeaderItemContentBox>
                 </ExpirationHeaderItemBox>
 
-                <StrategiesBox slot="content">
-                    {strategies.map(condor => (<OptionsStrategyComponent key={condor.key}
-                                                                         strategy={condor} bestPop={bestPop}
-                                                                         bestRiskReward={bestRiskReward} onOpenTradeModal={props.onTrade}
-                                                                         isGuvidPick={condor.key === guvidPickKey}/>))}
-                </StrategiesBox>
+                {isEmpty ? (
+                    <NoStrategiesMessageBox slot="content">
+                        {isWaitingForData
+                            ? 'Waiting for live quotes for this expiration…'
+                            : 'No combination passes the current filters (delta, wings, spread, credit). Try widening the filters.'}
+                    </NoStrategiesMessageBox>
+                ) : (
+                    <StrategiesBox slot="content">
+                        {strategies.map(condor => (<OptionsStrategyComponent key={condor.key}
+                                                                             strategy={condor} bestPop={bestPop}
+                                                                             bestRiskReward={bestRiskReward} onOpenTradeModal={props.onTrade}
+                                                                             isGuvidPick={condor.key === guvidPickKey}/>))}
+                    </StrategiesBox>
+                )}
 
             </IonAccordion>
 

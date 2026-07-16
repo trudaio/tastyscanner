@@ -180,6 +180,10 @@ export class TickerModel implements ITickerViewModel {
             .sort((a, b) => a.daysToExpiration - b.daysToExpiration);
     }
 
+    getFilteredExpirations(): IOptionsExpirationVewModel[] {
+        return this._filterExpirations();
+    }
+
     getExpirationsWithIronCondors(): IOptionsExpirationVewModel[] {
         return this._filterExpirations().filter(expiration => expiration.ironCondors.length > 0);
     }

@@ -19,6 +19,7 @@ export interface IOptionsExpirationVewModel {
     readonly settlementType: OptionExpirationSettlementType;
     readonly expirationType: OptionExpirationTypeEnum;
     readonly strikes: IOptionStrikeViewModel[];
+    readonly hasStreamingData: boolean;
     readonly ironCondors: IIronCondorViewModel[];
     readonly putCreditSpreads: ICreditSpreadViewModel[];
     readonly callCreditSpreads: ICreditSpreadViewModel[];

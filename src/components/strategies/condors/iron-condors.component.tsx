@@ -16,11 +16,14 @@ interface IronCondorsProps {
 export const IronCondorsComponent: React.FC<IronCondorsProps> = observer((props) => {
     const services = useServices();
     const filters = services.settings.strategyFilters;
-    const expirations = props.ticker.getExpirationsWithIronCondors();
+    // Show every expiration inside the DTE range — including those with 0 qualifying ICs —
+    // so the user can tell "expiration exists but nothing passes filters" from "expiration missing".
+    const expirations = props.ticker.getFilteredExpirations();
+    const hasAnyCondors = expirations.some(expiration => expiration.ironCondors.length > 0);
 
-    // "No Edge" signal: no expirations pass filters AND at least one EV/Alpha/POP filter is active
+    // "No Edge" signal: no ICs pass filters AND at least one EV/Alpha/POP filter is active
     const hasActiveEdgeFilters = filters.minExpectedValue > 0 || filters.minAlpha > 0 || filters.minPop > 0;
-    const noEdge = expirations.length === 0 && hasActiveEdgeFilters;
+    const noEdge = !hasAnyCondors && hasActiveEdgeFilters;
 
     if (noEdge) {
         return <NoEdgeBannerComponent symbol={props.ticker.symbol} />;

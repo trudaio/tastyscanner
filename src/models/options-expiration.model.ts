@@ -28,7 +28,8 @@ export class OptionsExpirationModel implements IOptionsExpirationVewModel {
         makeObservable(this, {
             ironCondors: computed,
             putCreditSpreads: computed,
-            callCreditSpreads: computed
+            callCreditSpreads: computed,
+            hasStreamingData: computed
         });
     }
 
@@ -86,6 +87,11 @@ export class OptionsExpirationModel implements IOptionsExpirationVewModel {
 
     private _filterStrategies<T extends IOptionsStrategyViewModel>(strategies: T[]): T[] {
         return strategies.filter(s => s.riskRewardRatio > 0 && s.riskRewardRatio <= this.services.settings.strategyFilters.maxRiskRewardRatio);
+    }
+
+    /** True once live quotes arrived for at least one strike of this expiration. */
+    get hasStreamingData(): boolean {
+        return this._sortedStrikes.some(s => s.put.midPrice > 0 || s.call.midPrice > 0);
     }
 
     get ironCondors(): IronCondorModel[] {

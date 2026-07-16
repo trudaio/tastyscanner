@@ -80,14 +80,19 @@ export class StrategiesBuilder {
         const icType = filters.icType;
 
         // Build (shortPutDelta, shortCallDelta) pairs according to IC type bias:
-        //   symmetric → matched indices (same delta both sides, delta-neutral)
+        //   symmetric → all combos where |shortPutDelta − shortCallDelta| ≤ 3 (near delta-neutral)
         //   bullish   → all combos where shortPutDelta − shortCallDelta ≥ 5 (net positive delta ≥ +5)
         //   bearish   → all combos where shortCallDelta − shortPutDelta ≥ 5 (net negative delta ≤ −5)
+        // NOTE: symmetric must pair by delta VALUE, not by list index — put and call
+        // delta lists rarely align (skew), so index-pairing matched e.g. a 30Δ put
+        // with a 17Δ call and never produced 16Δ/16Δ.
+        const SYMMETRIC_DELTA_TOLERANCE = 3;
         const deltaPairs: Array<[number, number]> = [];
         if (icType === 'symmetric') {
-            const maxIndex = Math.min(putsDeltas.length, callsDeltas.length) - 1;
-            for (let i = 0; i <= maxIndex; i++) {
-                deltaPairs.push([putsDeltas[i], callsDeltas[i]]);
+            for (const pd of putsDeltas) {
+                for (const cd of callsDeltas) {
+                    if (Math.abs(pd - cd) <= SYMMETRIC_DELTA_TOLERANCE) deltaPairs.push([pd, cd]);
+                }
             }
         } else {
             for (const pd of putsDeltas) {

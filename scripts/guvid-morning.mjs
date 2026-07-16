@@ -6,7 +6,7 @@
 
 import { createRequire } from 'module';
 import admin from 'firebase-admin';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 
 const require = createRequire(import.meta.url);
 
@@ -55,13 +55,16 @@ const { DXLinkWebSocketClient } = require('@dxfeed/dxlink-websocket-client');
 const { DXLinkFeed, FeedContract, FeedDataFormat } = require('@dxfeed/dxlink-feed');
 
 // ── Firebase ──────────────────────────────────────────────────────────────────
-const sa = JSON.parse(readFileSync('/tmp/firebase-sa.json', 'utf8'));
+const SA_PATH = process.env.FIREBASE_SA_PATH || '/tmp/firebase-sa.json';
+if (!existsSync(SA_PATH))
+  throw new Error(`Firebase service account not found at ${SA_PATH}. Set FIREBASE_SA_PATH or place the file at /tmp/firebase-sa.json.`);
+const sa = JSON.parse(readFileSync(SA_PATH, 'utf8'));
 admin.initializeApp({ credential: admin.credential.cert(sa) });
 const db = admin.firestore();
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 // HARD RULE: Only use Catalin's credentials — never scan all users.
-const CATALIN_UID = '7OcSxAkz8eahmOJD2ddu4ElBPsf2'; // macovei17@gmail.com
+const CATALIN_UID = process.env.GUVID_UID || '7OcSxAkz8eahmOJD2ddu4ElBPsf2';
 const TASTY_BASE  = 'https://api.tastyworks.com';
 const axios       = require('axios');
 const axiosCfg    = { ...(httpsAgent ? { httpsAgent, proxy: false } : {}), maxRedirects: 5 };
@@ -129,7 +132,9 @@ async function getAccessToken(credsList) {
         refresh_token: rt, client_secret: cs, scope: 'read', grant_type: 'refresh_token',
       }, axiosCfg);
       return `Bearer ${res.data['access_token'] || res.data['access-token']}`;
-    } catch (_) {}
+    } catch (err) {
+      console.warn(`  Token refresh failed for credential (rt=${rt.slice(0, 8)}…): ${err?.response?.status ?? ''} ${err?.message ?? err}`);
+    }
   }
   throw new Error('All TastyTrade refresh tokens failed. Re-authenticate in app.');
 }
@@ -172,7 +177,9 @@ async function getVixFromRest(accessToken) {
         if (iv > 0) return round2(iv * 100);
       }
     }
-  } catch (_) {}
+  } catch (err) {
+    console.warn(`  VIX REST fetch failed: ${err?.message ?? err}`);
+  }
   return null;
 }
 
@@ -278,7 +285,7 @@ function buildICs(expiration, profileName, profile, quotesMap, greeksMap) {
     const callSprdPct = sc.midPrice > 0 ? (sc.ask - sc.bid) / sc.midPrice : 1;
     if (putSprdPct > spread || callSprdPct > spread) continue;
 
-    const pop = round2(100 - Math.max(sp.absDelta * 100, sc.absDelta * 100));
+    const pop = round2((1 - sp.absDelta - sc.absDelta) * 100);
     if (pop < minPOP) continue;
 
     const maxLoss = wings - credit;
@@ -486,16 +493,14 @@ async function main() {
     });
     console.log(`  Scan saved → guvid-agent/scans/${TODAY}/morning`);
 
-    // Position documents
-    const batch = db.batch();
-    let posCount = 0;
+    // Position documents (chunked to stay under Firestore's 500-write batch limit)
+    const positionDocs = [];
     for (const ticker of tickers) {
       const { underlyingPrice } = results[ticker];
       for (const [pName, ics] of Object.entries(results[ticker])) {
         if (!Array.isArray(ics)) continue;
         for (const ic of ics) {
-          const ref = db.collection('guvid-agent').doc('positions').collection('items').doc();
-          batch.set(ref, {
+          positionDocs.push({
             ticker, profile: pName, ic,
             openDate: TODAY, expiration: ic.expiration,
             credit: ic.credit, pop: ic.pop, ev: ic.ev, alpha: ic.alpha,
@@ -506,12 +511,20 @@ async function main() {
               ivRank: null,
             },
           });
-          posCount++;
         }
       }
     }
-    await batch.commit();
-    console.log(`  ${posCount} position(s) saved → guvid-agent/positions/items/{auto-id}`);
+    const BATCH_LIMIT = 499;
+    for (let i = 0; i < positionDocs.length; i += BATCH_LIMIT) {
+      const chunk = positionDocs.slice(i, i + BATCH_LIMIT);
+      const batch = db.batch();
+      for (const doc of chunk) {
+        const ref = db.collection('guvid-agent').doc('positions').collection('items').doc();
+        batch.set(ref, doc);
+      }
+      await batch.commit();
+    }
+    console.log(`  ${positionDocs.length} position(s) saved → guvid-agent/positions/items/{auto-id}`);
 
     // ── Summary ───────────────────────────────────────────────────────────
     console.log('\n=== MORNING SUMMARY ===');

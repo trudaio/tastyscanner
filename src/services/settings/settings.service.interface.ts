@@ -19,6 +19,14 @@ export type ByEarningsDate = 'before' | 'after' | 'all';
  */
 export type IcType = 'symmetric' | 'bullish' | 'bearish';
 
+/**
+ * Wing width balance:
+ * - equal:     same width both sides (as selected in Wings/Spread size)
+ * - widerPut:  put wing one step wider than selected (more room below)
+ * - widerCall: call wing one step wider than selected (more room above)
+ */
+export type WingMode = 'equal' | 'widerPut' | 'widerCall';
+
 export interface IStrategyFiltersViewModel {
     minDelta: number;
     maxDelta: number;
@@ -36,8 +44,10 @@ export interface IStrategyFiltersViewModel {
     minExpectedValue: number;
     /** Minimum Alpha (%). Condors below this are hidden. */
     minAlpha: number;
-    /** IC type bias — controls wing asymmetry suggestion */
+    /** IC type bias — controls the short put Δ vs short call Δ pairing */
     icType: IcType;
+    /** Wing width balance — equal wings or one side a step wider */
+    wingMode: WingMode;
     /** Minimum credit received ($). Condors below this are hidden. */
     minCredit: number;
 }

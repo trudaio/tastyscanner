@@ -3,7 +3,7 @@ import { observer } from "mobx-react";
 import {useServices} from "../hooks/use-services.hook";
 import {IonChip, IonRadio, IonRadioGroup, IonRange, IonToggle} from "@ionic/react";
 import styled from "styled-components";
-import {IcType} from "../services/settings/settings.service.interface";
+import {IcType, WingMode} from "../services/settings/settings.service.interface";
 
 const FiltersContainerBox = styled.div`
     display: flex;
@@ -225,6 +225,25 @@ export const StrategyFiltersComponent: React.FC = observer(() => {
             <WingsEditorBox>
                 {filters.availableWings.map(w => <WingValueComponent key={w} value={w}/>)}
             </WingsEditorBox>
+
+            <SeparatorBox/>
+
+            <FilterLabelBox>
+                Wings balance
+            </FilterLabelBox>
+
+            <ByEarningDateRadioGroupBox value={filters.wingMode}
+                                        onIonChange={e => filters.wingMode = e.detail.value as WingMode}>
+                <IonRadio value={"equal"} labelPlacement="end">
+                    Equal wings
+                </IonRadio>
+                <IonRadio value={"widerPut"} labelPlacement="end">
+                    Wider PUT wing (+1 step below)
+                </IonRadio>
+                <IonRadio value={"widerCall"} labelPlacement="end">
+                    Wider CALL wing (+1 step above)
+                </IonRadio>
+            </ByEarningDateRadioGroupBox>
 
             <SeparatorBox/>
 

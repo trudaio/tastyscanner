@@ -103,6 +103,23 @@ export class StrategiesBuilder {
             }
         }
 
+        // Wing variants: the user's selected widths applied to both sides, plus the
+        // biased variant (wider protective wing) for bullish/bearish. The delta
+        // pairing already provides the directional tilt — without the equal-wing
+        // variant, the forced wider wing inflates risk/reward and can filter out
+        // every bullish/bearish IC at conservative maxRR settings.
+        const wingVariants: Array<{ putWing: number; callWing: number }> = [];
+        const seenWings = new Set<string>();
+        for (const baseWing of this.wings) {
+            for (const variant of [{ putWing: baseWing, callWing: baseWing }, this._getAsymmetricWings(baseWing, icType)]) {
+                const key = `${variant.putWing}x${variant.callWing}`;
+                if (!seenWings.has(key)) {
+                    seenWings.add(key);
+                    wingVariants.push(variant);
+                }
+            }
+        }
+
         for (const [putDelta, callDelta] of deltaPairs) {
             const stoPuts = puts[putDelta.toString()];
             const stoCalls = calls[callDelta.toString()];
@@ -110,9 +127,7 @@ export class StrategiesBuilder {
 
             for (const stoPut of stoPuts) {
                 for (const stoCall of stoCalls) {
-                    for (const baseWing of this.wings) {
-                        const { putWing, callWing } = this._getAsymmetricWings(baseWing, icType);
-
+                    for (const { putWing, callWing } of wingVariants) {
                         const btoPut = this.expiration.getStrikeByPrice(stoPut.strike.strikePrice - putWing)?.put;
                         if (!btoPut) continue;
                         const btoCall = this.expiration.getStrikeByPrice(stoCall.strike.strikePrice + callWing)?.call;

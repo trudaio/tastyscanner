@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useState} from "react";
+import React, {useEffect, useMemo, useRef, useState} from "react";
 import {observer} from "mobx-react-lite";
 import {useServices} from "../../hooks/use-services.hook";
 import {TickerModel} from "../../models/ticker.model";
@@ -502,6 +502,9 @@ export const DteAnalyzerComponent: React.FC = observer(() => {
             if (!cancelled) {
                 setTicker(newTicker);
                 setLoading(false);
+            } else {
+                // Unmounted (or switched) mid-start — don't leak the subscription
+                newTicker.stop();
             }
         };
         loadTicker();
@@ -511,14 +514,16 @@ export const DteAnalyzerComponent: React.FC = observer(() => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedTicker, services]);
 
-    // Cleanup on unmount
+    // Cleanup on unmount. Track the live ticker in a ref — a [] effect closure
+    // would capture the initial null and never stop the real ticker.
+    const tickerRef = useRef<TickerModel | null>(null);
+    useEffect(() => {
+        tickerRef.current = ticker;
+    }, [ticker]);
     useEffect(() => {
         return () => {
-            if (ticker) {
-                ticker.stop();
-            }
+            tickerRef.current?.stop();
         };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const rows = useMemo(() => {

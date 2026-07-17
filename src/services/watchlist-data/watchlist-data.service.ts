@@ -124,10 +124,10 @@ export class WatchlistDataService extends ServiceBase implements IWatchlistDataS
     }
 
     startAutoRefresh(symbols: string[]): void {
-        this._currentSymbols = symbols;
-
-        // Clear any existing interval
+        // Stop (and unsubscribe) the PREVIOUS symbol list before replacing it —
+        // overwriting first would leak the old subscriptions forever.
         this.stopAutoRefresh();
+        this._currentSymbols = symbols;
 
         if (symbols.length === 0) return;
 

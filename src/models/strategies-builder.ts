@@ -30,7 +30,11 @@ export class StrategiesBuilder {
     }
 
     private _filterByDelta(options: OptionModel[]): OptionModel[] {
-        return options.filter(o => o.absoluteDeltaPercent >= this.minDelta && o.absoluteDeltaPercent <= this.maxDelta && o.midPrice > 0)
+        // absoluteDeltaPercent > 0 also guards against options whose greeks
+        // haven't streamed yet (delta reads as 0) — never short a strike with
+        // no risk data, even when minDelta is set to 0.
+        return options.filter(o => o.absoluteDeltaPercent > 0
+                && o.absoluteDeltaPercent >= this.minDelta && o.absoluteDeltaPercent <= this.maxDelta && o.midPrice > 0)
             .sort((a, b) => b.absoluteDeltaPercent - a.absoluteDeltaPercent);
     }
 
@@ -142,17 +146,23 @@ export class StrategiesBuilder {
             }
         }
 
-        // Apply EV / Alpha / POP / Credit filters
-        const filtered = condors.filter(c => {
-            if (filters.minPop > 0 && c.pop < filters.minPop) return false;
-            if (filters.minExpectedValue !== 0 && c.expectedValue < filters.minExpectedValue) return false;
-            if (filters.minAlpha !== 0 && c.alpha < filters.minAlpha) return false;
-            if (filters.minCredit > 0 && c.credit < filters.minCredit) return false;
+        // Apply EV / Alpha / POP / Credit filters, evaluating each metric ONCE
+        // per condor — pop/expectedValue/alpha are uncached getter chains with
+        // strike lookups, and Array.sort would otherwise recompute them on
+        // every comparison.
+        const snapshots = condors.map(c => ({
+            condor: c, pop: c.pop, expectedValue: c.expectedValue, alpha: c.alpha, credit: c.credit,
+        }));
+        const filtered = snapshots.filter(s => {
+            if (filters.minPop > 0 && s.pop < filters.minPop) return false;
+            if (filters.minExpectedValue !== 0 && s.expectedValue < filters.minExpectedValue) return false;
+            if (filters.minAlpha !== 0 && s.alpha < filters.minAlpha) return false;
+            if (filters.minCredit > 0 && s.credit < filters.minCredit) return false;
             return true;
         });
 
         // Sort by alpha descending (best statistical edge first)
-        return filtered.sort((a, b) => b.alpha - a.alpha);
+        return filtered.sort((a, b) => b.alpha - a.alpha).map(s => s.condor);
     }
 
     buildPutCreditSpreads(): PutCreditSpreadModel[] {

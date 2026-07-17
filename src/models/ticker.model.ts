@@ -1,4 +1,4 @@
-import {IReactionDisposer, makeObservable, observable, reaction, runInAction} from "mobx";
+import {IReactionDisposer, makeObservable, observable, reaction, runInAction, when} from "mobx";
 import {OptionsExpirationModel} from "./options-expiration.model";
 import {ITickerViewModel} from "./ticker.view-model.interface";
 import {IServiceFactory} from "../services/service-factory.interface";
@@ -129,6 +129,10 @@ export class TickerModel implements ITickerViewModel {
 
     private _streamedSymbols: string[] = [];
     private _filtersReaction: IReactionDisposer | null = null;
+    private _spotWhenDisposer: IReactionDisposer | null = null;
+    // Bumped by every start()/stop(); an in-flight start() aborts after each
+    // await if it is no longer the current lifecycle (rapid ticker switch).
+    private _lifecycleEpoch = 0;
 
     private _getSpotEstimate(): number {
         const trade = this.getSymbolTrade(this.symbol)?.price ?? 0;
@@ -145,6 +149,13 @@ export class TickerModel implements ITickerViewModel {
         const filters = this.services.settings.strategyFilters;
         const spot = this._getSpotEstimate();
         const symbols: string[] = [this.symbol];
+
+        // Without a spot price the strike band can't be applied — subscribing
+        // the full chain would flood DxLink's rate limit, so stream only the
+        // underlying; the spot `when` in start() re-syncs once a price arrives.
+        if(spot <= 0) {
+            return symbols;
+        }
 
         for(const expiration of this.expirations) {
             if(expiration.daysToExpiration < filters.minDaysToExpiration
@@ -190,16 +201,34 @@ export class TickerModel implements ITickerViewModel {
     }
 
     async start(): Promise<void> {
+        const epoch = ++this._lifecycleEpoch;
         this.isLoading = true;
         try {
             await this._loadMarketData();
+            if(epoch !== this._lifecycleEpoch) {
+                return; // superseded by a stop()/start() while loading
+            }
 
             // Subscribe the underlying first and wait briefly for a spot price
             // so the options subscription can be narrowed to near-the-money strikes.
             this.services.marketDataProvider.subscribe([this.symbol]);
             await this._waitForSpot(3000);
+            if(epoch !== this._lifecycleEpoch) {
+                this.services.marketDataProvider.unsubscribe([this.symbol]);
+                return;
+            }
             this._streamedSymbols = [this.symbol];
             this._syncSubscriptions();
+
+            // If the spot price wasn't known yet, only the underlying is
+            // streaming (see _getStreamSymbols). Sync again once spot arrives
+            // so the near-the-money option subscriptions kick in.
+            this._disposeWatchers();
+            if(this._getSpotEstimate() <= 0) {
+                this._spotWhenDisposer = when(
+                    () => this._getSpotEstimate() > 0,
+                    () => this._syncSubscriptions());
+            }
 
             // Re-sync streamed symbols whenever strategy filters change (DTE range).
             this._filtersReaction = reaction(
@@ -215,11 +244,20 @@ export class TickerModel implements ITickerViewModel {
 
     }
 
-    async stop(): Promise<void> {
+    private _disposeWatchers(): void {
         if(this._filtersReaction) {
             this._filtersReaction();
             this._filtersReaction = null;
         }
+        if(this._spotWhenDisposer) {
+            this._spotWhenDisposer();
+            this._spotWhenDisposer = null;
+        }
+    }
+
+    async stop(): Promise<void> {
+        this._lifecycleEpoch++;
+        this._disposeWatchers();
         this.services.marketDataProvider.unsubscribe(this._streamedSymbols);
         this._streamedSymbols = [];
         this.services.positions.clearPositions();

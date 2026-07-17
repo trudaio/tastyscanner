@@ -1,4 +1,4 @@
-import {ByEarningsDate, IcType, IDeltaAlertSettings, ISettingsService, IStrategyFiltersViewModel} from "./settings.service.interface";
+import {ByEarningsDate, IcType, IDeltaAlertSettings, ISettingsService, IStrategyFiltersViewModel, WingMode} from "./settings.service.interface";
 import {makeObservable, observable, runInAction} from "mobx";
 import {ServiceBase} from "../service-base";
 import {IServiceFactory} from "../service-factory.interface";
@@ -51,6 +51,7 @@ export class StrategyFiltersModel implements IStrategyFiltersViewModel {
             | '_minExpectedValue'
             | '_minAlpha'
             | '_icType'
+            | '_wingMode'
             | '_minCredit'>(this, {
             _minDelta: observable.ref,
             _maxDelta: observable.ref,
@@ -64,6 +65,7 @@ export class StrategyFiltersModel implements IStrategyFiltersViewModel {
             _minExpectedValue: observable.ref,
             _minAlpha: observable.ref,
             _icType: observable.ref,
+            _wingMode: observable.ref,
             _minCredit: observable.ref,
             lastUpdate: observable.ref
         })
@@ -81,6 +83,7 @@ export class StrategyFiltersModel implements IStrategyFiltersViewModel {
     _minExpectedValue: number = 0;
     _minAlpha: number = 0;
     _icType: IcType = "symmetric";
+    _wingMode: WingMode = "equal";
     _minCredit: number = 1;
     lastUpdate: number = Date.now()
 
@@ -172,6 +175,13 @@ export class StrategyFiltersModel implements IStrategyFiltersViewModel {
     }
     set minAlpha(value: number) {
         this._setProperty("_minAlpha", value);
+    }
+
+    get wingMode(): WingMode {
+        return this._wingMode;
+    }
+    set wingMode(value: WingMode) {
+        this._setProperty("_wingMode", value);
     }
 
     get icType(): IcType {

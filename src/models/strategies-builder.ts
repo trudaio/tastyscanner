@@ -6,7 +6,7 @@ import {PutCreditSpreadModel} from "./put-credit-spread.model";
 import {CallCreditSpreadModel} from "./call-credit-spread.model";
 import {CreditSpreadModel} from "./credit-spread.model";
 import {OptionStrikeModel} from "./option-strike.model";
-import {IcType} from "../services/settings/settings.service.interface";
+import {WingMode} from "../services/settings/settings.service.interface";
 
 
 export class StrategiesBuilder {
@@ -47,29 +47,25 @@ export class StrategiesBuilder {
     }
 
     /**
-     * Returns the wing widths for put and call sides based on icType.
-     * - symmetric: same width for both sides
-     * - bullish: wider put wing (more protection downside), narrower call wing
-     * - bearish: wider call wing (more protection upside), narrower put wing
+     * Returns the wing widths for put and call sides based on the wing mode:
+     * - equal:     both sides get the selected base width
+     * - widerPut:  put wing one step wider than selected (more room below)
+     * - widerCall: call wing one step wider than selected (more room above)
      */
-    private _getAsymmetricWings(baseWing: number, icType: IcType): { putWing: number; callWing: number } {
-        const availableWings = this.services.settings.strategyFilters.availableWings;
-        const idx = availableWings.indexOf(baseWing);
-
-        if (icType === 'symmetric' || availableWings.length < 2) {
+    private _getWingVariant(baseWing: number, wingMode: WingMode): { putWing: number; callWing: number } {
+        if (wingMode === 'equal') {
             return { putWing: baseWing, callWing: baseWing };
         }
 
-        const widerWing = availableWings[Math.min(idx + 1, availableWings.length - 1)];
-        const narrowerWing = availableWings[Math.max(idx - 1, 0)];
+        const availableWings = this.services.settings.strategyFilters.availableWings;
+        const idx = availableWings.indexOf(baseWing);
+        const widerWing = idx >= 0
+            ? availableWings[Math.min(idx + 1, availableWings.length - 1)]
+            : baseWing;
 
-        if (icType === 'bullish') {
-            // Bullish = wider put side (protection on downside), narrower call side
-            return { putWing: widerWing, callWing: narrowerWing };
-        } else {
-            // Bearish = wider call side (protection on upside), narrower put side
-            return { putWing: narrowerWing, callWing: widerWing };
-        }
+        return wingMode === 'widerPut'
+            ? { putWing: widerWing, callWing: baseWing }
+            : { putWing: baseWing, callWing: widerWing };
     }
 
     buildIronCondors(): IronCondorModel[] {
@@ -107,20 +103,16 @@ export class StrategiesBuilder {
             }
         }
 
-        // Wing variants: the user's selected widths applied to both sides, plus the
-        // biased variant (wider protective wing) for bullish/bearish. The delta
-        // pairing already provides the directional tilt — without the equal-wing
-        // variant, the forced wider wing inflates risk/reward and can filter out
-        // every bullish/bearish IC at conservative maxRR settings.
+        // Wing variants come from the explicit Wings balance filter (equal /
+        // wider put / wider call), independent of the IC type delta bias.
         const wingVariants: Array<{ putWing: number; callWing: number }> = [];
         const seenWings = new Set<string>();
         for (const baseWing of this.wings) {
-            for (const variant of [{ putWing: baseWing, callWing: baseWing }, this._getAsymmetricWings(baseWing, icType)]) {
-                const key = `${variant.putWing}x${variant.callWing}`;
-                if (!seenWings.has(key)) {
-                    seenWings.add(key);
-                    wingVariants.push(variant);
-                }
+            const variant = this._getWingVariant(baseWing, filters.wingMode);
+            const key = `${variant.putWing}x${variant.callWing}`;
+            if (!seenWings.has(key)) {
+                seenWings.add(key);
+                wingVariants.push(variant);
             }
         }
 

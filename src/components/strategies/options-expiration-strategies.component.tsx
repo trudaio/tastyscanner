@@ -98,6 +98,8 @@ interface OptionsExpirationStrategiesComponentProps {
     ticker: ITickerViewModel;
     expiration: IOptionsExpirationVewModel;
     strategies: IOptionsStrategyViewModel[];
+    /** Specific reason why this expiration has zero strategies (which filter). */
+    emptyReason?: string | null;
     earningsDatePosition: EarningsDatePositionEnum;
     onTrade: (strategy: IOptionsStrategyViewModel) => void;
 }
@@ -153,7 +155,7 @@ export const OptionsExpirationStrategiesComponent: React.FC<OptionsExpirationStr
                         </IonLabel>
                         {isEmpty && (
                             <EmptyExpirationHintBox>
-                                {isWaitingForData ? 'loading quotes…' : 'no match for current filters'}
+                                {isWaitingForData ? 'loading quotes…' : (props.emptyReason ?? 'no match for current filters')}
                             </EmptyExpirationHintBox>
                         )}
 
@@ -164,7 +166,7 @@ export const OptionsExpirationStrategiesComponent: React.FC<OptionsExpirationStr
                     <NoStrategiesMessageBox slot="content">
                         {isWaitingForData
                             ? 'Waiting for live quotes for this expiration…'
-                            : 'No combination passes the current filters (delta, wings, spread, credit). Try widening the filters.'}
+                            : (props.emptyReason ?? 'No combination passes the current filters (delta, wings, spread, credit). Try widening the filters.')}
                     </NoStrategiesMessageBox>
                 ) : (
                     <StrategiesBox slot="content">

@@ -185,23 +185,41 @@ export class TastyMarketDataProvider implements IMarketDataProviderService {
         return result;
     }
 
+    // DxLink enforces a subscription rate limit ("BAD_ACTION: Your subscription
+    // rate is too high") and silently drops the excess — those symbols never get
+    // data. Pace large subscriptions in chunks. An unsubscribe bumps the
+    // generation, cancelling still-pending chunks from a superseded view.
+    private static readonly SUB_CHUNK_SIZE = 500;
+    private static readonly SUB_CHUNK_DELAY_MS = 300;
+    private _subGeneration = 0;
+
     subscribe(symbols: string[]): void {
-        this._tastyClient.quoteStreamer.subscribe(symbols, [
+        const generation = this._subGeneration;
+        const types = [
             MarketDataSubscriptionType.Quote,
             MarketDataSubscriptionType.Trade,
-            //MarketDataSubscriptionType.Summary,
-            //MarketDataSubscriptionType.Profile,
             MarketDataSubscriptionType.Greeks,
-            //MarketDataSubscriptionType.Underlying
-        ]);
+        ];
 
-
+        void (async () => {
+            for(let i = 0; i < symbols.length; i += TastyMarketDataProvider.SUB_CHUNK_SIZE) {
+                if(generation !== this._subGeneration) {
+                    return; // superseded by an unsubscribe (ticker switch / filter change)
+                }
+                this._tastyClient.quoteStreamer.subscribe(
+                    symbols.slice(i, i + TastyMarketDataProvider.SUB_CHUNK_SIZE), types);
+                if(i + TastyMarketDataProvider.SUB_CHUNK_SIZE < symbols.length) {
+                    await new Promise(resolve => setTimeout(resolve, TastyMarketDataProvider.SUB_CHUNK_DELAY_MS));
+                }
+            }
+        })();
     }
 
     unsubscribe(symbols: string[]): void {
         if(symbols.length === 0) {
             return;
         }
+        this._subGeneration++;
         this._tastyClient.quoteStreamer.unsubscribe(symbols);
         /*
         runInAction(() => {

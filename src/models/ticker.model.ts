@@ -1,4 +1,4 @@
-import {makeObservable, observable, runInAction} from "mobx";
+import {IReactionDisposer, makeObservable, observable, reaction, runInAction} from "mobx";
 import {OptionsExpirationModel} from "./options-expiration.model";
 import {ITickerViewModel} from "./ticker.view-model.interface";
 import {IServiceFactory} from "../services/service-factory.interface";
@@ -121,13 +121,72 @@ export class TickerModel implements ITickerViewModel {
         });
     }
 
-    private _getAllSymbols(): string[] {
-        const allOptionsSymbols: string[] = [this.symbol];
+    // DxLink rejects over-large subscription batches ("Your subscription rate is
+    // too high") and the rejected symbols never receive data. Subscribing every
+    // strike of every expiration (~11k symbols on QQQ) starved ~70% of the chain,
+    // so only stream expirations inside the DTE filter and strikes near the money.
+    private static readonly STRIKE_BAND_PCT = 0.20;
+
+    private _streamedSymbols: string[] = [];
+    private _filtersReaction: IReactionDisposer | null = null;
+
+    private _getSpotEstimate(): number {
+        const trade = this.getSymbolTrade(this.symbol)?.price ?? 0;
+        if(trade > 0) {
+            return trade;
+        }
+        const quote = this.getSymbolQuote(this.symbol);
+        const bid = quote?.bidPrice ?? 0;
+        const ask = quote?.askPrice ?? 0;
+        return (bid > 0 && ask > 0) ? (bid + ask) / 2 : 0;
+    }
+
+    private _getStreamSymbols(): string[] {
+        const filters = this.services.settings.strategyFilters;
+        const spot = this._getSpotEstimate();
+        const symbols: string[] = [this.symbol];
+
         for(const expiration of this.expirations) {
-            expiration.getAllSymbols().forEach(s => allOptionsSymbols.push(s));
+            if(expiration.daysToExpiration < filters.minDaysToExpiration
+                || expiration.daysToExpiration > filters.maxDaysToExpiration) {
+                continue;
+            }
+            for(const strike of expiration.strikes) {
+                if(spot > 0 && Math.abs(strike.strikePrice - spot) > spot * TickerModel.STRIKE_BAND_PCT) {
+                    continue;
+                }
+                symbols.push(strike.put.streamerSymbol);
+                symbols.push(strike.call.streamerSymbol);
+            }
         }
 
-        return allOptionsSymbols;
+        return symbols;
+    }
+
+    private _syncSubscriptions(): void {
+        const next = this._getStreamSymbols();
+        const nextSet = new Set(next);
+        const prevSet = new Set(this._streamedSymbols);
+        const toRemove = this._streamedSymbols.filter(s => !nextSet.has(s));
+        const toAdd = next.filter(s => !prevSet.has(s));
+
+        if(toRemove.length > 0) {
+            this.services.marketDataProvider.unsubscribe(toRemove);
+        }
+        if(toAdd.length > 0) {
+            this.services.marketDataProvider.subscribe(toAdd);
+        }
+        this._streamedSymbols = next;
+    }
+
+    private async _waitForSpot(timeoutMs: number): Promise<void> {
+        const startedAt = Date.now();
+        while(Date.now() - startedAt < timeoutMs) {
+            if(this._getSpotEstimate() > 0) {
+                return;
+            }
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
     }
 
     async start(): Promise<void> {
@@ -135,7 +194,17 @@ export class TickerModel implements ITickerViewModel {
         try {
             await this._loadMarketData();
 
-            this.services.marketDataProvider.subscribe(this._getAllSymbols());
+            // Subscribe the underlying first and wait briefly for a spot price
+            // so the options subscription can be narrowed to near-the-money strikes.
+            this.services.marketDataProvider.subscribe([this.symbol]);
+            await this._waitForSpot(3000);
+            this._streamedSymbols = [this.symbol];
+            this._syncSubscriptions();
+
+            // Re-sync streamed symbols whenever strategy filters change (DTE range).
+            this._filtersReaction = reaction(
+                () => this.services.settings.strategyFilters.lastUpdate,
+                () => this._syncSubscriptions());
 
             // Load positions for this ticker to enable conflict detection
             await this.services.positions.loadPositions(this.symbol);
@@ -147,7 +216,12 @@ export class TickerModel implements ITickerViewModel {
     }
 
     async stop(): Promise<void> {
-        this.services.marketDataProvider.unsubscribe(this._getAllSymbols());
+        if(this._filtersReaction) {
+            this._filtersReaction();
+            this._filtersReaction = null;
+        }
+        this.services.marketDataProvider.unsubscribe(this._streamedSymbols);
+        this._streamedSymbols = [];
         this.services.positions.clearPositions();
     }
 

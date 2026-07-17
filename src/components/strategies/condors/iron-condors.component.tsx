@@ -21,9 +21,12 @@ export const IronCondorsComponent: React.FC<IronCondorsProps> = observer((props)
     const expirations = props.ticker.getFilteredExpirations();
     const hasAnyCondors = expirations.some(expiration => expiration.ironCondors.length > 0);
 
-    // "No Edge" signal: no ICs pass filters AND at least one EV/Alpha/POP filter is active
+    // "No Edge" signal: no ICs pass filters AND at least one EV/Alpha/POP filter
+    // is active AND quotes have actually arrived — before streaming warms up
+    // every list is empty and the banner would falsely hide the loading states.
+    const hasAnyStreamingData = expirations.some(expiration => expiration.hasStreamingData);
     const hasActiveEdgeFilters = filters.minExpectedValue > 0 || filters.minAlpha > 0 || filters.minPop > 0;
-    const noEdge = !hasAnyCondors && hasActiveEdgeFilters;
+    const noEdge = !hasAnyCondors && hasActiveEdgeFilters && hasAnyStreamingData;
 
     if (noEdge) {
         return <NoEdgeBannerComponent symbol={props.ticker.symbol} />;

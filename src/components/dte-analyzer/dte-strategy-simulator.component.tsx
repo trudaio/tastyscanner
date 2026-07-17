@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useState} from "react";
+import React, {useEffect, useMemo, useRef, useState} from "react";
 import {observer} from "mobx-react-lite";
 import {useServices} from "../../hooks/use-services.hook";
 import {IonChip, IonInput, IonSegment, IonSegmentButton, IonLabel, IonSpinner} from "@ionic/react";
@@ -369,15 +369,18 @@ export const DteStrategySimulatorComponent: React.FC = observer(() => {
             const newTicker = new TickerModel(selectedTicker, services);
             await newTicker.start();
             if (!cancelled) { setTicker(newTicker); setLoading(false); }
+            else { newTicker.stop(); } // unmounted mid-start — don't leak
         };
         loadTicker();
         return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedTicker, services]);
 
+    // Ref-tracked cleanup: a [] closure would capture the initial null ticker.
+    const tickerRef = useRef<TickerModel | null>(null);
+    useEffect(() => { tickerRef.current = ticker; }, [ticker]);
     useEffect(() => {
-        return () => { if (ticker) ticker.stop(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        return () => { tickerRef.current?.stop(); };
     }, []);
 
     const results = useMemo(() => {

@@ -187,30 +187,55 @@ export class TastyMarketDataProvider implements IMarketDataProviderService {
 
     // DxLink enforces a subscription rate limit ("BAD_ACTION: Your subscription
     // rate is too high") and silently drops the excess — those symbols never get
-    // data. Pace large subscriptions in chunks. An unsubscribe bumps the
-    // generation, cancelling still-pending chunks from a superseded view.
+    // data. Pace large subscriptions in chunks. Several services share this
+    // provider (ticker, watchlist, delta alerts, savior, portfolio greeks), so
+    // symbols are REFCOUNTED: the transport subscribe happens on 0→1 and the
+    // transport unsubscribe on 1→0. An unsubscribe pulls its symbols out of
+    // still-pending chunks but never cancels other callers' pending work.
     private static readonly SUB_CHUNK_SIZE = 500;
     private static readonly SUB_CHUNK_DELAY_MS = 300;
-    private _subGeneration = 0;
+    private _refCounts = new Map<string, number>();
+    private _pendingSubJobs: Set<string>[] = [];
 
     subscribe(symbols: string[]): void {
-        const generation = this._subGeneration;
+        const toStream: string[] = [];
+        for(const symbol of symbols) {
+            const count = this._refCounts.get(symbol) ?? 0;
+            this._refCounts.set(symbol, count + 1);
+            if(count === 0) {
+                toStream.push(symbol);
+            }
+        }
+        if(toStream.length === 0) {
+            return;
+        }
+
         const types = [
             MarketDataSubscriptionType.Quote,
             MarketDataSubscriptionType.Trade,
             MarketDataSubscriptionType.Greeks,
         ];
+        const job = new Set(toStream);
+        this._pendingSubJobs.push(job);
 
         void (async () => {
-            for(let i = 0; i < symbols.length; i += TastyMarketDataProvider.SUB_CHUNK_SIZE) {
-                if(generation !== this._subGeneration) {
-                    return; // superseded by an unsubscribe (ticker switch / filter change)
+            try {
+                for(let i = 0; i < toStream.length; i += TastyMarketDataProvider.SUB_CHUNK_SIZE) {
+                    // Re-check against the job set: an unsubscribe may have removed
+                    // symbols that should no longer be subscribed.
+                    const chunk = toStream
+                        .slice(i, i + TastyMarketDataProvider.SUB_CHUNK_SIZE)
+                        .filter(s => job.has(s));
+                    if(chunk.length > 0) {
+                        this._tastyClient.quoteStreamer.subscribe(chunk, types);
+                        chunk.forEach(s => job.delete(s));
+                    }
+                    if(i + TastyMarketDataProvider.SUB_CHUNK_SIZE < toStream.length) {
+                        await new Promise(resolve => setTimeout(resolve, TastyMarketDataProvider.SUB_CHUNK_DELAY_MS));
+                    }
                 }
-                this._tastyClient.quoteStreamer.subscribe(
-                    symbols.slice(i, i + TastyMarketDataProvider.SUB_CHUNK_SIZE), types);
-                if(i + TastyMarketDataProvider.SUB_CHUNK_SIZE < symbols.length) {
-                    await new Promise(resolve => setTimeout(resolve, TastyMarketDataProvider.SUB_CHUNK_DELAY_MS));
-                }
+            } finally {
+                this._pendingSubJobs = this._pendingSubJobs.filter(j => j !== job);
             }
         })();
     }
@@ -219,19 +244,47 @@ export class TastyMarketDataProvider implements IMarketDataProviderService {
         if(symbols.length === 0) {
             return;
         }
-        this._subGeneration++;
-        this._tastyClient.quoteStreamer.unsubscribe(symbols);
-        /*
+
+        const toDrop: string[] = [];
+        for(const symbol of symbols) {
+            const count = this._refCounts.get(symbol) ?? 0;
+            if(count <= 1) {
+                this._refCounts.delete(symbol);
+                if(count === 1) {
+                    toDrop.push(symbol);
+                }
+            } else {
+                this._refCounts.set(symbol, count - 1);
+            }
+        }
+        if(toDrop.length === 0) {
+            return;
+        }
+
+        // Symbols still sitting in a pending chunk were never sent to the
+        // transport — just remove them; only unsubscribe the ones already sent.
+        const removedFromPending = new Set<string>();
+        for(const job of this._pendingSubJobs) {
+            for(const symbol of toDrop) {
+                if(job.delete(symbol)) {
+                    removedFromPending.add(symbol);
+                }
+            }
+        }
+        const sent = toDrop.filter(s => !removedFromPending.has(s));
+        if(sent.length > 0) {
+            this._tastyClient.quoteStreamer.unsubscribe(sent);
+        }
+
+        // Purge cached data for fully-released symbols so the UI can't keep
+        // rendering frozen prices as if they were live.
         runInAction(() => {
-            for(const symbol of symbols) {
+            for(const symbol of toDrop) {
                 delete this.quotes[symbol];
                 delete this.trades[symbol];
                 delete this.greeks[symbol];
             }
         });
-
-         */
-
     }
 
     private _streamEventHandler= (records: any[]) => {

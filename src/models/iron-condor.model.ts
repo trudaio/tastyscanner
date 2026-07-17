@@ -19,7 +19,7 @@ export class IronCondorModel implements IIronCondorViewModel {
     }
 
     get key(): string {
-        return `${this.wingsWidth}${this.btoPut.strikePrice}${this.stoPut.strikePrice}${this.stoCall.strikePrice}${this.btoCall.strikePrice}`;
+        return `${this.wingsWidth}-${this.btoPut.strikePrice}-${this.stoPut.strikePrice}-${this.stoCall.strikePrice}-${this.btoCall.strikePrice}`;
     }
 
     get credit(): number {
@@ -42,13 +42,18 @@ export class IronCondorModel implements IIronCondorViewModel {
         const breakEvenPut = this.stoPut.strike.expiration.getStrikeBelow(putBreakEven)?.put
         const breakEvenCall = this.stoCall.strike.expiration.getStrikeAbove(callBreakEven)?.call;
 
+        // absoluteDeltaPercent is 0 when the greeks haven't streamed yet — a
+        // missing delta must count as UNKNOWN (conservative 50), never as 0,
+        // otherwise ICs get a phantom ~100% POP during quote warmup and sort
+        // to the top of the list.
+        const putBreakEventDelta = breakEvenPut && breakEvenPut.absoluteDeltaPercent > 0
+            ? breakEvenPut.absoluteDeltaPercent : 50;
+        const callBreakEventDelta = breakEvenCall && breakEvenCall.absoluteDeltaPercent > 0
+            ? breakEvenCall.absoluteDeltaPercent : 50;
 
-        const putBreakEventDelta = breakEvenPut?.absoluteDeltaPercent ?? 50;
-        const callBreakEventDelta = breakEvenCall?.absoluteDeltaPercent ?? 50;
-
-        return 100 - Math.max(putBreakEventDelta, callBreakEventDelta);
-
-
+        // P(loss) ≈ sum of BOTH tail probabilities. Using only the larger tail
+        // overstated POP by the entire smaller tail (~16pp on a balanced IC).
+        return Math.max(0, 100 - Math.min(100, putBreakEventDelta + callBreakEventDelta));
     }
 
     /**

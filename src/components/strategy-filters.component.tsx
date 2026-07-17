@@ -213,7 +213,7 @@ export const StrategyFiltersComponent: React.FC = observer(() => {
             <SeparatorBox/>
             <SingleValueEditorComponent label="Max bid/ask spread"
                                                min={0}
-                                               max={10}
+                                               max={30}
                                                value={filters.maxBidAskSpread}
                                                formatValue={value => `${value}%`}
                                                onValueChanged={value => filters.maxBidAskSpread = value}/>

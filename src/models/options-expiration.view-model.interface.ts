@@ -12,6 +12,22 @@ export enum OptionExpirationTypeEnum {
 
 export type OptionExpirationSettlementType = 'AM' | 'PM';
 
+/** Stage-by-stage counters from the last Iron Condor build — used to tell
+ *  the user WHICH filter rejected everything when an expiration shows 0. */
+export interface IcBuildStats {
+    deltaPuts: number;
+    deltaCalls: number;
+    pairs: number;
+    wingStrikeMissing: number;
+    spreadFail: number;
+    built: number;
+    popFail: number;
+    evFail: number;
+    alphaFail: number;
+    creditFail: number;
+    rrFail: number;
+}
+
 export interface IOptionsExpirationVewModel {
     readonly key: string;
     readonly expirationDate: string;
@@ -20,6 +36,7 @@ export interface IOptionsExpirationVewModel {
     readonly expirationType: OptionExpirationTypeEnum;
     readonly strikes: IOptionStrikeViewModel[];
     readonly hasStreamingData: boolean;
+    readonly icBuildStats: IcBuildStats | null;
     readonly ironCondors: IIronCondorViewModel[];
     readonly putCreditSpreads: ICreditSpreadViewModel[];
     readonly callCreditSpreads: ICreditSpreadViewModel[];

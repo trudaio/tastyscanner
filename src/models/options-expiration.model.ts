@@ -2,6 +2,7 @@ import {OptionModel} from "./option.model";
 import {TickerModel} from "./ticker.model";
 import {OptionStrikeModel} from "./option-strike.model";
 import {
+    IcBuildStats,
     IOptionsExpirationVewModel,
     OptionExpirationSettlementType,
     OptionExpirationTypeEnum
@@ -95,7 +96,19 @@ export class OptionsExpirationModel implements IOptionsExpirationVewModel {
     }
 
     get ironCondors(): IronCondorModel[] {
-        return this._filterStrategies(this._strategiesBuilder.buildIronCondors());
+        const built = this._strategiesBuilder.buildIronCondors();
+        const filtered = this._filterStrategies(built);
+        const stats = this._strategiesBuilder.lastIcBuildStats;
+        if(stats) {
+            stats.rrFail = built.length - filtered.length;
+        }
+        return filtered;
+    }
+
+    /** Stage counters from the last ironCondors evaluation — read AFTER
+     *  accessing ironCondors (the getter above populates them). */
+    get icBuildStats(): IcBuildStats | null {
+        return this._strategiesBuilder.lastIcBuildStats;
     }
 
     get putCreditSpreads(): PutCreditSpreadModel[] {

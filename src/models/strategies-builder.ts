@@ -7,6 +7,7 @@ import {CallCreditSpreadModel} from "./call-credit-spread.model";
 import {CreditSpreadModel} from "./credit-spread.model";
 import {OptionStrikeModel} from "./option-strike.model";
 import {WingMode} from "../services/settings/settings.service.interface";
+import {IcBuildStats} from "./options-expiration.view-model.interface";
 
 
 export class StrategiesBuilder {
@@ -68,9 +69,25 @@ export class StrategiesBuilder {
             : { putWing: baseWing, callWing: widerWing };
     }
 
+    /** Stage counters of the most recent buildIronCondors() run — lets the UI
+     *  explain WHICH filter rejected everything when 0 ICs survive. Written
+     *  during the build; read right after ironCondors is evaluated. */
+    public lastIcBuildStats: IcBuildStats | null = null;
+
     buildIronCondors(): IronCondorModel[] {
-        const puts = this.getPutsByDelta().groupByKey(put => put.absoluteDeltaPercent.toString());
-        const calls = this.getCallsByDelta().groupByKey(call => call.absoluteDeltaPercent.toString());
+        const stats: IcBuildStats = {
+            deltaPuts: 0, deltaCalls: 0, pairs: 0, wingStrikeMissing: 0, spreadFail: 0,
+            built: 0, popFail: 0, evFail: 0, alphaFail: 0, creditFail: 0, rrFail: 0,
+        };
+        this.lastIcBuildStats = stats;
+
+        const putsList = this.getPutsByDelta();
+        const callsList = this.getCallsByDelta();
+        stats.deltaPuts = putsList.length;
+        stats.deltaCalls = callsList.length;
+
+        const puts = putsList.groupByKey(put => put.absoluteDeltaPercent.toString());
+        const calls = callsList.groupByKey(call => call.absoluteDeltaPercent.toString());
 
         const putsDeltas = Object.keys(puts).map(d => parseFloat(d)).sort((a, b) => b - a);
         const callsDeltas = Object.keys(calls).map(d => parseFloat(d)).sort((a, b) => b - a);
@@ -116,6 +133,8 @@ export class StrategiesBuilder {
             }
         }
 
+        stats.pairs = deltaPairs.length;
+
         for (const [putDelta, callDelta] of deltaPairs) {
             const stoPuts = puts[putDelta.toString()];
             const stoCalls = calls[callDelta.toString()];
@@ -125,18 +144,23 @@ export class StrategiesBuilder {
                 for (const stoCall of stoCalls) {
                     for (const { putWing, callWing } of wingVariants) {
                         const btoPut = this.expiration.getStrikeByPrice(stoPut.strike.strikePrice - putWing)?.put;
-                        if (!btoPut) continue;
                         const btoCall = this.expiration.getStrikeByPrice(stoCall.strike.strikePrice + callWing)?.call;
-                        if (!btoCall) continue;
+                        if (!btoPut || !btoCall) {
+                            stats.wingStrikeMissing++;
+                            continue;
+                        }
 
                         if (this._hasGoodBidAskSpread([btoPut, stoPut, stoCall, btoCall])) {
                             const maxWing = Math.max(putWing, callWing);
                             condors.push(new IronCondorModel(maxWing, btoPut, stoPut, stoCall, btoCall, this.services));
+                        } else {
+                            stats.spreadFail++;
                         }
                     }
                 }
             }
         }
+        stats.built = condors.length;
 
         // Apply EV / Alpha / POP / Credit filters, evaluating each metric ONCE
         // per condor — pop/expectedValue/alpha are uncached getter chains with
@@ -146,10 +170,10 @@ export class StrategiesBuilder {
             condor: c, pop: c.pop, expectedValue: c.expectedValue, alpha: c.alpha, credit: c.credit,
         }));
         const filtered = snapshots.filter(s => {
-            if (filters.minPop > 0 && s.pop < filters.minPop) return false;
-            if (filters.minExpectedValue !== 0 && s.expectedValue < filters.minExpectedValue) return false;
-            if (filters.minAlpha !== 0 && s.alpha < filters.minAlpha) return false;
-            if (filters.minCredit > 0 && s.credit < filters.minCredit) return false;
+            if (filters.minPop > 0 && s.pop < filters.minPop) { stats.popFail++; return false; }
+            if (filters.minExpectedValue !== 0 && s.expectedValue < filters.minExpectedValue) { stats.evFail++; return false; }
+            if (filters.minAlpha !== 0 && s.alpha < filters.minAlpha) { stats.alphaFail++; return false; }
+            if (filters.minCredit > 0 && s.credit < filters.minCredit) { stats.creditFail++; return false; }
             return true;
         });
 

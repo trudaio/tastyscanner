@@ -16,6 +16,8 @@ interface AllExpirationsStrategiesComponentProps {
     getExpirations: () => IOptionsExpirationVewModel[];
     getExpirationStrategies: (expiration: IOptionsExpirationVewModel) => IOptionsStrategyViewModel[];
     noStrategiesAvailableMessage: string;
+    /** Optional: explains WHY an expiration has zero strategies (which filter). */
+    getEmptyReason?: (expiration: IOptionsExpirationVewModel) => string | null;
     onTrade: (strategy: IOptionsStrategyViewModel) => void;
 }
 export const AllExpirationsStrategiesComponent: React.FC<AllExpirationsStrategiesComponentProps> = observer((props) => {
@@ -62,6 +64,7 @@ export const AllExpirationsStrategiesComponent: React.FC<AllExpirationsStrategie
                 ticker={props.ticker}
                 expiration={expiration}
                 strategies={expiration.key === expandedExpirationKey ? expandedExpirationStrategies : getExpirationStrategies(expiration)}
+                emptyReason={props.getEmptyReason?.(expiration) ?? null}
                 onTrade={props.onTrade}
                 earningsDatePosition={getEarningsDateRenderPosition(props.ticker, expirations, index)}/>)}
         </IonAccordionGroup>

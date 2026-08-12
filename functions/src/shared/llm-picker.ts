@@ -2,10 +2,10 @@
 // Takes top candidates → asks Claude to select → returns final IAiCompetitionTrade
 
 import { callClaude, extractJson, BudgetExceededError } from './llm-client';
-import { PICK_SYSTEM_PROMPT, PAPER_PICK_SYSTEM_PROMPT, buildPickUserPrompt, type PickPromptInput } from './prompts';
+import { PAPER_PICK_SYSTEM_PROMPT, buildPickUserPrompt, type PickPromptInput } from './prompts';
 import { candidateToTrade, type IcCandidate, type CandidatesResult } from './ic-picker';
 import { reviewPick, type RiskReviewResult } from './risk-manager';
-import type { IAiCompetitionTrade, IAiState, ICompetitionTradeV2, IMarketContext } from './types';
+import type { IAiCompetitionTrade, IAiState, IMarketContext } from './types';
 
 interface ClaudePickResponse {
     selection: number | 'custom';
@@ -45,16 +45,11 @@ export async function pickWithLlm(
     aiState: IAiState,
     candidatesResult: CandidatesResult,
     weeklyMemo: string | null,
-    catalinSubmission: ICompetitionTradeV2 | null,
     bpePercentage?: number,
-    mode: 'competition' | 'paper' = 'competition',
 ): Promise<LlmPickResult> {
     if (candidatesResult.topN.length === 0) {
         return { trade: null, reason: candidatesResult.reason, fallback: 'no_candidates' };
     }
-
-    const isPaper = mode === 'paper';
-    const auditFunction = isPaper ? 'guvidPaperSubmit' as const : 'aiDailySubmit' as const;
 
     // Build prompt
     const pickInput: PickPromptInput = {
@@ -65,22 +60,15 @@ export async function pickWithLlm(
         aiState,
         candidates: candidatesResult.topN,
         weeklyMemo,
-        catalinSubmission: catalinSubmission ? {
-            strategy: catalinSubmission.strategy,
-            pop: catalinSubmission.pop,
-            credit: catalinSubmission.credit,
-            wings: catalinSubmission.wings,
-        } : null,
         bpePercentage,
-        mode,
     };
     const userPrompt = buildPickUserPrompt(pickInput);
 
     let claudeResponse: { text: string; auditLogId: string };
     try {
-        const result = await callClaude(isPaper ? PAPER_PICK_SYSTEM_PROMPT : PICK_SYSTEM_PROMPT, userPrompt, {
+        const result = await callClaude(PAPER_PICK_SYSTEM_PROMPT, userPrompt, {
             uid,
-            function: auditFunction,
+            function: 'guvidPaperSubmit',
             purpose: 'round_pick',
             agent: 'picker',
             metadata: { ticker, expirationDate, dte },
@@ -161,7 +149,7 @@ export async function pickWithLlm(
     };
 
     // ─── Phase 2: Risk Manager review ───────────────────────────
-    const riskReview = await reviewPick(uid, trade, marketContext, aiState, bpePercentage, candidatesResult.topN, mode);
+    const riskReview = await reviewPick(uid, trade, marketContext, aiState, bpePercentage, candidatesResult.topN);
 
     // Append risk verdict to trade rationale + rules + structured fields
     trade = {

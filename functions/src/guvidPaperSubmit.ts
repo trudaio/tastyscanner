@@ -6,9 +6,9 @@
 import * as admin from 'firebase-admin';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { defineSecret } from 'firebase-functions/params';
-import { getCredentialsForUser, findActiveTastyUser, CATALIN_UID as CATALIN_UID_CONST } from './shared/credentials';
+import { getCredentialsForUser, CATALIN_UID } from './shared/credentials';
 import {
-    getAccessToken, getAccounts, getOptionsChain, getMarketDataSnapshot, getUnderlyingPrice, getAccountBalances,
+    getAccessToken, getAccounts, getOptionsChain, getMarketDataSnapshot, getUnderlyingPrice, getAccountBalances, getIvRanks,
 } from './shared/tasty-rest-client';
 import type { IRawPosition } from './shared/tasty-rest-client';
 import { getTopCandidates, hasStrikeOverlap, type ChainInput } from './shared/ic-picker';
@@ -22,7 +22,6 @@ import { DEFAULT_AI_STATE } from './shared/types';
 
 const anthropicKey = defineSecret('ANTHROPIC_API_KEY');
 
-const CATALIN_UID = CATALIN_UID_CONST;
 const TICKERS: Array<'SPX' | 'QQQ'> = ['SPX', 'QQQ'];
 
 // Entry window: 25-45 DTE so the 21-DTE management rule leaves room to work.
@@ -98,11 +97,9 @@ export const guvidPaperSubmit = onSchedule(
         memory: '1GiB',
     },
     async () => {
-        const uid = CATALIN_UID || await findActiveTastyUser();
-        if (!uid) {
-            console.error('[guvidPaperSubmit] No user with active TastyTrade found — aborting');
-            return;
-        }
+        // Hardcoded owner uid — background jobs must never run on another
+        // user's TastyTrade account (see shared/credentials.ts).
+        const uid = CATALIN_UID;
         const date = new Date().toISOString().split('T')[0];
         console.log(`[guvidPaperSubmit] Starting for uid=${uid}, date=${date}`);
 
@@ -154,7 +151,10 @@ export const guvidPaperSubmit = onSchedule(
         // VIX fetched once (identical for all tickers). FAIL-SAFE: without a
         // real VIX reading the VIX≥18 entry gate cannot be evaluated — skip
         // the whole run rather than trade blind on a default.
-        const vix = await getUnderlyingPrice(token, 'VIX');
+        const [vix, ivRanks] = await Promise.all([
+            getUnderlyingPrice(token, 'VIX'),
+            getIvRanks(token, TICKERS),
+        ]);
         if (vix === null || vix <= 0) {
             console.error('[guvidPaperSubmit] No VIX reading — skipping all picks (fail-safe: never trade blind)');
             return;
@@ -189,7 +189,7 @@ export const guvidPaperSubmit = onSchedule(
                 const marketContext: IMarketContext = {
                     underlyingPrice,
                     vix,
-                    ivRank: 0,
+                    ivRank: ivRanks.get(ticker) ?? 0,
                     technicals,
                 };
 
@@ -262,14 +262,12 @@ export const guvidPaperSubmit = onSchedule(
                     }
                     candidates.topN = conflictFree;
 
-                    // LLM pick (Picker → Risk Manager) in paper-trading mode
+                    // LLM pick (Picker → Risk Manager)
                     const llmResult = await pickWithLlm(
                         uid, ticker, expDate, exp['days-to-expiration'],
                         marketContext, aiState, candidates,
                         memoText,
-                        null,           // no user submission — Guvid trades solo
                         bpePct,
-                        'paper',
                     );
                     if (!llmResult.trade) {
                         console.log(`[guvidPaperSubmit] ${ticker} ${expDate}: no trade — ${llmResult.reason}`);

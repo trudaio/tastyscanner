@@ -5,8 +5,11 @@ import {
 } from 'recharts';
 import {
     subscribePaperAccount, subscribePaperTrades, subscribePaperEquity,
-    IPaperAccount, IPaperTrade, IEquityPoint,
 } from '../../services/guvid-paper/guvid-paper.service';
+import type {
+    IPaperAccount, IPaperTrade, IEquityPoint,
+} from '../../services/guvid-paper/guvid-paper.service.interface';
+import { formatUsd as fmt } from '../../utils/format';
 
 /* ─── layout ─────────────────────────────────────────────── */
 const PageBox = styled.div`
@@ -211,9 +214,6 @@ const EmptyBox = styled.div`
     line-height: 1.6;
 `;
 
-const fmt = (v: number) =>
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(v);
-
 /* ─── trade card ─────────────────────────────────────────── */
 const PaperTradeCard: React.FC<{ trade: IPaperTrade }> = ({ trade }) => {
     const [showRationale, setShowRationale] = useState(false);
@@ -332,6 +332,16 @@ export const GuvidPaperComponent: React.FC = () => {
                     </StatCard>
                 </StatsGrid>
             </HeroCard>
+
+            {!account && (
+                <SectionCard>
+                    <EmptyBox>
+                        The virtual account is not initialized yet.<br />
+                        It seeds itself automatically with the real account&apos;s net liq
+                        at the first scheduled run (weekdays, 10:30 AM ET).
+                    </EmptyBox>
+                </SectionCard>
+            )}
 
             {equity.length >= 2 && (
                 <SectionCard>

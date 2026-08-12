@@ -17,6 +17,7 @@ import { checkmarkCircleOutline, closeCircleOutline, eyeOutline, eyeOffOutline }
 import { observer } from 'mobx-react-lite';
 import { BrokerType } from '../services/broker-provider/broker-provider.interface';
 import { BrokerAccountListComponent } from '../components/broker-manager/broker-account-list.component';
+import { FractionalKellyCardComponent } from '../components/fractional-kelly-card.component';
 
 const PageBox = styled.div`
     max-width: 600px;
@@ -262,6 +263,9 @@ export const AccountPage: React.FC = observer(() => {
                             {resetError && <IonText color="danger"><p>{resetError}</p></IonText>}
                         </IonCardContent>
                     </IonCard>
+
+                    {/* ── Fractional Kelly (½K) ─────────────────────────── */}
+                    <FractionalKellyCardComponent />
 
                     {/* ── Schimbare parola ──────────────────────────────── */}
                     <IonCard>

@@ -2,7 +2,7 @@
 // Takes top candidates → asks Claude to select → returns final IAiCompetitionTrade
 
 import { callClaude, extractJson, BudgetExceededError } from './llm-client';
-import { PICK_SYSTEM_PROMPT, buildPickUserPrompt, type PickPromptInput } from './prompts';
+import { PICK_SYSTEM_PROMPT, PAPER_PICK_SYSTEM_PROMPT, buildPickUserPrompt, type PickPromptInput } from './prompts';
 import { candidateToTrade, type IcCandidate, type CandidatesResult } from './ic-picker';
 import { reviewPick, type RiskReviewResult } from './risk-manager';
 import type { IAiCompetitionTrade, IAiState, ICompetitionTradeV2, IMarketContext } from './types';
@@ -47,11 +47,14 @@ export async function pickWithLlm(
     weeklyMemo: string | null,
     catalinSubmission: ICompetitionTradeV2 | null,
     bpePercentage?: number,
-    systemPromptOverride?: string,
+    mode: 'competition' | 'paper' = 'competition',
 ): Promise<LlmPickResult> {
     if (candidatesResult.topN.length === 0) {
         return { trade: null, reason: candidatesResult.reason, fallback: 'no_candidates' };
     }
+
+    const isPaper = mode === 'paper';
+    const auditFunction = isPaper ? 'guvidPaperSubmit' as const : 'aiDailySubmit' as const;
 
     // Build prompt
     const pickInput: PickPromptInput = {
@@ -69,14 +72,15 @@ export async function pickWithLlm(
             wings: catalinSubmission.wings,
         } : null,
         bpePercentage,
+        mode,
     };
     const userPrompt = buildPickUserPrompt(pickInput);
 
     let claudeResponse: { text: string; auditLogId: string };
     try {
-        const result = await callClaude(systemPromptOverride ?? PICK_SYSTEM_PROMPT, userPrompt, {
+        const result = await callClaude(isPaper ? PAPER_PICK_SYSTEM_PROMPT : PICK_SYSTEM_PROMPT, userPrompt, {
             uid,
-            function: 'aiDailySubmit',
+            function: auditFunction,
             purpose: 'round_pick',
             agent: 'picker',
             metadata: { ticker, expirationDate, dte },
@@ -149,13 +153,15 @@ export async function pickWithLlm(
         deviatesFromRules: parsed.deviatesFromRules ?? false,
         deviationReason: parsed.deviationReason ?? null,
         requiresApproval: parsed.deviatesFromRules && parsed.confidenceScore >= 70,
-        approvalStatus: parsed.deviatesFromRules && parsed.confidenceScore >= 70 ? 'pending' : undefined,
+        // Only include approvalStatus when approval is actually required —
+        // an `approvalStatus: undefined` key makes Firestore .set() throw.
+        ...(parsed.deviatesFromRules && parsed.confidenceScore >= 70 ? { approvalStatus: 'pending' as const } : {}),
         approvedAt: null,
         customStrategy: isCustom,
     };
 
     // ─── Phase 2: Risk Manager review ───────────────────────────
-    const riskReview = await reviewPick(uid, trade, marketContext, aiState, bpePercentage, candidatesResult.topN);
+    const riskReview = await reviewPick(uid, trade, marketContext, aiState, bpePercentage, candidatesResult.topN, mode);
 
     // Append risk verdict to trade rationale + rules + structured fields
     trade = {

@@ -193,18 +193,24 @@ export async function getMarketDataSnapshot(token: string, symbols: string[]): P
 export async function getUnderlyingPrice(token: string, symbol: string): Promise<number | null> {
     try {
         const params = new URLSearchParams();
-        if (symbol === 'SPX' || symbol.startsWith('$')) {
+        // VIX and SPX are indices — querying them as equity returns no data
+        if (symbol === 'SPX' || symbol === 'VIX' || symbol.startsWith('$')) {
             params.append('index', symbol);
         } else {
             params.append('equity', symbol);
         }
         const resp = await request<{
-            data: { items: Array<{ symbol: string; bid?: string; ask?: string; mid?: string; 'last-trade-price'?: string }> };
+            data: { items: Array<{ symbol: string; bid?: string; ask?: string; mid?: string; mark?: string; last?: string; 'last-trade-price'?: string }> };
         }>('GET', `/market-data/by-type?${params.toString()}`, token);
         const item = resp.data.items[0];
         if (!item) return null;
-        const last = item['last-trade-price'] ? parseFloat(item['last-trade-price']) : 0;
+        // The API returns `last`/`mark`, not `last-trade-price` (kept for
+        // compatibility). Indices like VIX have NO bid/ask, so without reading
+        // `last` this returned null and callers fell back to fake defaults.
+        const last = parseFloat(item['last-trade-price'] ?? item.last ?? '0');
         if (last > 0) return last;
+        const mark = parseFloat(item.mark ?? item.mid ?? '0');
+        if (mark > 0) return mark;
         const bid = parseFloat(item.bid ?? '0');
         const ask = parseFloat(item.ask ?? '0');
         return (bid + ask) / 2 || null;

@@ -2,14 +2,17 @@
 // Manages Guvid's open paper trades:
 //   - refreshes current close cost + unrealized P&L on every open trade
 //   - closes at 75% of max profit, or at 21 DTE (Catalin's management rules)
-//   - updates the paper account (realized P&L, wins/losses, correct count)
-//   - writes a daily equity snapshot for the equity curve
+//   - NEVER closes without live quotes — a quote outage defers to the next run
+//     instead of fabricating a P&L
+//   - all writes (trades + account + equity snapshot) commit in ONE batch, so
+//     a mid-run failure can't desynchronize the account from the trade docs
 
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { getCredentialsForUser, findActiveTastyUser, CATALIN_UID as CATALIN_UID_CONST } from './shared/credentials';
 import { getAccessToken, getOptionsChain, getMarketDataSnapshot } from './shared/tasty-rest-client';
+import type { IOptionQuote } from './shared/tasty-rest-client';
 import {
-    equityCollection, getOpenPaperTrades, paperEquity, tradesCollection, updatePaperAccount,
+    daysUntilExpiration, equityCollection, getOpenPaperTrades, paperEquity, tradesCollection,
     type IEquityPoint, type IPaperAccount, type IPaperTrade,
 } from './shared/paper-account';
 import * as admin from 'firebase-admin';
@@ -19,10 +22,46 @@ const CATALIN_UID = CATALIN_UID_CONST;
 const PROFIT_TARGET_PCT = 75;   // close at 75% of max profit
 const MANAGE_DTE = 21;          // close at 21 DTE (Catalin's rule)
 
-function daysUntil(expirationDate: string): number {
-    const exp = new Date(expirationDate + 'T16:00:00-05:00'); // 4 PM ET expiration
-    const now = new Date();
-    return Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+type StrikeMap = Map<number, { call: string; put: string }>;
+type ChainResult = Awaited<ReturnType<typeof getOptionsChain>>;
+
+/** Build streamer-symbol lookup for one expiration, searching ALL chain roots
+ *  (SPX exposes multiple roots — SPX and SPXW — and the expiration may not
+ *  live under items[0]). */
+function buildStrikeMap(chain: ChainResult, expDate: string): StrikeMap {
+    const map: StrikeMap = new Map();
+    for (const item of chain.items) {
+        const exp = item.expirations.find((e) => e['expiration-date'] === expDate);
+        if (!exp) continue;
+        for (const s of exp.strikes) {
+            map.set(parseFloat(s['strike-price']), {
+                call: s['call-streamer-symbol'],
+                put: s['put-streamer-symbol'],
+            });
+        }
+        if (map.size > 0) break;
+    }
+    return map;
+}
+
+/** Cost to close (per share): short mids − long mids. Null when any leg is
+ *  missing a quote or the trade isn't a complete 4-leg IC. */
+function computeCurrentClose(
+    trade: IPaperTrade,
+    strikeMap: StrikeMap,
+    quotes: Map<string, IOptionQuote>,
+): number | null {
+    let total = 0;
+    let legs = 0;
+    for (const leg of trade.legs) {
+        const entry = strikeMap.get(leg.strike);
+        if (!entry) return null;
+        const q = quotes.get(leg.optionType === 'C' ? entry.call : entry.put);
+        if (!q || (q.bid <= 0 && q.ask <= 0)) return null;
+        total += (leg.type === 'STO' ? 1 : -1) * q.mid;
+        legs++;
+    }
+    return legs === 4 ? total : null;
 }
 
 export const guvidPaperClose = onSchedule(
@@ -37,8 +76,9 @@ export const guvidPaperClose = onSchedule(
         const uid = CATALIN_UID || await findActiveTastyUser();
         if (!uid) { console.error('[guvidPaperClose] No active TastyTrade user found'); return; }
 
-        const accountDoc = await admin.firestore()
-            .collection('users').doc(uid).collection('guvidPaper').doc('account').get();
+        const accountRef = admin.firestore()
+            .collection('users').doc(uid).collection('guvidPaper').doc('account');
+        const accountDoc = await accountRef.get();
         if (!accountDoc.exists) {
             console.log('[guvidPaperClose] No paper account yet — nothing to manage');
             return;
@@ -59,32 +99,30 @@ export const guvidPaperClose = onSchedule(
         let unrealizedTotal = 0;
         let stillOpen = 0;
 
-        // Group by ticker|expiration so each chain is fetched once
+        const batch = admin.firestore().batch();
+
+        // Group by ticker|expiration; fetch each ticker's chain only once
         const byExp = new Map<string, IPaperTrade[]>();
         for (const t of openTrades) {
             const k = `${t.ticker}|${t.expiration}`;
             if (!byExp.has(k)) byExp.set(k, []);
             byExp.get(k)!.push(t);
         }
+        const chainCache = new Map<string, ChainResult | null>();
 
         for (const [key, trades] of byExp) {
             const [ticker, expDate] = key.split('|');
-            let strikeMap = new Map<number, { call: string; put: string }>();
-            try {
-                const chain = await getOptionsChain(token, ticker);
-                const exp = chain.items[0]?.expirations.find((e) => e['expiration-date'] === expDate);
-                if (exp) {
-                    for (const s of exp.strikes) {
-                        strikeMap.set(parseFloat(s['strike-price']), {
-                            call: s['call-streamer-symbol'],
-                            put: s['put-streamer-symbol'],
-                        });
-                    }
+
+            if (!chainCache.has(ticker)) {
+                try {
+                    chainCache.set(ticker, await getOptionsChain(token, ticker));
+                } catch (e) {
+                    console.warn(`[guvidPaperClose] Chain fetch failed for ${ticker}:`, e);
+                    chainCache.set(ticker, null);
                 }
-            } catch (e) {
-                console.warn(`[guvidPaperClose] Chain fetch failed for ${key}:`, e);
-                strikeMap = new Map();
             }
+            const chain = chainCache.get(ticker) ?? null;
+            const strikeMap: StrikeMap = chain ? buildStrikeMap(chain, expDate) : new Map();
 
             const allSymbols: string[] = [];
             for (const t of trades) {
@@ -95,32 +133,24 @@ export const guvidPaperClose = onSchedule(
             }
             const quotes = allSymbols.length > 0
                 ? await getMarketDataSnapshot(token, [...new Set(allSymbols)])
-                : new Map<string, import('./shared/tasty-rest-client').IOptionQuote>();
+                : new Map<string, IOptionQuote>();
 
             for (const trade of trades) {
                 try {
-                    const dte = daysUntil(trade.expiration);
+                    const dte = daysUntilExpiration(trade.expiration);
+                    const currentClose = computeCurrentClose(trade, strikeMap, quotes);
 
-                    // Current cost to close = short mids − long mids (per share)
-                    let currentClose: number | null = null;
-                    const legMid = (strike: number, type: 'P' | 'C'): number | null => {
-                        const e = strikeMap.get(strike);
-                        if (!e) return null;
-                        const q = quotes.get(type === 'C' ? e.call : e.put);
-                        return q ? q.mid : null;
-                    };
-                    const ps = legMid(trade.legs.find((l) => l.type === 'STO' && l.optionType === 'P')!.strike, 'P');
-                    const pb = legMid(trade.legs.find((l) => l.type === 'BTO' && l.optionType === 'P')!.strike, 'P');
-                    const sc = legMid(trade.legs.find((l) => l.type === 'STO' && l.optionType === 'C')!.strike, 'C');
-                    const cb = legMid(trade.legs.find((l) => l.type === 'BTO' && l.optionType === 'C')!.strike, 'C');
-                    if (ps !== null && pb !== null && sc !== null && cb !== null) {
-                        currentClose = ps + sc - pb - cb;
+                    if (currentClose === null) {
+                        // No reliable quotes — never book a P&L we didn't observe.
+                        // Leave the trade open; the next run will retry.
+                        console.warn(`[guvidPaperClose] ${trade.id}: no quotes (dte=${dte}) — deferring management to next run`);
+                        stillOpen++;
+                        unrealizedTotal += trade.unrealizedPl ?? 0;
+                        continue;
                     }
 
-                    const plDollars = currentClose !== null
-                        ? Math.round((trade.credit - currentClose) * 100 * trade.quantity * 100) / 100
-                        : null;
-                    const profitPct = currentClose !== null && trade.credit > 0
+                    const plDollars = Math.round((trade.credit - currentClose) * 100 * trade.quantity * 100) / 100;
+                    const profitPct = trade.credit > 0
                         ? Math.round(((trade.credit - currentClose) / trade.credit) * 1000) / 10
                         : null;
 
@@ -128,15 +158,10 @@ export const guvidPaperClose = onSchedule(
                     const hitDte = dte <= MANAGE_DTE;
 
                     if (hitTarget || hitDte) {
-                        // Close. If no quotes at DTE close, assume shorts expire worthless
-                        // (keeps full credit) — same convention as the old closeCheck.
-                        const exitPl = plDollars !== null
-                            ? plDollars
-                            : Math.round(trade.credit * 100 * trade.quantity * 100) / 100;
-                        const correct = exitPl > 0;
-                        await tradesCollection(uid).doc(trade.id!).update({
+                        const correct = plDollars > 0;
+                        batch.update(tradesCollection(uid).doc(trade.id!), {
                             status: 'closed',
-                            exitPl,
+                            exitPl: plDollars,
                             exitDate: new Date().toISOString().split('T')[0],
                             closedBy: hitTarget ? 'target' : 'dte',
                             currentClose,
@@ -144,17 +169,17 @@ export const guvidPaperClose = onSchedule(
                             profitPct,
                             correct,
                         });
-                        realizedDelta += exitPl;
+                        realizedDelta += plDollars;
                         closedDelta++;
                         if (correct) winsDelta++; else lossesDelta++;
-                        console.log(`[guvidPaperClose] CLOSED ${trade.id}: ${hitTarget ? 'target' : `${dte} DTE`}, P&L $${exitPl.toFixed(2)}`);
+                        console.log(`[guvidPaperClose] CLOSED ${trade.id}: ${hitTarget ? 'target' : `${dte} DTE`}, P&L $${plDollars.toFixed(2)}`);
                     } else {
-                        await tradesCollection(uid).doc(trade.id!).update({
+                        batch.update(tradesCollection(uid).doc(trade.id!), {
                             currentClose,
                             unrealizedPl: plDollars,
                             profitPct,
                         });
-                        unrealizedTotal += plDollars ?? 0;
+                        unrealizedTotal += plDollars;
                         stillOpen++;
                     }
                 } catch (e) {
@@ -163,19 +188,20 @@ export const guvidPaperClose = onSchedule(
             }
         }
 
-        // Update the paper account
+        // Account update + daily equity snapshot in the SAME batch as the
+        // trade updates — atomic, so realizedPl can never drift from the docs.
+        const newRealized = Math.round((account.realizedPl + realizedDelta) * 100) / 100;
         if (closedDelta > 0) {
-            await updatePaperAccount(uid, {
-                realizedPl: Math.round((account.realizedPl + realizedDelta) * 100) / 100,
+            batch.update(accountRef, {
+                realizedPl: newRealized,
                 wins: account.wins + winsDelta,
                 losses: account.losses + lossesDelta,
                 tradesClosed: account.tradesClosed + closedDelta,
+                lastUpdated: new Date().toISOString(),
             });
         }
 
-        // Daily equity snapshot
         const date = new Date().toISOString().split('T')[0];
-        const newRealized = Math.round((account.realizedPl + realizedDelta) * 100) / 100;
         const equityPoint: IEquityPoint = {
             date,
             realizedPl: newRealized,
@@ -183,7 +209,9 @@ export const guvidPaperClose = onSchedule(
             equity: Math.round((paperEquity({ ...account, realizedPl: newRealized }) + unrealizedTotal) * 100) / 100,
             openCount: stillOpen,
         };
-        await equityCollection(uid).doc(date).set(equityPoint);
+        batch.set(equityCollection(uid).doc(date), equityPoint);
+
+        await batch.commit();
 
         console.log(`[guvidPaperClose] Complete — closed ${closedDelta}, realized $${realizedDelta.toFixed(2)}, equity $${equityPoint.equity.toFixed(2)}`);
     },

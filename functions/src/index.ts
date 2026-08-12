@@ -9,6 +9,9 @@ import { defineSecret } from 'firebase-functions/params';
 admin.initializeApp();
 
 const db = admin.firestore();
+// Trade objects legitimately carry optional fields (e.g. approvalStatus) that
+// may be undefined — without this, any .set()/.update() containing one throws.
+db.settings({ ignoreUndefinedProperties: true });
 
 interface ICredentialsRequest {
   clientSecret: string;

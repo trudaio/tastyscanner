@@ -13,12 +13,11 @@ import {
 import type { IRawPosition } from './shared/tasty-rest-client';
 import { getTopCandidates, hasStrikeOverlap, type ChainInput } from './shared/ic-picker';
 import { pickWithLlm } from './shared/llm-picker';
-import { PAPER_PICK_SYSTEM_PROMPT } from './shared/prompts';
 import {
     getOrCreatePaperAccount, getOpenPaperTrades, paperBpePercentage, paperEquity,
     sizePaperQuantity, tradesCollection, updatePaperAccount, type IPaperTrade,
 } from './shared/paper-account';
-import type { IAiState, IMarketContext, ITechnicalsContext, IWeeklyMemo } from './shared/types';
+import type { IAiState, IMarketContext, ITechnicalsContext } from './shared/types';
 import { DEFAULT_AI_STATE } from './shared/types';
 
 const anthropicKey = defineSecret('ANTHROPIC_API_KEY');
@@ -123,6 +122,10 @@ export const guvidPaperSubmit = onSchedule(
         }
         const balances = await getAccountBalances(token, accounts[0]['account-number']);
         const account = await getOrCreatePaperAccount(uid, balances?.netLiquidatingValue ?? 0);
+        if (!account) {
+            console.error('[guvidPaperSubmit] Paper account not seeded (real balances unavailable) — skipping run');
+            return;
+        }
         const equity = paperEquity(account);
 
         // 3. Open paper positions → BPE of the paper account
@@ -137,34 +140,52 @@ export const guvidPaperSubmit = onSchedule(
 
         const paperPositions = paperTradesAsPositions(openTrades);
 
-        // 4. AI state + latest weekly memo (kept for pick context)
+        // 4. AI state — override the competition-era counters with the paper
+        //    account's actual record so prompts reflect what Guvid is judged on.
+        //    The weekly memo producer is retired, so no memo is injected.
         const aiState = await getAiState(uid);
-        const memoSnap = await admin.firestore()
-            .collection('users').doc(uid)
-            .collection('aiState').doc('current').collection('weeklyMemos')
-            .orderBy('createdAt', 'desc').limit(1).get();
-        const latestMemo: IWeeklyMemo | null = memoSnap.empty ? null : (memoSnap.docs[0].data() as IWeeklyMemo);
-        const memoText = latestMemo?.memoText ?? null;
+        aiState.wins = account.wins;
+        aiState.losses = account.losses;
+        aiState.draws = 0;
+        aiState.ghostRounds = 0;
+        aiState.totalRounds = account.tradesClosed;
+        const memoText: string | null = null;
+
+        // VIX fetched once (identical for all tickers). FAIL-SAFE: without a
+        // real VIX reading the VIX≥18 entry gate cannot be evaluated — skip
+        // the whole run rather than trade blind on a default.
+        const vix = await getUnderlyingPrice(token, 'VIX');
+        if (vix === null || vix <= 0) {
+            console.error('[guvidPaperSubmit] No VIX reading — skipping all picks (fail-safe: never trade blind)');
+            return;
+        }
+        const bpeCap = vix > 22 ? 70 : 50;
 
         let tradesOpenedToday = 0;
 
         for (const ticker of TICKERS) {
             try {
-                const underlyingPrice = await getUnderlyingPrice(token, ticker) ?? 0;
+                // BPE soft cap per ticker — checked BEFORE any heavy fetch
+                if (bpePct >= bpeCap) {
+                    console.warn(`[guvidPaperSubmit] ${ticker}: paper BPE ${bpePct.toFixed(1)}% >= ${bpeCap}% cap (VIX=${vix.toFixed(1)}) — skipping ticker`);
+                    continue;
+                }
+
+                const [underlyingPrice, chain, technicals] = await Promise.all([
+                    getUnderlyingPrice(token, ticker).then((p) => p ?? 0),
+                    getOptionsChain(token, ticker),
+                    loadTechnicals(ticker),
+                ]);
                 if (!underlyingPrice) {
                     console.warn(`[guvidPaperSubmit] No underlying price for ${ticker} — skipping`);
                     continue;
                 }
-
-                const chain = await getOptionsChain(token, ticker);
                 const firstChain = chain.items[0];
                 if (!firstChain) {
                     console.warn(`[guvidPaperSubmit] No chain for ${ticker}`);
                     continue;
                 }
 
-                const vix = await getUnderlyingPrice(token, 'VIX') ?? 20;
-                const technicals = await loadTechnicals(ticker);
                 const marketContext: IMarketContext = {
                     underlyingPrice,
                     vix,
@@ -172,18 +193,12 @@ export const guvidPaperSubmit = onSchedule(
                     technicals,
                 };
 
-                // BPE soft cap per ticker (re-checked as paper trades stack up)
-                const bpeCap = vix > 22 ? 70 : 50;
-                if (bpePct >= bpeCap) {
-                    console.warn(`[guvidPaperSubmit] ${ticker}: paper BPE ${bpePct.toFixed(1)}% >= ${bpeCap}% cap (VIX=${vix.toFixed(1)}) — skipping ticker`);
-                    continue;
-                }
-
                 const targetExps = firstChain.expirations
                     .filter((e) => e['days-to-expiration'] >= MIN_ENTRY_DTE && e['days-to-expiration'] <= MAX_ENTRY_DTE)
                     .slice(0, MAX_EXPIRATIONS_PER_TICKER);
 
                 for (const exp of targetExps) {
+                    try {
                     const expDate = exp['expiration-date'];
 
                     // Bound quote subscriptions to ±10% of spot
@@ -247,14 +262,14 @@ export const guvidPaperSubmit = onSchedule(
                     }
                     candidates.topN = conflictFree;
 
-                    // LLM pick (Picker → Risk Manager), paper-trading system prompt
+                    // LLM pick (Picker → Risk Manager) in paper-trading mode
                     const llmResult = await pickWithLlm(
                         uid, ticker, expDate, exp['days-to-expiration'],
                         marketContext, aiState, candidates,
                         memoText,
                         null,           // no user submission — Guvid trades solo
                         bpePct,
-                        PAPER_PICK_SYSTEM_PROMPT,
+                        'paper',
                     );
                     if (!llmResult.trade) {
                         console.log(`[guvidPaperSubmit] ${ticker} ${expDate}: no trade — ${llmResult.reason}`);
@@ -274,6 +289,10 @@ export const guvidPaperSubmit = onSchedule(
                         quantity: qty,
                         maxProfit: Math.round(t.credit * 100 * qty * 100) / 100,
                         maxLoss: Math.round(perContractMaxLoss * qty * 100) / 100,
+                        // No approval workflow in paper mode — deviations are
+                        // logged in the rationale, never left 'pending' forever.
+                        requiresApproval: false,
+                        approvalStatus: undefined,
                     };
 
                     // BPE gate again including the new trade
@@ -297,13 +316,27 @@ export const guvidPaperSubmit = onSchedule(
                         profitPct: null,
                         correct: null,
                     };
-                    await tradesCollection(uid).doc(tradeId).set(paperTrade);
+                    // .create() (not .set()) — a retry the same day must never
+                    // overwrite an already-booked trade back to 'open'.
+                    try {
+                        await tradesCollection(uid).doc(tradeId).create(paperTrade);
+                    } catch (e) {
+                        if ((e as { code?: number }).code === 6 /* ALREADY_EXISTS */) {
+                            console.log(`[guvidPaperSubmit] ${tradeId} already exists — skipping duplicate`);
+                            continue;
+                        }
+                        throw e;
+                    }
                     console.log(`[guvidPaperSubmit] OPENED ${tradeId}: ${sized.strategy} x${qty}, credit $${sized.credit}, maxLoss $${sized.maxLoss} (${llmResult.reason})`);
 
                     // Track the new exposure for subsequent gates + overlap checks
                     bpePct = projectedBpe;
                     tradesOpenedToday++;
                     paperPositions.push(...paperTradesAsPositions([{ ...paperTrade, id: tradeId } as IPaperTrade]));
+                    } catch (e) {
+                        // One bad expiration must not discard the remaining ones
+                        console.error(`[guvidPaperSubmit] Error on ${ticker} ${exp['expiration-date']}:`, e);
+                    }
                 }
             } catch (e) {
                 console.error(`[guvidPaperSubmit] Error processing ${ticker}:`, e);

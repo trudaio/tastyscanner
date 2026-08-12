@@ -2,7 +2,7 @@
 // Mirrors functions/src/shared/paper-account.ts (keep in sync)
 
 import {
-    collection, doc, onSnapshot, orderBy, query, Unsubscribe,
+    collection, doc, limit, onSnapshot, orderBy, query, Unsubscribe,
 } from 'firebase/firestore';
 import { db, auth } from '../../firebase';
 
@@ -79,20 +79,23 @@ export function subscribePaperAccount(callback: (account: IPaperAccount | null) 
     });
 }
 
+/** Most recent 250 trades (newest first). Open trades are always recent
+ *  (entries are 25-45 DTE), so they're guaranteed inside the window. */
 export function subscribePaperTrades(callback: (trades: IPaperTrade[]) => void): Unsubscribe {
     const uid = requireUid();
     const ref = collection(db, 'users', uid, 'guvidPaperTrades');
-    const q = query(ref, orderBy('openDate', 'desc'));
+    const q = query(ref, orderBy('openDate', 'desc'), limit(250));
     return onSnapshot(q, (snap) => {
         callback(snap.docs.map((d) => ({ id: d.id, ...d.data() } as IPaperTrade)));
     });
 }
 
+/** Last ~1 year of daily equity points, oldest first. */
 export function subscribePaperEquity(callback: (points: IEquityPoint[]) => void): Unsubscribe {
     const uid = requireUid();
     const ref = collection(db, 'users', uid, 'guvidPaperEquity');
-    const q = query(ref, orderBy('date', 'asc'));
+    const q = query(ref, orderBy('date', 'desc'), limit(365));
     return onSnapshot(q, (snap) => {
-        callback(snap.docs.map((d) => d.data() as IEquityPoint));
+        callback(snap.docs.map((d) => d.data() as IEquityPoint).reverse());
     });
 }

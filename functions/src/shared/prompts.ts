@@ -14,6 +14,8 @@ export interface PickPromptInput {
     weeklyMemo: string | null;
     catalinSubmission: { strategy: string; pop: number; credit: number; wings: number } | null;
     bpePercentage?: number;     // current account BPE % (0-100)
+    /** 'paper' drops the competition framing (Catalin's move, approval flow). */
+    mode?: 'competition' | 'paper';
 }
 
 export const PICK_SYSTEM_PROMPT = `You are Guvidul, an autonomous AI Iron Condor trader competing against your developer Catalin in a 2-month head-to-head competition (deadline 2026-06-13).
@@ -84,14 +86,21 @@ export function buildPickUserPrompt(input: PickPromptInput): string {
         ? aiState.ruleAdjustments.slice(0, 5).map((r) => `- ${r.id}: effect=${r.effect.toFixed(2)}, samples=${r.samplesSeen}, winRate=${(r.winRate * 100).toFixed(0)}%`).join('\n')
         : '(no learned adjustments yet — first runs)';
 
-    const memoStr = weeklyMemo ?? '(no memo yet — first week of competition)';
+    const isPaper = input.mode === 'paper';
+
+    const memoStr = weeklyMemo ?? (isPaper ? '(no memo)' : '(no memo yet — first week of competition)');
 
     const catalinStr = catalinSubmission
         ? `Catalin already submitted: ${catalinSubmission.strategy}, POP ${catalinSubmission.pop}%, credit $${catalinSubmission.credit.toFixed(2)}, wings $${catalinSubmission.wings}.`
         : `Catalin has NOT submitted yet for this expiration (or this is a ghost round — you play solo).`;
 
+    // Paper mode has no opponent — replace the competition section entirely
+    const opponentSection = isPaper
+        ? `# Session Context\nYou trade solo into your virtual paper account. There is no opponent and no approval step — a deviating pick is simply logged with its reason.`
+        : `# Catalin's Move\n${catalinStr}`;
+
     const bpeStr = input.bpePercentage !== undefined
-        ? `\n- Account BPE used: ${input.bpePercentage.toFixed(1)}% of net liquidity (cap: 50% standard, 70% if VIX>22 + 16-delta picks)`
+        ? `\n- Account BPE used: ${input.bpePercentage.toFixed(1)}% of ${isPaper ? 'paper account equity' : 'net liquidity'} (cap: 50% standard, 70% if VIX>22 + 16-delta picks)`
         : '';
 
     const tech = marketContext.technicals;
@@ -110,7 +119,11 @@ Do NOT override structural rules (symmetric delta, credit-to-wing, min POP) unle
 is extreme (RSI >75 or <25, or |distanceσ| >2).`
         : `\n# Technical Context\n(no daily indicators available for this ticker — rely on structural rules)`;
 
-    return `# Today's Round
+    const recordLine = isPaper
+        ? `- Paper record so far: ${aiState.wins}W-${aiState.losses}L (${aiState.totalRounds} closed trades)`
+        : `- Record so far: ${aiState.wins}W-${aiState.losses}L-${aiState.draws}D (${aiState.ghostRounds} ghost)`;
+
+    return `# ${isPaper ? "Today's Paper-Trading Session" : "Today's Round"}
 - Date: ${new Date().toISOString().split('T')[0]}
 - Ticker: ${ticker}
 - Expiration: ${expirationDate} (${dte} DTE)
@@ -118,11 +131,10 @@ is extreme (RSI >75 or <25, or |distanceσ| >2).`
 - VIX: ${marketContext.vix.toFixed(2)}
 - IV Rank: ${marketContext.ivRank.toFixed(0)}${bpeStr}${techStr}
 
-# Catalin's Move
-${catalinStr}
+${opponentSection}
 
-# Your Strategy State (round ${aiState.totalRounds + 1})
-- Record so far: ${aiState.wins}W-${aiState.losses}L-${aiState.draws}D (${aiState.ghostRounds} ghost)
+# Your Strategy State${isPaper ? '' : ` (round ${aiState.totalRounds + 1})`}
+${recordLine}
 - Exploration rate: ${aiState.explorationRate.toFixed(3)}
 - Top rule adjustments learned:
 ${ruleAdjStr}
@@ -147,7 +159,7 @@ Output STRICT JSON:
   "confidenceScore": 30-95 integer,
   "rulesApplied": ["seed_vix_gate_18", "research_wings_10_optimal", "exploration_top_2", ...],
   "deviatesFromRules": true | false,
-  "deviationReason": null OR "string explaining the deviation and why it's worth Catalin's approval"
+  "deviationReason": null OR ${isPaper ? '"string explaining the deviation — it will be logged for review"' : '"string explaining the deviation and why it\'s worth Catalin\'s approval"'}
 }`;
 }
 

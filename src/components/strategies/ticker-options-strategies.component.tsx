@@ -288,7 +288,10 @@ export const TickerOptionsStrategiesComponent: React.FC = observer(() => {
                                                           strategy={currentStrategy}
                                                           symbol={ticker.symbol}
                                                           onDitDismiss={() => setCurrentStrategy(null)}
-                                                          onGuvidChallenge={onGuvidChallenge}/>}
+                                                          /* "Add to Guvid" retired with the competition — rounds written
+                                                             to competitionV2 had no consumer left (aiDailySubmit/closeCheck
+                                                             are gone), so the button was a silent dead end. */
+                                                          />}
         </IonTabs>
 
     )

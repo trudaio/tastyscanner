@@ -1,98 +1,53 @@
 // guvidPaperSubmit — Cloud Scheduler runs this daily at 10:30 AM ET (weekdays)
-// Guvid autonomous PAPER TRADING: picks Iron Condors on its own and books them
-// into a virtual account seeded with the user's real net liq at first run.
-// No competition — Guvid trades solo; performance is tracked for review.
+// Guvidelul ladder book (paper): ported from the Guvidul-Skew Discord bot
+// (guvidel_book.py, spec 03-TASTYSCANNER-IC-RULES.md, commit f591a59).
+//
+// Entry rules, per ticker (QQQ has priority — it is the reference instrument;
+// the bot's second name comes from its 2σ "fresh box" range scan, which has no
+// server-side equivalent here, so SPX stands in as the second book name):
+//   1. IVR ≥ 30 (true 52-week IVR from market-metrics)
+//   2. 2σ move gate: skip if |yesterday c2c| or |today so far| > 2σ_daily(60)
+//   3. Macro gate (FOMC/CPI) — NOT implemented server-side (no calendar source)
+// Then open ONE new IC rung on EVERY expiration inside 21–45 DTE that wasn't
+// already opened today, longest DTE first, 1 contract per rung:
+//   short put ~0.18Δ, short call ~0.16Δ, longs ~$10 out (±50% tolerance),
+//   skew tilt: relative 25Δ skew beyond ±30% doubles the expensive side's wing.
+// Caps: Σ rung BP (width × 100) ≤ 80% of NAV; max 20 new rungs/day;
+// stress pause: portfolio unrealized ≤ −10% NAV → no new rungs.
+// Pricing integrity: two-sided quotes on all 4 legs, slippage haircut,
+// credit plausibility invariant — no invented prices, ever.
 
-import * as admin from 'firebase-admin';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { defineSecret } from 'firebase-functions/params';
 import { getCredentialsForUser, CATALIN_UID } from './shared/credentials';
 import {
     getAccessToken, getAccounts, getOptionsChain, getMarketDataSnapshot, getUnderlyingPrice, getAccountBalances, getIvRanks,
 } from './shared/tasty-rest-client';
-import type { IRawPosition } from './shared/tasty-rest-client';
-import { getTopCandidates, hasStrikeOverlap, type ChainInput } from './shared/ic-picker';
-import { pickWithLlm } from './shared/llm-picker';
+import { fetchDailyBarsWithRetry } from './shared/polygon-client';
 import {
-    getOrCreatePaperAccount, getOpenPaperTrades, paperBpePercentage, paperEquity,
-    sizePaperQuantity, tradesCollection, updatePaperAccount, type IPaperTrade,
+    buildRung, decideStructure, measureSkew25, twoSigmaGate,
+    GUVIDEL_MIN_IVR, GUVIDEL_VOL_LOOKBACK, GUVIDEL_BOOK_DTE_MIN, GUVIDEL_BOOK_DTE_MAX,
+    GUVIDEL_BOOK_QTY, GUVIDEL_BOOK_BP_CAP, GUVIDEL_MAX_RUNGS_PER_DAY, GUVIDEL_STRESS_PAUSE_PCT,
+    GUVIDEL_BOOK_TARGET_PCT, GUVIDEL_BOOK_STOP_MULT, GUVIDEL_BOOK_EXIT_DTE,
+    type IChainStrike,
+} from './shared/guvidel-rules';
+import {
+    getOrCreatePaperAccount, getOpenPaperTrades, paperEquity,
+    tradesCollection, updatePaperAccount, type IPaperTrade,
 } from './shared/paper-account';
-import type { IAiState, IMarketContext, ITechnicalsContext } from './shared/types';
-import { DEFAULT_AI_STATE } from './shared/types';
+import type { IMarketContext } from './shared/types';
 
-const anthropicKey = defineSecret('ANTHROPIC_API_KEY');
+const polygonApiKey = defineSecret('POLYGON_API_KEY');
 
-const TICKERS: Array<'SPX' | 'QQQ'> = ['SPX', 'QQQ'];
-
-// Entry window: 25-45 DTE so the 21-DTE management rule leaves room to work.
-const MIN_ENTRY_DTE = 25;
-const MAX_ENTRY_DTE = 45;
-const MAX_EXPIRATIONS_PER_TICKER = 3;
-
-async function getAiState(uid: string): Promise<IAiState> {
-    const doc = await admin.firestore().collection('users').doc(uid).collection('aiState').doc('current').get();
-    if (doc.exists) return doc.data() as IAiState;
-    await admin.firestore().collection('users').doc(uid).collection('aiState').doc('current').set(DEFAULT_AI_STATE);
-    return { ...DEFAULT_AI_STATE };
-}
-
-/** Open paper trades expressed as raw positions, so hasStrikeOverlap can
- *  guard against strike cancel/duplicate conflicts within the paper book. */
-function paperTradesAsPositions(trades: IPaperTrade[]): IRawPosition[] {
-    const positions: IRawPosition[] = [];
-    for (const t of trades) {
-        for (const leg of t.legs) {
-            positions.push({
-                symbol: `${t.ticker}-paper`,
-                underlyingSymbol: t.ticker,
-                strikePrice: leg.strike,
-                optionType: leg.optionType === 'C' ? 'C' : 'P',
-                expirationDate: t.expiration,
-                quantity: t.quantity,
-                quantityDirection: leg.type === 'BTO' ? 'Long' : 'Short',
-                averageOpenPrice: 0,
-                closePrice: 0,
-                multiplier: 100,
-            });
-        }
-    }
-    return positions;
-}
-
-async function loadTechnicals(ticker: string): Promise<ITechnicalsContext | null> {
-    try {
-        const techDoc = await admin.firestore().collection('marketTechnicals').doc(ticker).get();
-        if (!techDoc.exists) return null;
-        const d = techDoc.data() as {
-            rsi: { value: number; verdict: string };
-            bb: { distanceSigma: number; verdict: string };
-            atr: { value: number; verdict: string };
-            computedAt: string;
-            stale?: boolean;
-        };
-        const ageHours = (Date.now() - new Date(d.computedAt).getTime()) / 3_600_000;
-        if (!!d.stale || ageHours > 48) return null;
-        return {
-            rsi: d.rsi.value,
-            rsiVerdict: d.rsi.verdict,
-            bbDistance: d.bb.distanceSigma,
-            bbVerdict: d.bb.verdict,
-            atr: d.atr.value,
-            atrVerdict: d.atr.verdict,
-            computedAt: d.computedAt,
-            stale: false,
-        };
-    } catch {
-        return null;
-    }
-}
+// QQQ first — it gets the buying power before the cap bites
+const TICKERS: Array<'QQQ' | 'SPX'> = ['QQQ', 'SPX'];
 
 export const guvidPaperSubmit = onSchedule(
     {
         schedule: '30 10 * * 1-5', // 10:30 AM ET weekdays
         timeZone: 'America/New_York',
         region: 'us-east1',
-        secrets: [anthropicKey],
+        secrets: [polygonApiKey],
         timeoutSeconds: 540,
         memory: '1GiB',
     },
@@ -101,7 +56,7 @@ export const guvidPaperSubmit = onSchedule(
         // user's TastyTrade account (see shared/credentials.ts).
         const uid = CATALIN_UID;
         const date = new Date().toISOString().split('T')[0];
-        console.log(`[guvidPaperSubmit] Starting for uid=${uid}, date=${date}`);
+        console.log(`[guvidPaperSubmit] Guvidelul ladder starting, date=${date}`);
 
         // 1. Credentials + token (market data only — no real orders, ever)
         const creds = await getCredentialsForUser(uid);
@@ -123,217 +78,219 @@ export const guvidPaperSubmit = onSchedule(
             console.error('[guvidPaperSubmit] Paper account not seeded (real balances unavailable) — skipping run');
             return;
         }
-        const equity = paperEquity(account);
 
-        // 3. Open paper positions → BPE of the paper account
+        // 3. Book state: NAV, BP usage, stress check
         const openTrades = await getOpenPaperTrades(uid);
-        let bpePct = paperBpePercentage(openTrades, equity);
-        console.log(`[guvidPaperSubmit] Paper equity $${equity.toFixed(2)}, BPE ${bpePct.toFixed(1)}%, open trades ${openTrades.length}`);
+        const unrealizedTotal = openTrades.reduce((s, t) => s + (t.unrealizedPl ?? 0), 0);
+        const nav = paperEquity(account) + unrealizedTotal;
+        let bpUsed = openTrades.reduce((s, t) => s + t.wings * 100 * t.quantity, 0);
+        const bpCap = nav * GUVIDEL_BOOK_BP_CAP;
+        console.log(`[guvidPaperSubmit] NAV $${nav.toFixed(2)}, BP used $${bpUsed.toFixed(0)} / cap $${bpCap.toFixed(0)}, open rungs ${openTrades.length}`);
 
-        if (bpePct >= 80) {
-            console.warn(`[guvidPaperSubmit] Paper BPE ${bpePct.toFixed(1)}% >= 80% hard cap — skipping all picks today`);
+        // Stress rule: unrealized P&L ≤ −10% NAV → stop opening new rungs
+        if (nav > 0 && unrealizedTotal / nav <= GUVIDEL_STRESS_PAUSE_PCT) {
+            console.warn(`[guvidPaperSubmit] STRESS PAUSE: unrealized $${unrealizedTotal.toFixed(0)} ≤ ${GUVIDEL_STRESS_PAUSE_PCT * 100}% of NAV — no new rungs today`);
             return;
         }
 
-        const paperPositions = paperTradesAsPositions(openTrades);
-
-        // 4. AI state — override the competition-era counters with the paper
-        //    account's actual record so prompts reflect what Guvid is judged on.
-        //    The weekly memo producer is retired, so no memo is injected.
-        const aiState = await getAiState(uid);
-        aiState.wins = account.wins;
-        aiState.losses = account.losses;
-        aiState.draws = 0;
-        aiState.ghostRounds = 0;
-        aiState.totalRounds = account.tradesClosed;
-        const memoText: string | null = null;
-
-        // VIX fetched once (identical for all tickers). FAIL-SAFE: without a
-        // real VIX reading the VIX≥18 entry gate cannot be evaluated — skip
-        // the whole run rather than trade blind on a default.
-        const [vix, ivRanks] = await Promise.all([
-            getUnderlyingPrice(token, 'VIX'),
+        // 4. Context: IVR per ticker + VIX (display only — the ladder gates on IVR, not VIX)
+        const [ivRanks, vix] = await Promise.all([
             getIvRanks(token, TICKERS),
+            getUnderlyingPrice(token, 'VIX'),
         ]);
-        if (vix === null || vix <= 0) {
-            console.error('[guvidPaperSubmit] No VIX reading — skipping all picks (fail-safe: never trade blind)');
-            return;
-        }
-        const bpeCap = vix > 22 ? 70 : 50;
 
-        let tradesOpenedToday = 0;
+        // Rungs already opened today (any status) — one rung per expiration per day
+        const todaySnap = await tradesCollection(uid).where('openDate', '==', date).get();
+        const openedToday = new Set(todaySnap.docs.map((d) => {
+            const t = d.data() as IPaperTrade;
+            return `${t.ticker}|${t.expiration}`;
+        }));
+
+        let rungsOpenedToday = 0;
 
         for (const ticker of TICKERS) {
             try {
-                // BPE soft cap per ticker — checked BEFORE any heavy fetch
-                if (bpePct >= bpeCap) {
-                    console.warn(`[guvidPaperSubmit] ${ticker}: paper BPE ${bpePct.toFixed(1)}% >= ${bpeCap}% cap (VIX=${vix.toFixed(1)}) — skipping ticker`);
+                // Gate 1: IVR ≥ 30. Fail-safe: unknown IVR → skip (never trade blind)
+                const ivr = ivRanks.get(ticker);
+                if (ivr === undefined) {
+                    console.warn(`[guvidPaperSubmit] ${ticker}: IVR unavailable — skipping (fail-safe)`);
+                    continue;
+                }
+                if (ivr < GUVIDEL_MIN_IVR) {
+                    console.log(`[guvidPaperSubmit] ${ticker}: IVR ${ivr.toFixed(1)} < ${GUVIDEL_MIN_IVR} — gate closed`);
                     continue;
                 }
 
-                const [underlyingPrice, chain, technicals] = await Promise.all([
-                    getUnderlyingPrice(token, ticker).then((p) => p ?? 0),
-                    getOptionsChain(token, ticker),
-                    loadTechnicals(ticker),
-                ]);
-                if (!underlyingPrice) {
-                    console.warn(`[guvidPaperSubmit] No underlying price for ${ticker} — skipping`);
-                    continue;
-                }
-                const firstChain = chain.items[0];
-                if (!firstChain) {
-                    console.warn(`[guvidPaperSubmit] No chain for ${ticker}`);
+                const spot = await getUnderlyingPrice(token, ticker) ?? 0;
+                if (!spot) {
+                    console.warn(`[guvidPaperSubmit] ${ticker}: no spot price — skipping`);
                     continue;
                 }
 
-                const marketContext: IMarketContext = {
-                    underlyingPrice,
-                    vix,
-                    ivRank: ivRanks.get(ticker) ?? 0,
-                    technicals,
-                };
-
-                const targetExps = firstChain.expirations
-                    .filter((e) => e['days-to-expiration'] >= MIN_ENTRY_DTE && e['days-to-expiration'] <= MAX_ENTRY_DTE)
-                    .slice(0, MAX_EXPIRATIONS_PER_TICKER);
-
-                for (const exp of targetExps) {
-                    try {
-                    const expDate = exp['expiration-date'];
-
-                    // Bound quote subscriptions to ±10% of spot
-                    const STRIKE_BAND_PCT = 0.10;
-                    const lo = underlyingPrice * (1 - STRIKE_BAND_PCT);
-                    const hi = underlyingPrice * (1 + STRIKE_BAND_PCT);
-                    const streamerSymbols: string[] = [];
-                    for (const s of exp.strikes) {
-                        const k = parseFloat(s['strike-price']);
-                        if (k < lo || k > hi) continue;
-                        streamerSymbols.push(s['call-streamer-symbol'], s['put-streamer-symbol']);
-                    }
-
-                    const quoteMap = await getMarketDataSnapshot(token, streamerSymbols);
-                    if (quoteMap.size === 0) {
-                        console.warn(`[guvidPaperSubmit] No quotes for ${ticker} ${expDate}`);
+                // Gate 2: 2σ move gate (σ over 60 sessions from Polygon daily closes;
+                // SPX uses SPY as proxy inside polygon-client — return σ is ~identical)
+                try {
+                    const bars = await fetchDailyBarsWithRetry(polygonApiKey.value(), ticker, GUVIDEL_VOL_LOOKBACK + 5);
+                    const gate = twoSigmaGate(bars.map((b) => b.close), ticker === 'SPX' ? 0 : spot);
+                    // NOTE: for SPX the spot is an index level vs SPY closes — today-so-far
+                    // leg is skipped there (0), yesterday's c2c still applies via SPY.
+                    if (gate.blocked) {
+                        console.log(`[guvidPaperSubmit] ${ticker}: 2σ gate — ${gate.reason}`);
                         continue;
                     }
+                    console.log(`[guvidPaperSubmit] ${ticker}: 2σ gate ok (${gate.reason})`);
+                } catch (e) {
+                    console.warn(`[guvidPaperSubmit] ${ticker}: Polygon bars unavailable — 2σ gate skipped:`, e);
+                }
 
-                    const chainInput: ChainInput = {
-                        ticker,
-                        underlyingPrice,
-                        expirationDate: expDate,
-                        dte: exp['days-to-expiration'],
-                        strikes: exp.strikes
-                            .filter((s) => {
-                                const k = parseFloat(s['strike-price']);
-                                return k >= lo && k <= hi;
-                            })
-                            .map((s) => ({
-                                strike: parseFloat(s['strike-price']),
-                                callSymbol: s.call,
-                                callStreamerSymbol: s['call-streamer-symbol'],
-                                putSymbol: s.put,
-                                putStreamerSymbol: s['put-streamer-symbol'],
-                            })),
-                        quotes: quoteMap,
-                    };
+                // Gate 3 (macro FOMC/CPI) — no server-side calendar source; not enforced.
 
-                    const candidates = getTopCandidates(chainInput, aiState, marketContext, 10);
-                    if (candidates.topN.length === 0) {
-                        console.log(`[guvidPaperSubmit] ${ticker} ${expDate}: no candidates — ${candidates.reason}`);
-                        continue;
-                    }
+                const chain = await getOptionsChain(token, ticker);
 
-                    // No strike conflicts inside the paper book
-                    const conflictFree = candidates.topN.filter((c) => {
-                        const check = hasStrikeOverlap(
-                            { putBuy: c.putBuy, putSell: c.putSell, callSell: c.callSell, callBuy: c.callBuy },
-                            expDate,
-                            paperPositions,
-                        );
-                        if (check.overlaps) {
-                            console.log(`[guvidPaperSubmit] ${ticker} ${expDate}: filtered ${c.putBuy}/${c.putSell}p ${c.callSell}/${c.callBuy}c — ${check.reason}`);
+                // Merge expirations across ALL chain roots (SPX lists SPX + SPXW),
+                // dedupe by date, keep the root with more strikes.
+                const expMap = new Map<string, { dte: number; strikes: IChainStrike[] }>();
+                for (const item of chain.items) {
+                    for (const exp of item.expirations) {
+                        const dte = exp['days-to-expiration'];
+                        if (dte < GUVIDEL_BOOK_DTE_MIN || dte > GUVIDEL_BOOK_DTE_MAX) continue;
+                        // TastyTrade symbols (not streamer) — the REST snapshot is keyed by them
+                        const strikes: IChainStrike[] = exp.strikes.map((s) => ({
+                            strike: parseFloat(s['strike-price']),
+                            callSymbol: s.call,
+                            putSymbol: s.put,
+                        }));
+                        const existing = expMap.get(exp['expiration-date']);
+                        if (!existing || strikes.length > existing.strikes.length) {
+                            expMap.set(exp['expiration-date'], { dte, strikes });
                         }
-                        return !check.overlaps;
-                    }).slice(0, 5);
-                    if (conflictFree.length === 0) {
-                        console.log(`[guvidPaperSubmit] ${ticker} ${expDate}: all candidates conflict with open paper positions — skipping`);
-                        continue;
                     }
-                    candidates.topN = conflictFree;
+                }
 
-                    // LLM pick (Picker → Risk Manager)
-                    const llmResult = await pickWithLlm(
-                        uid, ticker, expDate, exp['days-to-expiration'],
-                        marketContext, aiState, candidates,
-                        memoText,
-                        bpePct,
-                    );
-                    if (!llmResult.trade) {
-                        console.log(`[guvidPaperSubmit] ${ticker} ${expDate}: no trade — ${llmResult.reason}`);
-                        continue;
-                    }
+                // Longest DTE first — most theta runway gets the BP before the cap bites
+                const ladder = [...expMap.entries()].sort((a, b) => b[1].dte - a[1].dte);
+                console.log(`[guvidPaperSubmit] ${ticker}: ${ladder.length} expirations in ${GUVIDEL_BOOK_DTE_MIN}-${GUVIDEL_BOOK_DTE_MAX} DTE window, IVR ${ivr.toFixed(1)}`);
 
-                    // Re-size against the paper account: max loss ≤ 5% of equity
-                    const t = llmResult.trade;
-                    const perContractMaxLoss = (t.wings - t.credit) * 100;
-                    const qty = sizePaperQuantity(perContractMaxLoss, equity);
-                    if (qty === 0) {
-                        console.log(`[guvidPaperSubmit] ${ticker} ${expDate}: 1 contract max loss $${perContractMaxLoss.toFixed(0)} exceeds 5% of equity — skipping`);
-                        continue;
-                    }
-                    const sized: typeof t = {
-                        ...t,
-                        quantity: qty,
-                        maxProfit: Math.round(t.credit * 100 * qty * 100) / 100,
-                        maxLoss: Math.round(perContractMaxLoss * qty * 100) / 100,
-                        // No approval workflow in paper mode — deviations are
-                        // logged in the rationale, never left 'pending' forever.
-                        requiresApproval: false,
-                        approvalStatus: undefined,
-                    };
-
-                    // BPE gate again including the new trade
-                    const projectedBpe = bpePct + (sized.maxLoss / equity) * 100;
-                    if (projectedBpe >= bpeCap) {
-                        console.log(`[guvidPaperSubmit] ${ticker} ${expDate}: trade would push BPE to ${projectedBpe.toFixed(1)}% >= ${bpeCap}% — skipping`);
-                        continue;
-                    }
-
-                    const shortPut = sized.legs.find((l) => l.type === 'STO' && l.optionType === 'P')?.strike ?? 0;
-                    const shortCall = sized.legs.find((l) => l.type === 'STO' && l.optionType === 'C')?.strike ?? 0;
-                    const tradeId = `${date}_${ticker}_${expDate}_${shortPut}p${shortCall}c`;
-
-                    const paperTrade: Omit<IPaperTrade, 'id'> = {
-                        ...sized,
-                        openDate: date,
-                        dteAtEntry: exp['days-to-expiration'],
-                        marketContext,
-                        currentClose: null,
-                        unrealizedPl: null,
-                        profitPct: null,
-                        correct: null,
-                    };
-                    // .create() (not .set()) — a retry the same day must never
-                    // overwrite an already-booked trade back to 'open'.
+                for (const [expDate, { dte, strikes }] of ladder) {
                     try {
-                        await tradesCollection(uid).doc(tradeId).create(paperTrade);
-                    } catch (e) {
-                        if ((e as { code?: number }).code === 6 /* ALREADY_EXISTS */) {
-                            console.log(`[guvidPaperSubmit] ${tradeId} already exists — skipping duplicate`);
+                        if (rungsOpenedToday >= GUVIDEL_MAX_RUNGS_PER_DAY) {
+                            console.warn(`[guvidPaperSubmit] runaway breaker: ${GUVIDEL_MAX_RUNGS_PER_DAY} rungs today — stopping`);
+                            return finish();
+                        }
+                        if (openedToday.has(`${ticker}|${expDate}`)) continue;
+
+                        // Quote the strikes within ±10% of spot
+                        const lo = spot * 0.90;
+                        const hi = spot * 1.10;
+                        const banded = strikes.filter((s) => s.strike >= lo && s.strike <= hi);
+                        const symbols = banded.flatMap((s) => [s.callSymbol, s.putSymbol]);
+                        if (symbols.length === 0) continue;
+                        const quotes = await getMarketDataSnapshot(token, symbols);
+                        if (quotes.size === 0) {
+                            console.warn(`[guvidPaperSubmit] ${ticker} ${expDate}: no quotes — skipping (no invented prices)`);
                             continue;
                         }
-                        throw e;
-                    }
-                    console.log(`[guvidPaperSubmit] OPENED ${tradeId}: ${sized.strategy} x${qty}, credit $${sized.credit}, maxLoss $${sized.maxLoss} (${llmResult.reason})`);
 
-                    // Track the new exposure for subsequent gates + overlap checks
-                    bpePct = projectedBpe;
-                    tradesOpenedToday++;
-                    paperPositions.push(...paperTradesAsPositions([{ ...paperTrade, id: tradeId } as IPaperTrade]));
+                        // Skew → structure (wider wing on the expensive side)
+                        const skew = measureSkew25(banded, quotes);
+                        const structure = decideStructure(skew?.skewPct ?? null);
+
+                        const { rung, reason } = buildRung(banded, quotes, spot, dte, structure);
+                        if (!rung) {
+                            console.log(`[guvidPaperSubmit] ${ticker} ${expDate}: no rung — ${reason}`);
+                            continue;
+                        }
+
+                        // BP cap: Σ rung BP ≤ 80% of NAV
+                        const rungBp = rung.width * 100 * GUVIDEL_BOOK_QTY;
+                        if (bpUsed + rungBp > bpCap) {
+                            console.log(`[guvidPaperSubmit] ${ticker} ${expDate}: BP cap — used $${bpUsed.toFixed(0)} + $${rungBp} > $${bpCap.toFixed(0)}; ladder stops here`);
+                            break; // shorter rungs won't fit either (same width scale) — next ticker
+                        }
+
+                        const qty = GUVIDEL_BOOK_QTY;
+                        const maxProfit = Math.round(rung.credit * 100 * qty * 100) / 100;
+                        const maxLoss = Math.round((rung.width - rung.credit) * 100 * qty * 100) / 100;
+                        const marketContext: IMarketContext = {
+                            underlyingPrice: spot,
+                            vix: vix ?? 0,
+                            ivRank: ivr,
+                            technicals: null,
+                        };
+
+                        const skewNote = skew
+                            ? `skew25 ${skew.skewPts >= 0 ? '+' : ''}${skew.skewPts.toFixed(1)}pts (${skew.classification}, ${skew.skewPct >= 0 ? '+' : ''}${skew.skewPct.toFixed(0)}%)`
+                            : 'skew25 n/a';
+                        const rationale =
+                            `Guvidelul ladder rung: IVR ${ivr.toFixed(1)} ≥ ${GUVIDEL_MIN_IVR}; ${skewNote} → ${structure} wings $${rung.putWing}/$${rung.callWing}; ` +
+                            `shorts ${rung.shortPut}p (Δ${rung.deltaShortPut.toFixed(2)}) / ${rung.shortCall}c (Δ${rung.deltaShortCall.toFixed(2)}); ` +
+                            `credit $${rung.credit.toFixed(2)} after slippage; POP ${rung.pop.toFixed(1)}%; managed EV $${rung.ev.toFixed(2)}. ` +
+                            `Management: TP ${GUVIDEL_BOOK_TARGET_PCT}% of credit / stop ${GUVIDEL_BOOK_STOP_MULT}× credit / exit ${GUVIDEL_BOOK_EXIT_DTE} DTE (priority STOP → target → DTE).`;
+
+                        const tradeId = `${date}_${ticker}_${expDate}_${rung.shortPut}p${rung.shortCall}c`;
+                        const paperTrade: Omit<IPaperTrade, 'id'> = {
+                            ticker,
+                            strategy: `IC ${rung.longPut}/${rung.shortPut}p ${rung.shortCall}/${rung.longCall}c`,
+                            expiration: expDate,
+                            legs: [
+                                { type: 'BTO', optionType: 'P', strike: rung.longPut },
+                                { type: 'STO', optionType: 'P', strike: rung.shortPut },
+                                { type: 'STO', optionType: 'C', strike: rung.shortCall },
+                                { type: 'BTO', optionType: 'C', strike: rung.longCall },
+                            ],
+                            credit: rung.credit,
+                            quantity: qty,
+                            wings: rung.width,
+                            maxProfit,
+                            maxLoss,
+                            pop: rung.pop,
+                            ev: rung.ev,
+                            alpha: maxLoss > 0 ? Math.round((rung.ev / maxLoss) * 10000) / 100 : 0,
+                            rr: Math.round((rung.width / rung.credit) * 100) / 100,
+                            delta: Math.round(rung.deltaShortPut * 100) / 100,
+                            theta: rung.thetaTotal,
+                            exitPl: null, exitDate: null, closedBy: null, status: 'open',
+                            rationale,
+                            confidenceScore: 50,
+                            rulesApplied: [
+                                `guvidel_min_ivr_${GUVIDEL_MIN_IVR}`,
+                                'guvidel_2sigma_gate',
+                                `structure_${structure.toLowerCase().replace('-', '_')}`,
+                                `wing_target_10_tol_50pct`,
+                                'two_sided_quotes_all_legs',
+                            ],
+                            experimentVariant: null,
+                            openDate: date,
+                            dteAtEntry: dte,
+                            marketContext,
+                            currentClose: null,
+                            unrealizedPl: null,
+                            profitPct: null,
+                            correct: null,
+                            structure,
+                            putWing: rung.putWing,
+                            callWing: rung.callWing,
+                            skewPts: skew?.skewPts ?? null,
+                            skewPct: skew?.skewPct ?? null,
+                        };
+
+                        // .create() — a retry the same day must never overwrite a booked trade
+                        try {
+                            await tradesCollection(uid).doc(tradeId).create(paperTrade);
+                        } catch (e) {
+                            if ((e as { code?: number }).code === 6 /* ALREADY_EXISTS */) {
+                                console.log(`[guvidPaperSubmit] ${tradeId} already exists — skipping duplicate`);
+                                continue;
+                            }
+                            throw e;
+                        }
+                        bpUsed += rungBp;
+                        rungsOpenedToday++;
+                        openedToday.add(`${ticker}|${expDate}`);
+                        console.log(`[guvidPaperSubmit] RUNG ${tradeId}: ${paperTrade.strategy} x${qty} (${structure}), credit $${rung.credit}, width $${rung.width}, POP ${rung.pop}%`);
                     } catch (e) {
-                        // One bad expiration must not discard the remaining ones
-                        console.error(`[guvidPaperSubmit] Error on ${ticker} ${exp['expiration-date']}:`, e);
+                        // One bad expiration must not discard the remaining rungs
+                        console.error(`[guvidPaperSubmit] Error on ${ticker} ${expDate}:`, e);
                     }
                 }
             } catch (e) {
@@ -341,9 +298,13 @@ export const guvidPaperSubmit = onSchedule(
             }
         }
 
-        if (tradesOpenedToday > 0) {
-            await updatePaperAccount(uid, { tradesOpened: account.tradesOpened + tradesOpenedToday });
+        await finish();
+
+        async function finish(): Promise<void> {
+            if (rungsOpenedToday > 0) {
+                await updatePaperAccount(uid, { tradesOpened: account!.tradesOpened + rungsOpenedToday });
+            }
+            console.log(`[guvidPaperSubmit] Complete — ${rungsOpenedToday} rungs opened`);
         }
-        console.log(`[guvidPaperSubmit] Complete — ${tradesOpenedToday} paper trades opened`);
     },
 );

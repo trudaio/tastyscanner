@@ -214,6 +214,15 @@ const EmptyBox = styled.div`
     line-height: 1.6;
 `;
 
+const CLOSED_BY_LABEL: Record<string, string> = {
+    target: '50% target',
+    stop: '2× stop',
+    dte: '14 DTE exit',
+    stress: 'stress rule',
+    kill: 'kill switch',
+    user: 'manual',
+};
+
 /* ─── trade card ─────────────────────────────────────────── */
 const PaperTradeCard: React.FC<{ trade: IPaperTrade }> = ({ trade }) => {
     const [showRationale, setShowRationale] = useState(false);
@@ -234,12 +243,22 @@ const PaperTradeCard: React.FC<{ trade: IPaperTrade }> = ({ trade }) => {
             <StrategyText>{trade.strategy} ×{trade.quantity}</StrategyText>
             <TradeRow><span>Opened</span><span>{trade.openDate} ({trade.dteAtEntry} DTE)</span></TradeRow>
             <TradeRow><span>Expiration</span><span>{trade.expiration}{!isClosed ? ` (${dte} DTE)` : ''}</span></TradeRow>
+            {trade.structure && (
+                <TradeRow>
+                    <span>Structure</span>
+                    <span>
+                        {trade.structure}
+                        {trade.putWing !== undefined && trade.callWing !== undefined ? ` ($${trade.putWing}p/$${trade.callWing}c)` : ''}
+                        {trade.skewPts !== undefined && trade.skewPts !== null ? ` • skew ${trade.skewPts >= 0 ? '+' : ''}${trade.skewPts.toFixed(1)}pts` : ''}
+                    </span>
+                </TradeRow>
+            )}
             <TradeRow><span>Credit</span><span>${trade.credit.toFixed(2)}</span></TradeRow>
             <TradeRow><span>Max profit / loss</span><span>{fmt(trade.maxProfit)} / {fmt(trade.maxLoss)}</span></TradeRow>
             <TradeRow><span>POP</span><span>{trade.pop.toFixed(1)}%</span></TradeRow>
             {isClosed ? (
                 <>
-                    <TradeRow><span>Closed</span><span>{trade.exitDate} ({trade.closedBy === 'target' ? '75% target' : `${trade.closedBy}`})</span></TradeRow>
+                    <TradeRow><span>Closed</span><span>{trade.exitDate} ({CLOSED_BY_LABEL[trade.closedBy ?? 'user'] ?? trade.closedBy})</span></TradeRow>
                     <TradeRow><span>P&L</span><PlValue $v={trade.exitPl}>{trade.exitPl !== null ? fmt(trade.exitPl) : '—'}</PlValue></TradeRow>
                 </>
             ) : (
@@ -295,9 +314,10 @@ export const GuvidPaperComponent: React.FC = () => {
             <HeroCard>
                 <HeroTitle>Guvidul — Paper Trading</HeroTitle>
                 <HeroSubtitle>
-                    Autonomous AI trader • Virtual account seeded with your net liq
+                    Guvidelul ladder book • Virtual account seeded with your net liq
                     {account ? ` (${fmt(startingCapital)} on ${account.createdAt.split('T')[0]})` : ''} •
-                    Picks daily at 10:30 AM ET • Managed at 4:05 PM ET
+                    Rungs daily 10:30 ET (IVR≥30, 2σ gate, 21-45 DTE) •
+                    Managed 15:00 ET: stop 2× → TP 50% → exit 14 DTE
                 </HeroSubtitle>
 
                 <StatsGrid>
@@ -373,9 +393,10 @@ export const GuvidPaperComponent: React.FC = () => {
                 <SectionTitle>🟡 Open positions ({openTrades.length})</SectionTitle>
                 {openTrades.length === 0 ? (
                     <EmptyBox>
-                        No open paper positions.<br />
-                        Guvidul scans SPX + QQQ every weekday at 10:30 AM ET and opens trades
-                        when VIX ≥ 18 and a setup passes his rules.
+                        No open rungs.<br />
+                        Guvidelul lays ladder rungs on QQQ + SPX every weekday at 10:30 AM ET —
+                        one IC per expiration in the 21-45 DTE window — when IVR ≥ 30 and
+                        the tape is calm (no &gt;2σ moves).
                     </EmptyBox>
                 ) : (
                     <TradesGrid>

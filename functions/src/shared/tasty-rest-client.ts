@@ -117,8 +117,7 @@ export async function getAccounts(token: string): Promise<Array<{ 'account-numbe
     return resp.data.items.map((i) => i.account);
 }
 
-/** Fetch options chain nested format (expirations with strikes) */
-export async function getOptionsChain(token: string, underlying: string): Promise<{
+export interface INestedChain {
     items: Array<{
         expirations: Array<{
             'expiration-date': string;
@@ -132,9 +131,16 @@ export async function getOptionsChain(token: string, underlying: string): Promis
             }>;
         }>;
     }>;
-}> {
+}
+
+/** Fetch options chain nested format (expirations with strikes).
+ *  NOTE: the API wraps the payload in { data: ... } — the previous version
+ *  returned the raw body typed as if unwrapped, so `.items` was always
+ *  undefined at runtime and callers logged "No chain" forever. */
+export async function getOptionsChain(token: string, underlying: string): Promise<INestedChain> {
     const encodedUnderlying = encodeURIComponent(underlying);
-    return request('GET', `/option-chains/${encodedUnderlying}/nested`, token);
+    const resp = await request<{ data: INestedChain }>('GET', `/option-chains/${encodedUnderlying}/nested`, token);
+    return resp.data;
 }
 
 /** Get market data snapshot for option symbols. Batch of up to 100 symbols per call. */
@@ -164,6 +170,7 @@ export async function getMarketDataSnapshot(token: string, symbols: string[]): P
                         theta?: string;
                         gamma?: string;
                         vega?: string;
+                        volatility?: string;
                         'implied-volatility-index'?: string;
                     }>;
                 };
@@ -180,7 +187,9 @@ export async function getMarketDataSnapshot(token: string, symbols: string[]): P
                     theta: item.theta ? parseFloat(item.theta) : null,
                     gamma: item.gamma ? parseFloat(item.gamma) : null,
                     vega: item.vega ? parseFloat(item.vega) : null,
-                    iv: item['implied-volatility-index'] ? parseFloat(item['implied-volatility-index']) : null,
+                    // per-option IV lives in `volatility` on /market-data/by-type
+                    iv: item.volatility ? parseFloat(item.volatility)
+                        : item['implied-volatility-index'] ? parseFloat(item['implied-volatility-index']) : null,
                 });
             }
         } catch (e) {

@@ -46,7 +46,7 @@ export interface ICompetitionTradeV2 {
     theta: number;
     exitPl: number | null;       // dollars, filled on close
     exitDate: string | null;     // ISO date
-    closedBy: 'target' | 'dte' | 'user' | null;
+    closedBy: 'target' | 'dte' | 'stop' | 'stress' | 'kill' | 'user' | null;
     status: 'open' | 'closed';
 }
 

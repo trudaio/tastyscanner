@@ -329,43 +329,11 @@ const ValueEditorComponent: React.FC<ValueEditorComponentProps> = observer((prop
 })
 
 
-const GuvidButton = styled.button<{ $saved?: boolean }>`
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 14px;
-    background: rgba(155, 89, 255, 0.15);
-    border: 1.5px solid #9b59ff;
-    border-radius: 6px;
-    color: #9b59ff;
-    font-size: 12px;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.2s;
-
-    &:hover {
-        background: rgba(155, 89, 255, 0.3);
-        box-shadow: 0 0 12px rgba(155, 89, 255, 0.3);
-    }
-
-    &:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-    }
-
-    img {
-        width: 20px;
-        height: 20px;
-        border-radius: 50%;
-    }
-`
-
 interface SendOrderDialogComponentProps {
     isOpen: boolean;
     strategy: IOptionsStrategyViewModel;
     symbol: string;
     onDitDismiss: () => void;
-    onGuvidChallenge?: (strategy: IOptionsStrategyViewModel) => Promise<void>;
 }
 
 export const SendOrderDialogComponent: React.FC<SendOrderDialogComponentProps> = observer((props) => {
@@ -374,25 +342,6 @@ export const SendOrderDialogComponent: React.FC<SendOrderDialogComponentProps> =
     const [quantity, setQuantity] = React.useState<number>(1);
     const [orderType] = React.useState<OrderType>("Limit");
     const [timeInForce] = React.useState<TimeInForce>("Day");
-    const [guvidSaving, setGuvidSaving] = React.useState(false);
-    const [guvidSaved, setGuvidSaved] = React.useState(false);
-
-    const handleAddToGuvid = async () => {
-        if (!props.onGuvidChallenge || guvidSaving || guvidSaved) return;
-        setGuvidSaving(true);
-        try {
-            await props.onGuvidChallenge(props.strategy);
-            setGuvidSaved(true);
-            alert('Pozitia ta a fost salvata! Guvidul AI va raspunde la urmatoarea rulare 10:30 AM ET. Verifica pagina Guvidul vs User.');
-        } catch (e: any) {
-            console.error('[AddToGuvid] Error:', e);
-            alert('Eroare la salvare: ' + (e?.message || 'Unknown error'));
-        } finally {
-            setGuvidSaving(false);
-        }
-    };
-
-
     const onLockerClick = (isLocked: boolean) => {
         if(isLocked) {
             setLimitPrice(null);
@@ -549,12 +498,6 @@ export const SendOrderDialogComponent: React.FC<SendOrderDialogComponentProps> =
 
                 </BodyBox>
                 <FooterBox>
-                    {props.onGuvidChallenge && (
-                        <GuvidButton onClick={handleAddToGuvid} disabled={guvidSaving || guvidSaved}>
-                            <img src="/logo-guvidul.svg" alt="Guvid" />
-                            {guvidSaved ? 'Added' : 'Add to Guvid'}
-                        </GuvidButton>
-                    )}
                     <IonButton color={"success"} onClick={sendOrder}>
                         Send order
                     </IonButton>

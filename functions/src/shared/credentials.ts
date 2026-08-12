@@ -21,25 +21,6 @@ interface IBrokerAccountDoc {
     };
 }
 
-/**
- * Returns Catalin's UID iff he has an active TastyTrade broker account.
- * Replaces the previous "first active user" scan that abused other users' tokens.
- */
-export async function findActiveTastyUser(): Promise<string | null> {
-    const subs = await admin.firestore()
-        .collection('users').doc(CATALIN_UID)
-        .collection('brokerAccounts')
-        .where('isActive', '==', true)
-        .get();
-    for (const s of subs.docs) {
-        const d = s.data();
-        if (d['brokerType']?.toLowerCase() === 'tastytrade' && d['credentials']?.refreshToken) {
-            return CATALIN_UID;
-        }
-    }
-    return null;
-}
-
 /** Find active TastyTrade account for a given uid and return its credentials */
 export async function getCredentialsForUser(uid: string): Promise<TastyCredentials | null> {
     const snap = await admin.firestore()

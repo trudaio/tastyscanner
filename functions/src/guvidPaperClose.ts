@@ -8,7 +8,7 @@
 //     a mid-run failure can't desynchronize the account from the trade docs
 
 import { onSchedule } from 'firebase-functions/v2/scheduler';
-import { getCredentialsForUser, findActiveTastyUser, CATALIN_UID as CATALIN_UID_CONST } from './shared/credentials';
+import { getCredentialsForUser, CATALIN_UID } from './shared/credentials';
 import { getAccessToken, getOptionsChain, getMarketDataSnapshot } from './shared/tasty-rest-client';
 import type { IOptionQuote } from './shared/tasty-rest-client';
 import {
@@ -16,8 +16,6 @@ import {
     type IEquityPoint, type IPaperAccount, type IPaperTrade,
 } from './shared/paper-account';
 import * as admin from 'firebase-admin';
-
-const CATALIN_UID = CATALIN_UID_CONST;
 
 const PROFIT_TARGET_PCT = 75;   // close at 75% of max profit
 const MANAGE_DTE = 21;          // close at 21 DTE (Catalin's rule)
@@ -73,8 +71,8 @@ export const guvidPaperClose = onSchedule(
         memory: '1GiB',
     },
     async () => {
-        const uid = CATALIN_UID || await findActiveTastyUser();
-        if (!uid) { console.error('[guvidPaperClose] No active TastyTrade user found'); return; }
+        // Hardcoded owner uid — see shared/credentials.ts
+        const uid = CATALIN_UID;
 
         const accountRef = admin.firestore()
             .collection('users').doc(uid).collection('guvidPaper').doc('account');

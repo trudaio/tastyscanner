@@ -706,13 +706,6 @@ app.post('/polygon/option-bars-batch', async (req: express.Request, res: express
 
 export const api = onRequest({ invoker: 'public', secrets: [polygonApiKey, ibkrConsumerSecret] }, app);
 
-// ─── Guvid vs User Competition v2 — RETIRED ──────────────────────────────────
-// Replaced by Guvid Paper Trading below. Files kept for reference.
-// export { aiDailySubmit } from './aiDailySubmit';
-// export { closeCheck } from './closeCheck';
-// export { aiLearning } from './aiLearning';
-// export { weeklyReflect } from './weeklyReflect';
-
 // ─── Guvid Paper Trading ─────────────────────────────────────────────────────
 // Autonomous AI paper trader: virtual account seeded with the user's real net
 // liq at first run. Daily picks at 10:30 AM ET, management at 4:05 PM ET.

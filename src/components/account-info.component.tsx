@@ -5,6 +5,7 @@ import { useServices } from '../hooks/use-services.hook';
 import { BrokerType } from '../services/broker-provider/broker-provider.interface';
 import type { IBrokerAccount } from '../services/credentials/broker-credentials.service.interface';
 import type { ITastyTradeCredentials } from '../services/broker-provider/broker-provider.interface';
+import { formatUsd as fmt } from '../utils/format';
 
 /* ─── containers ─────────────────────────────────────────── */
 const AccountInfoContainer = styled.div`
@@ -254,8 +255,6 @@ export const AccountInfoComponent: React.FC = observer(() => {
         return () => { cancelled = true; };
     }, [services.tradingDashboard, hasBalances]);
 
-    const fmt = (v: number) =>
-        new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(v);
 
     if (!account) return null;
 

@@ -7,7 +7,7 @@ import * as admin from 'firebase-admin';
 import Anthropic from '@anthropic-ai/sdk';
 
 export type ModelName = 'claude-opus-4-6' | 'claude-sonnet-4-6';
-export type AgentRole = 'picker' | 'risk' | 'learner' | 'manual';
+export type AgentRole = 'picker' | 'risk' | 'manual';
 
 // Pricing per model (Apr 2026): per 1M tokens
 const MODEL_PRICING: Record<ModelName, { input: number; output: number }> = {
@@ -19,8 +19,8 @@ const DEFAULT_DAILY_BUDGET_USD = 10.0;
 
 export interface LlmCallContext {
     uid: string;
-    function: 'aiDailySubmit' | 'weeklyReflect' | 'guvidPaperSubmit' | 'manual';
-    purpose: 'round_pick' | 'risk_review' | 'weekly_memo' | 'test';
+    function: 'guvidPaperSubmit' | 'manual';
+    purpose: 'round_pick' | 'risk_review' | 'test';
     agent: AgentRole;
     metadata?: Record<string, unknown>;
 }

@@ -146,7 +146,8 @@ export async function getMarketDataSnapshot(token: string, symbols: string[]): P
         batches.push(symbols.slice(i, i + 100));
     }
 
-    for (const batch of batches) {
+    // Batches are independent — fetch them concurrently
+    await Promise.all(batches.map(async (batch) => {
         const params = new URLSearchParams();
         for (const s of batch) {
             params.append('equity-option', s);
@@ -185,7 +186,7 @@ export async function getMarketDataSnapshot(token: string, symbols: string[]): P
         } catch (e) {
             console.error('[tasty] snapshot batch failed:', e);
         }
-    }
+    }));
     return result;
 }
 
@@ -218,6 +219,27 @@ export async function getUnderlyingPrice(token: string, symbol: string): Promise
         console.error('[tasty] underlying price failed:', e);
         return null;
     }
+}
+
+/** IV Rank (0-100) per symbol from /market-metrics. Missing symbols are omitted. */
+export async function getIvRanks(token: string, symbols: string[]): Promise<Map<string, number>> {
+    const result = new Map<string, number>();
+    try {
+        const resp = await request<{
+            data: { items: Array<{ symbol: string; 'implied-volatility-index-rank'?: string; 'tos-implied-volatility-index-rank'?: string }> };
+        }>('GET', `/market-metrics?symbols=${encodeURIComponent(symbols.join(','))}`, token);
+        for (const item of resp.data.items) {
+            const raw = item['implied-volatility-index-rank'] ?? item['tos-implied-volatility-index-rank'];
+            if (raw === undefined) continue;
+            const rank = parseFloat(raw);
+            if (!Number.isFinite(rank)) continue;
+            // API returns 0-1; expose as 0-100
+            result.set(item.symbol, Math.round(rank * 1000) / 10);
+        }
+    } catch (e) {
+        console.error('[tasty] getIvRanks failed:', e);
+    }
+    return result;
 }
 
 /** Get current open positions for an account */

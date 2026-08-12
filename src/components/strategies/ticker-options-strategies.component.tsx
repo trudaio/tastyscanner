@@ -21,10 +21,6 @@ import {CallCreditSpreadsComponent} from "./credit-spreads/call-credit-spreads.c
 import {RawLocalStorageKeys} from "../../services/storage/raw-local-storage/raw-local-storage-keys";
 import {IOptionsStrategyViewModel} from "../../models/options-strategy.view-model.interface";
 import {SendOrderDialogComponent} from "./send-order-dialog.component";
-import {saveCompetitionRound, buildTradeFromStrategy, getCompetitionRounds, IMarketContext} from "../../services/competition/competition.service";
-import { submitUserPick, type ICompetitionTradeV2 } from "../../services/competition/competition-v2.service";
-import {auth} from "../../firebase";
-import {computeCompositeScore, STRATEGY_PROFILES} from "../../models/strategy-profile";
 
 const SpinnerContainerBox = styled.div`
     display: flex;
@@ -152,89 +148,6 @@ export const TickerOptionsStrategiesComponent: React.FC = observer(() => {
         setCurrentStrategy(strategy);
     }
 
-    const onGuvidChallenge = async (userStrategy: IOptionsStrategyViewModel) => {
-        if (!ticker) throw new Error('No ticker selected');
-        const userEmail = auth.currentUser?.email || 'unknown';
-
-        const userExpDate = userStrategy.legs[0]?.option.expirationDate;
-        if (!userExpDate) throw new Error('No expiration date on strategy legs');
-
-        console.log('[GuvidChallenge] User picked:', userStrategy.strategyName, '| Exp:', userExpDate);
-
-        // Capture market context (used by aiDailySubmit when it picks tomorrow)
-        services.marketDataProvider.subscribe(['$VIX.X']);
-        const underlyingPrice = ticker.currentPrice || 0;
-        const ivRank = ticker.ivRank || 0;
-        let vix = 0;
-        const vixQuote = services.marketDataProvider.getSymbolQuote('$VIX.X');
-        if (vixQuote) {
-            vix = Math.round(((vixQuote.bidPrice + vixQuote.askPrice) / 2) * 100) / 100;
-        }
-        const marketContext = { underlyingPrice, vix, ivRank };
-
-        // Build V2 user trade format
-        const legs = userStrategy.legs.map(l => ({
-            type: l.legType,
-            optionType: l.option.optionType,
-            strike: l.option.strikePrice,
-        }));
-        const btoPut = legs.find(l => l.type === 'BTO' && l.optionType === 'P');
-        const stoPut = legs.find(l => l.type === 'STO' && l.optionType === 'P');
-        const stoCall = legs.find(l => l.type === 'STO' && l.optionType === 'C');
-        const btoCall = legs.find(l => l.type === 'BTO' && l.optionType === 'C');
-        const strategyStr = `IC ${btoPut?.strike}/${stoPut?.strike}p ${stoCall?.strike}/${btoCall?.strike}c`;
-        const wings = (stoPut?.strike ?? 0) - (btoPut?.strike ?? 0);
-        const credit = userStrategy.credit;
-        const quantity = 1;
-        const maxProfit = credit * 100 * quantity;
-        const maxLoss = (wings - credit) * 100 * quantity;
-
-        const userTrade: ICompetitionTradeV2 = {
-            ticker: ticker.symbol,
-            strategy: strategyStr,
-            expiration: userExpDate,
-            legs,
-            credit: Math.round(credit * 100) / 100,
-            quantity,
-            wings,
-            maxProfit,
-            maxLoss,
-            pop: userStrategy.pop,
-            ev: Math.round(userStrategy.expectedValue * 100) / 100,
-            alpha: Math.round(userStrategy.alpha * 100) / 100,
-            rr: userStrategy.riskRewardRatio,
-            delta: userStrategy.delta,
-            theta: userStrategy.theta,
-            exitPl: null, exitDate: null, closedBy: null,
-            status: 'open',
-        };
-
-        const today = new Date().toISOString().split('T')[0];
-
-        // Submit to V2 collection — aiDailySubmit will attach AI's pick at next 10:30 AM ET
-        const roundId = await submitUserPick({
-            roundNumber: 0,
-            date: today,
-            userEmail,
-            expirationDate: userExpDate,
-            ticker: ticker.symbol as 'SPX' | 'QQQ',
-            userTrade,
-            winner: 'Pending',
-            ghost: false,
-            marketContext,
-            userScore: null,
-            aiScore: null,
-            winnerDecidedAt: null,
-        });
-
-        // Suppress unused-var warning for legacy v1 helpers (still imported for backward compat)
-        void saveCompetitionRound; void buildTradeFromStrategy; void getCompetitionRounds;
-        void STRATEGY_PROFILES; void computeCompositeScore;
-        const _legacyTypeRef: IMarketContext | null = null; void _legacyTypeRef;
-
-        console.log('[GuvidChallenge] V2 round saved:', roundId, '— AI will respond at next 10:30 AM ET');
-    }
-
     return (
         <IonTabs className={STRATEGIES_TABS_CSS_CLASS}>
 
@@ -287,11 +200,7 @@ export const TickerOptionsStrategiesComponent: React.FC = observer(() => {
             {currentStrategy && <SendOrderDialogComponent isOpen={Boolean(currentStrategy)}
                                                           strategy={currentStrategy}
                                                           symbol={ticker.symbol}
-                                                          onDitDismiss={() => setCurrentStrategy(null)}
-                                                          /* "Add to Guvid" retired with the competition — rounds written
-                                                             to competitionV2 had no consumer left (aiDailySubmit/closeCheck
-                                                             are gone), so the button was a silent dead end. */
-                                                          />}
+                                                          onDitDismiss={() => setCurrentStrategy(null)}/>}
         </IonTabs>
 
     )

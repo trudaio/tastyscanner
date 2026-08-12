@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { observer } from 'mobx-react-lite';
 import styled from 'styled-components';
 import { useServices } from '../hooks/use-services.hook';
+import { formatUsd as fmt } from '../utils/format';
 
 /* Dark card matching the sidebar account-info styling so the Kelly box
  * keeps its look now that it lives on the (light) My Account page. */
@@ -57,7 +58,7 @@ const KellyBullet = styled.div`
     }
 `;
 
-interface KellyData {
+interface IKellyData {
     kelly: number;
     halfKelly: number;
     winRate: number;
@@ -70,7 +71,7 @@ interface KellyData {
 export const FractionalKellyCardComponent: React.FC = observer(() => {
     const services = useServices();
     const account = services.brokerAccount.currentAccount;
-    const [kellyData, setKellyData] = useState<KellyData | null>(null);
+    const [kellyData, setKellyData] = useState<IKellyData | null>(null);
 
     useEffect(() => {
         let cancelled = false;
@@ -98,9 +99,6 @@ export const FractionalKellyCardComponent: React.FC = observer(() => {
     }, [services.ironCondorAnalytics, account]);
 
     if (!kellyData) return null;
-
-    const fmt = (v: number) =>
-        new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(v);
 
     return (
         <KellyCardContainer>

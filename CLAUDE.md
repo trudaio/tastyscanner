@@ -71,10 +71,22 @@ Reconstructed from transaction history: `startNetLiq = currentNetLiq - totalCumu
 ## Trading Rules (enforced in code)
 
 - **Position sizing**: Max 5% of net liquidity per trade
-- **Profit target**: Close at 75% of max profit
-- **DTE management**: Close or roll at 21 DTE
+- **Profit target**: Close at 50% of credit (production rule since 2026-07-06; was 75%)
+- **Stop**: Close when buy-back debit ≥ 2× credit (realized loss ≈ 1× premium)
+- **DTE management**: Close or roll at 21 DTE (Guvidelul ladder book exits at 14 DTE — it enters rungs across 21-45 DTE)
+- **Exit priority when several trigger at once**: STOP → profit target → DTE
 - **IV preference**: IV Rank > 30 preferred, > 50 ideal
 - **Portfolio balance**: Target delta-neutral, positive theta
+
+### Guvid Paper Trading (Guvidelul ladder book)
+
+Cloud Functions `guvidPaperSubmit` (10:30 ET) + `guvidPaperClose` (15:00 ET) run the
+Guvidelul ladder from the Guvidul-Skew bot spec (`functions/src/shared/guvidel-rules.ts`):
+QQQ + SPX, gates IVR ≥ 30 + 2σ move gate, one IC rung per expiration in 21-45 DTE
+(shorts 0.18Δ put / 0.16Δ call, longs ~$10 out, skew-tilted wings beyond ±30% relative
+25Δ skew), 1 contract per rung, Σ rung BP ≤ 80% NAV, max 20 rungs/day. Exits: stop 2× →
+TP 50% → 14 DTE; stress rules at −10%/−20% NAV; kill switch at 20% drawdown.
+Pricing integrity: two-sided quotes on all legs, slippage haircut, no invented prices.
 
 ## Development Rules
 

@@ -15,6 +15,8 @@ export interface IPaperAccount {
     tradesClosed: number;
     createdAt: string;           // ISO
     lastUpdated: string;         // ISO
+    /** Highest end-of-day equity seen — the kill switch measures drawdown from here. */
+    peakEquity?: number;
 }
 
 /** A Guvid paper trade — same shape as the AI competition trade plus
@@ -32,6 +34,12 @@ export interface IPaperTrade extends IAiCompetitionTrade {
     profitPct: number | null;
     /** Set on close: was this a correct (profitable) position? */
     correct: boolean | null;
+    /** Guvidelul ladder fields (skew-driven structure). */
+    structure?: 'SYMMETRIC' | 'PUT-TILTED' | 'CALL-TILTED';
+    putWing?: number;            // actual strike distance, put side
+    callWing?: number;           // actual strike distance, call side
+    skewPts?: number | null;     // 25Δ (putIV − callIV) × 100 at entry
+    skewPct?: number | null;     // relative 25Δ skew % at entry
 }
 
 export interface IEquityPoint {

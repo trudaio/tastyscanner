@@ -10,6 +10,7 @@ export interface IPaperAccount {
     tradesClosed: number;
     createdAt: string;
     lastUpdated: string;
+    peakEquity?: number;
 }
 
 export interface IPaperTradeLeg {
@@ -37,7 +38,7 @@ export interface IPaperTrade {
     theta: number;
     exitPl: number | null;
     exitDate: string | null;
-    closedBy: 'target' | 'dte' | 'user' | null;
+    closedBy: 'target' | 'dte' | 'stop' | 'stress' | 'kill' | 'user' | null;
     status: 'open' | 'closed';
     rationale: string;
     confidenceScore: number;
@@ -50,6 +51,12 @@ export interface IPaperTrade {
     unrealizedPl: number | null;
     profitPct: number | null;
     correct: boolean | null;
+    /** Guvidelul ladder fields (skew-driven structure). */
+    structure?: 'SYMMETRIC' | 'PUT-TILTED' | 'CALL-TILTED';
+    putWing?: number;
+    callWing?: number;
+    skewPts?: number | null;
+    skewPct?: number | null;
 }
 
 export interface IEquityPoint {

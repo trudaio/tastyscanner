@@ -51,14 +51,17 @@ export const tradesCollection = (uid: string) =>
 export const equityCollection = (uid: string) =>
     admin.firestore().collection('users').doc(uid).collection('guvidPaperEquity');
 
-/** Load the paper account; seed it with the real net liq on first run. */
-export async function getOrCreatePaperAccount(uid: string, realNetLiq: number): Promise<IPaperAccount> {
+/** Load the paper account; seed it with the real net liq on first run.
+ *  Returns null when the account doesn't exist yet AND no valid net liq is
+ *  available to seed it (fail-safe: never seed the account with a bad number). */
+export async function getOrCreatePaperAccount(uid: string, realNetLiq: number): Promise<IPaperAccount | null> {
     const ref = ACCOUNT_PATH(uid);
     const doc = await ref.get();
     if (doc.exists) return doc.data() as IPaperAccount;
 
     if (realNetLiq <= 0) {
-        throw new Error(`Cannot seed paper account with net liq ${realNetLiq}`);
+        console.error(`[paper-account] Cannot seed paper account with net liq ${realNetLiq} — skipping run`);
+        return null;
     }
     const account: IPaperAccount = {
         startingCapital: Math.round(realNetLiq * 100) / 100,
@@ -105,4 +108,15 @@ export function sizePaperQuantity(perContractMaxLoss: number, equity: number): n
     const budget = equity * 0.05;
     const qty = Math.floor(budget / perContractMaxLoss);
     return Math.max(0, Math.min(qty, 10)); // hard cap 10 contracts per trade
+}
+
+/**
+ * Calendar days until expiration, measured in the America/New_York trading
+ * calendar. DST-safe — a hardcoded UTC offset ("-05:00") makes DTE drift by
+ * one day for the ~8 months the US runs on EDT.
+ */
+export function daysUntilExpiration(expirationDate: string): number {
+    // en-CA locale formats as YYYY-MM-DD; both sides parse as UTC midnight
+    const todayEt = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    return Math.round((Date.parse(expirationDate) - Date.parse(todayEt)) / 86_400_000);
 }

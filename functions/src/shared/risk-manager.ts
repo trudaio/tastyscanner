@@ -31,6 +31,33 @@ Output STRICT JSON only:
 
 Be conservative but not paranoid. Most Picker choices should be APPROVE. Reject only when there's a clear violation or material risk.`;
 
+const PAPER_RISK_SYSTEM_PROMPT = `You are the Risk Manager for Guvidul, an AI Iron Condor PAPER trader. You review the Picker agent's selection before it is booked into Guvidul's virtual account (seeded from Catalin's real capital; no real money moves).
+
+Your role is the SECOND OPINION. You're skeptical by default. You catch:
+- Setups that violate Catalin's hard rules (VIX gate, BPE caps, slippage assumptions)
+- Picks that look good in isolation but are risky in current conditions
+- Over-confidence (Picker claims 90% certainty but evidence is thin)
+- Position sizing errors relative to the PAPER account's equity (max loss per trade ≤ 5% of equity)
+- Concurrency issues (overlapping with existing open PAPER positions)
+
+NOTE: the "Account BPE used" figure you receive is the PAPER account's utilization (sum of open max losses ÷ paper equity), not the real account.
+
+You can:
+- **APPROVE**: Picker's choice stands. Default if no concerns.
+- **MODIFY**: Suggest a smaller size or different strikes.
+- **REJECT**: Strong veto. No paper trade is opened for this expiration today.
+
+Output STRICT JSON only:
+{
+  "verdict": "APPROVE" | "MODIFY" | "REJECT",
+  "reason": "1-3 sentences explaining your assessment",
+  "concerns": ["concern1", "concern2"],
+  "confidence": 30-95,
+  "modifySuggestion": null OR { "quantity": N, "alternativeIndex": 1-5 }
+}
+
+Be conservative but not paranoid. Most Picker choices should be APPROVE. Reject only when there's a clear violation or material risk.`;
+
 interface RiskResponse {
     verdict: 'APPROVE' | 'MODIFY' | 'REJECT';
     reason: string;
@@ -56,7 +83,9 @@ export async function reviewPick(
     aiState: IAiState,
     bpePercentage: number | undefined,
     candidates: IcCandidate[],
+    mode: 'competition' | 'paper' = 'competition',
 ): Promise<RiskReviewResult> {
+    const isPaper = mode === 'paper';
     const candidatesStr = candidates.slice(0, 5).map((c, i) =>
         `${i + 1}. ${c.putBuy}/${c.putSell}p ${c.callSell}/${c.callBuy}c | wings $${c.wings} | qty ${c.quantity} | credit $${c.credit.toFixed(2)} | POP ${c.pop.toFixed(1)}% | RR ${c.rr.toFixed(2)}:1`
     ).join('\n');
@@ -76,7 +105,7 @@ Deviates from rules: ${pickerTrade.deviatesFromRules ? `YES — ${pickerTrade.de
 - Underlying: $${marketContext.underlyingPrice.toFixed(2)}
 - VIX: ${marketContext.vix.toFixed(2)}
 - IV Rank: ${marketContext.ivRank.toFixed(0)}
-${bpePercentage !== undefined ? `- Account BPE used: ${bpePercentage.toFixed(1)}% of net liq` : ''}
+${bpePercentage !== undefined ? `- Account BPE used: ${bpePercentage.toFixed(1)}% of ${isPaper ? 'paper account equity' : 'net liq'}` : ''}
 
 # Catalin's Hard Rules
 - VIX gate: VIX must be ≥ 18 (currently ${marketContext.vix.toFixed(1)})
@@ -97,9 +126,9 @@ ${candidatesStr}
 Review Picker's choice. Output JSON verdict.`;
 
     try {
-        const result = await callClaude(RISK_SYSTEM_PROMPT, userPrompt, {
+        const result = await callClaude(isPaper ? PAPER_RISK_SYSTEM_PROMPT : RISK_SYSTEM_PROMPT, userPrompt, {
             uid,
-            function: 'aiDailySubmit',
+            function: isPaper ? 'guvidPaperSubmit' : 'aiDailySubmit',
             purpose: 'risk_review',
             agent: 'risk',
             metadata: { pickerStrategy: pickerTrade.strategy, pickerConfidence: pickerTrade.confidenceScore },

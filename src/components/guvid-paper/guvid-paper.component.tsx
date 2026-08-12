@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import {
     AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
@@ -18,6 +18,11 @@ const PageBox = styled.div`
     gap: 16px;
     background: #0d1117;
     min-height: 100%;
+
+    @media (max-width: 480px) {
+        padding: 10px;
+        gap: 12px;
+    }
 `;
 
 const HeroCard = styled.div`
@@ -78,6 +83,10 @@ const SectionCard = styled.div`
     border: 1px solid #222b45;
     border-radius: 12px;
     padding: 16px;
+
+    @media (max-width: 480px) {
+        padding: 10px;
+    }
 `;
 
 const SectionTitle = styled.h2`
@@ -93,7 +102,9 @@ const SectionTitle = styled.h2`
 /* ─── trade cards ────────────────────────────────────────── */
 const TradesGrid = styled.div`
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    /* min(100%, 300px): the track can never exceed the container, so cards
+       don't overflow on narrow phones (375px minus paddings < 320px) */
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
     gap: 12px;
 `;
 
@@ -207,7 +218,10 @@ const fmt = (v: number) =>
 const PaperTradeCard: React.FC<{ trade: IPaperTrade }> = ({ trade }) => {
     const [showRationale, setShowRationale] = useState(false);
     const isClosed = trade.status === 'closed';
-    const dte = Math.max(0, Math.ceil((new Date(trade.expiration + 'T16:00:00-05:00').getTime() - Date.now()) / 86_400_000));
+    // Calendar days in the ET trading calendar — DST-safe (a hardcoded -05:00
+    // offset drifts one day during EDT and disagrees with the backend's rule)
+    const todayEt = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    const dte = Math.max(0, Math.round((Date.parse(trade.expiration) - Date.parse(todayEt)) / 86_400_000));
 
     return (
         <TradeCard $closed={isClosed} $correct={trade.correct}>
@@ -261,10 +275,14 @@ export const GuvidPaperComponent: React.FC = () => {
         return () => subs.forEach(u => u());
     }, []);
 
-    const openTrades = trades.filter(t => t.status === 'open');
-    const closedTrades = trades.filter(t => t.status === 'closed');
-
-    const unrealized = openTrades.reduce((s, t) => s + (t.unrealizedPl ?? 0), 0);
+    const { openTrades, closedTrades, unrealized } = useMemo(() => {
+        const open = trades.filter(t => t.status === 'open');
+        return {
+            openTrades: open,
+            closedTrades: trades.filter(t => t.status === 'closed'),
+            unrealized: open.reduce((s, t) => s + (t.unrealizedPl ?? 0), 0),
+        };
+    }, [trades]);
     const startingCapital = account?.startingCapital ?? 0;
     const realizedPl = account?.realizedPl ?? 0;
     const currentEquity = startingCapital + realizedPl + unrealized;

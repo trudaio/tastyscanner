@@ -159,9 +159,16 @@ const Menu: React.FC = observer(() => {
           <IonLabel>Guvid History</IonLabel>
         </IonItem>
 
+        {/* Guvidul vs User — retired, replaced by Guvid Paper Trading
         <IonItem button routerLink="/guvid-vs-user" routerDirection="forward" lines="none">
           <IonIcon slot="start" icon={trophyOutline} />
           <IonLabel>Guvidul vs User</IonLabel>
+        </IonItem>
+        */}
+
+        <IonItem button routerLink="/guvid-paper" routerDirection="forward" lines="none">
+          <IonIcon slot="start" icon={trophyOutline} />
+          <IonLabel>Guvid Paper Trading</IonLabel>
         </IonItem>
 
         <IonItem button routerLink="/guvid-visualization" routerDirection="forward" lines="none">

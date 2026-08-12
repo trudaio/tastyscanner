@@ -47,6 +47,7 @@ export async function pickWithLlm(
     weeklyMemo: string | null,
     catalinSubmission: ICompetitionTradeV2 | null,
     bpePercentage?: number,
+    systemPromptOverride?: string,
 ): Promise<LlmPickResult> {
     if (candidatesResult.topN.length === 0) {
         return { trade: null, reason: candidatesResult.reason, fallback: 'no_candidates' };
@@ -73,7 +74,7 @@ export async function pickWithLlm(
 
     let claudeResponse: { text: string; auditLogId: string };
     try {
-        const result = await callClaude(PICK_SYSTEM_PROMPT, userPrompt, {
+        const result = await callClaude(systemPromptOverride ?? PICK_SYSTEM_PROMPT, userPrompt, {
             uid,
             function: 'aiDailySubmit',
             purpose: 'round_pick',

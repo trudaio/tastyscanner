@@ -206,10 +206,12 @@ const Menu: React.FC = observer(() => {
           <IonLabel>Skew Scanner</IonLabel>
         </IonItem>
 
+        {/* Company Evaluation — hidden from menu, still accessible via URL (/company-evaluation)
         <IonItem button routerLink="/company-evaluation" routerDirection="forward" lines="none">
           <IonIcon slot="start" icon={businessOutline} />
           <IonLabel>Company Evaluation</IonLabel>
         </IonItem>
+        */}
 
         {/* IC Savior — temporarily hidden, will revisit later
         <IonItem button routerLink="/iron-condor-savior" routerDirection="forward" lines="none">

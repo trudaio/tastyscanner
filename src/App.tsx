@@ -19,7 +19,9 @@ import { OnboardingPage } from './pages/OnboardingPage';
 import { LandingPage } from './pages/LandingPage';
 import { RiskExposerPage } from './pages/RiskExposerPage';
 import { IbkrCallbackPage } from './pages/IbkrCallbackPage';
-import { GuviduVsCatalinPage } from './pages/GuviduVsCatalinPage';
+// Guvidul vs You — retired, replaced by Guvid Paper Trading
+// import { GuviduVsCatalinPage } from './pages/GuviduVsCatalinPage';
+import { GuvidPaperPage } from './pages/GuvidPaperPage';
 import { GuviduVisualizationPage } from './pages/GuviduVisualizationPage';
 import { SkewAnalysisPage } from './pages/SkewAnalysisPage';
 import { SkewScannerPage } from './pages/SkewScannerPage';
@@ -147,8 +149,13 @@ const App: React.FC = () => {
                                 <Route path="/risk-exposer" exact={true}>
                                     <RiskExposerPage />
                                 </Route>
+                                {/* Guvidul vs You — retired, replaced by paper trading
                                 <Route path="/guvid-vs-user" exact={true}>
                                     <GuviduVsCatalinPage />
+                                </Route>
+                                */}
+                                <Route path="/guvid-paper" exact={true}>
+                                    <GuvidPaperPage />
                                 </Route>
                                 <Route path="/guvid-visualization" exact={true}>
                                     <GuviduVisualizationPage />

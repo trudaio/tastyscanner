@@ -11,20 +11,23 @@ const TODAY = new Date().toISOString().slice(0, 10);
 const YESTERDAY = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
 const TASTY_BASE = 'https://api.tastyworks.com';
 
+const CATALIN_UID = '7OcSxAkz8eahmOJD2ddu4ElBPsf2'; // macovei17@gmail.com
+
 // ── TastyTrade ─────────────────────────────────────────────────────────────────
 async function getTastyCredentials() {
-  const usersSnap = await db.collection('users').limit(10).get();
-  for (const userDoc of usersSnap.docs) {
-    const bSnap = await db.collection('users').doc(userDoc.id)
-      .collection('brokerAccounts').where('isActive', '==', true).limit(1).get();
-    if (bSnap.empty) continue;
-    const d = bSnap.docs[0].data();
+  const snap = await db
+    .collection('users').doc(CATALIN_UID)
+    .collection('brokerAccounts')
+    .where('isActive', '==', true)
+    .get();
+  for (const doc of snap.docs) {
+    const d = doc.data();
     if (d.credentials?.clientSecret && d.credentials?.refreshToken) {
-      console.log(`Credentials: user=${userDoc.id} (${d.label})`);
+      console.log(`Credentials: user=${CATALIN_UID} (${d.label ?? doc.id})`);
       return { clientSecret: d.credentials.clientSecret, refreshToken: d.credentials.refreshToken };
     }
   }
-  throw new Error('No active TastyTrade credentials found');
+  throw new Error(`No active TastyTrade brokerAccount under users/${CATALIN_UID}/brokerAccounts`);
 }
 
 async function getOAuthToken({ clientSecret, refreshToken }) {
@@ -57,6 +60,8 @@ async function getDxLinkToken(token) {
 }
 
 // ── WebSocket streaming ────────────────────────────────────────────────────────
+// DxLink v1: client must initiate with SETUP, then server sends SETUP back,
+// then client AUTH, then CHANNEL_REQUEST.
 async function streamQuotes(dxToken, wsUrl, symbols, waitMs = 12000) {
   return new Promise((resolve) => {
     const data = {};
@@ -70,47 +75,68 @@ async function streamQuotes(dxToken, wsUrl, symbols, waitMs = 12000) {
 
     ws.on('error', () => { clearTimeout(timer); resolve(data); });
     ws.on('close', () => { clearTimeout(timer); resolve(data); });
+
+    // Client initiates the handshake
+    ws.on('open', () => {
+      ws.send(JSON.stringify({
+        type: 'SETUP', channel: 0, version: '0.1',
+        minVersion: '0.1', keepaliveTimeout: 60, acceptKeepaliveTimeout: 60,
+      }));
+    });
+
     ws.on('message', (raw) => {
       let msg;
       try { msg = JSON.parse(raw.toString()); } catch { return; }
       if (msg.type === 'SETUP') {
+        // Server SETUP response — now authenticate
         ws.send(JSON.stringify({ type: 'AUTH', channel: 0, token: dxToken }));
       } else if (msg.type === 'AUTH_STATE' && msg.state === 'AUTHORIZED' && !authDone) {
         authDone = true;
         ws.send(JSON.stringify({ type: 'CHANNEL_REQUEST', channel: ch, service: 'FEED', parameters: { contract: 'AUTO' } }));
       } else if (msg.type === 'CHANNEL_OPENED' && msg.channel === ch && !channelReady) {
         channelReady = true;
-        ws.send(JSON.stringify({
-          type: 'FEED_SETUP', channel: ch,
-          acceptAggregationPeriod: 0, acceptDataFormat: 'FULL',
-          acceptEventFields: {
-            Quote: ['eventSymbol', 'bidPrice', 'askPrice'],
-            Greeks: ['eventSymbol', 'delta', 'theta', 'gamma', 'vega'],
-          },
-        }));
-        const subs = symbols.flatMap(s => [{ type: 'Quote', symbol: s }, { type: 'Greeks', symbol: s }]);
-        ws.send(JSON.stringify({ type: 'FEED_SUBSCRIPTION', channel: ch, add: subs }));
+        const optSubs = symbols
+          .filter(s => s !== 'VIX')
+          .flatMap(s => [{ type: 'Quote', symbol: s }, { type: 'Greeks', symbol: s }]);
+        const vixSubs = symbols.includes('VIX')
+          ? [{ type: 'Trade', symbol: 'VIX' }, { type: 'Summary', symbol: 'VIX' }]
+          : [];
+        ws.send(JSON.stringify({ type: 'FEED_SUBSCRIPTION', channel: ch, reset: true, add: [...optSubs, ...vixSubs] }));
         setTimeout(finish, waitMs);
       } else if (msg.type === 'FEED_DATA' && msg.channel === ch) {
         const events = msg.data;
         if (!Array.isArray(events)) return;
-        let i = 0;
-        while (i < events.length) {
-          const evType = events[i++];
-          if (typeof evType !== 'string') continue;
-          const ev = events[i++];
+        for (const ev of events) {
           if (!ev || typeof ev !== 'object') continue;
           const sym = ev.eventSymbol;
-          if (!sym || !data[sym]) continue;
-          if (evType === 'Quote' && ev.bidPrice != null && ev.askPrice != null) {
-            data[sym].bid = ev.bidPrice;
-            data[sym].ask = ev.askPrice;
-            data[sym].mid = (ev.bidPrice + ev.askPrice) / 2;
-          } else if (evType === 'Greeks') {
-            data[sym].delta = ev.delta;
-            data[sym].theta = ev.theta;
-            data[sym].gamma = ev.gamma;
-            data[sym].vega = ev.vega;
+          if (!sym) continue;
+          // Accept any subscribed symbol (init data[sym] lazily for VIX)
+          if (!data[sym]) data[sym] = {};
+          if (ev.eventType === 'Quote' || ev.bidPrice != null) {
+            const bid = parseFloat(ev.bidPrice);
+            const ask = parseFloat(ev.askPrice);
+            if (!isNaN(bid) && !isNaN(ask) && bid > 0) {
+              data[sym].bid = bid;
+              data[sym].ask = ask;
+              data[sym].mid = (bid + ask) / 2;
+            }
+          }
+          if (ev.eventType === 'Greeks' || ev.delta != null) {
+            if (ev.delta != null)  data[sym].delta = ev.delta;
+            if (ev.theta != null)  data[sym].theta = ev.theta;
+            if (ev.gamma != null)  data[sym].gamma = ev.gamma;
+            if (ev.vega != null)   data[sym].vega  = ev.vega;
+          }
+          // VIX: use Trade price or Summary dayHighPrice mid
+          if (sym === 'VIX') {
+            if (ev.eventType === 'Trade' && ev.price != null && !isNaN(parseFloat(ev.price))) {
+              data[sym].mid = parseFloat(ev.price);
+            } else if (ev.eventType === 'Summary') {
+              const hi = parseFloat(ev.dayHighPrice);
+              const lo = parseFloat(ev.dayLowPrice);
+              if (!isNaN(hi) && !isNaN(lo) && hi > 0) data[sym].mid = data[sym].mid ?? (hi + lo) / 2;
+              if (!isNaN(parseFloat(ev.prevDayClosePrice))) data[sym].prevClose = parseFloat(ev.prevDayClosePrice);
+            }
           }
         }
       }
@@ -137,26 +163,46 @@ async function main() {
 
   const { dxToken, wsUrl } = await getDxLinkToken(token);
 
-  // VIX
-  console.log('Fetching VIX (12s)...');
-  const vixData = await streamQuotes(dxToken, wsUrl, ['$VIX.X'], 12000);
-  const vix = vixData['$VIX.X']?.mid ?? null;
-  console.log(`VIX: ${vix != null ? vix.toFixed(2) : 'N/A'}`);
+  // Morning comparison (Firestore reads in parallel)
+  const [dailySnap, ydaySnap, posSnap] = await Promise.all([
+    db.doc(`guvid-agent/daily-${TODAY}`).get(),
+    db.doc(`guvid-agent/daily-${YESTERDAY}`).get(),
+    db.collection('guvid-agent').where('status', '==', 'open').get(),
+  ]);
 
-  // Morning comparison
   const dailyRef = db.doc(`guvid-agent/daily-${TODAY}`);
-  const dailySnap = await dailyRef.get();
   const morningNetLiq = dailySnap.exists ? (dailySnap.data().morningNetLiq ?? null) : null;
   const netLiqChange = morningNetLiq != null ? netLiq - morningNetLiq : null;
 
-  // Day-over-day
-  const ydaySnap = await db.doc(`guvid-agent/daily-${YESTERDAY}`).get();
   const ydayNetLiq = ydaySnap.exists
     ? (ydaySnap.data().afternoonNetLiq ?? ydaySnap.data().morningNetLiq ?? null)
     : null;
   const netLiqChangeDayOverDay = ydayNetLiq != null ? netLiq - ydayNetLiq : null;
 
   const ts = new Date().toISOString();
+  const openPositions = posSnap.docs.map(d => ({ id: d.id, ref: d.ref, ...d.data() }));
+  console.log(`\nOpen positions found: ${openPositions.length}`);
+
+  const profitTargetsReached = [];
+  const under21DTEList = [];
+  const checks = [];
+
+  // Collect all dxFeed symbols + VIX for single streaming call
+  const allSymbols = ['VIX'];
+  for (const pos of openPositions) {
+    const ic = pos.ic;
+    if (!ic) continue;
+    for (const sym of [ic.stoPut?.symbol, ic.btoPut?.symbol, ic.stoCall?.symbol, ic.btoCall?.symbol]) {
+      if (sym && !allSymbols.includes(sym)) allSymbols.push(sym);
+    }
+  }
+
+  console.log(`Streaming ${allSymbols.length - 1} option symbols + VIX (12s wait)...`);
+  const streamed = await streamQuotes(dxToken, wsUrl, allSymbols, 12000);
+
+  const vix = streamed['VIX']?.mid ?? null;
+  console.log(`VIX: ${vix != null ? vix.toFixed(2) : 'N/A'}`);
+
   await dailyRef.set({
     afternoonNetLiq: netLiq,
     afternoonVix: vix,
@@ -166,33 +212,7 @@ async function main() {
   }, { merge: true });
   console.log('Daily doc updated.');
 
-  // Open positions
-  const posSnap = await db.collection('guvid-agent').where('status', '==', 'open').get();
-  const openPositions = posSnap.docs.map(d => ({ id: d.id, ref: d.ref, ...d.data() }));
-  console.log(`\nOpen positions found: ${openPositions.length}`);
-
-  const profitTargetsReached = [];
-  const under21DTEList = [];
-  const checks = [];
-
-  if (openPositions.length > 0) {
-    // Collect all dxFeed symbols from ic object
-    const allSymbols = [];
-    for (const pos of openPositions) {
-      const ic = pos.ic;
-      if (!ic) continue;
-      for (const sym of [ic.stoPut?.symbol, ic.btoPut?.symbol, ic.stoCall?.symbol, ic.btoCall?.symbol]) {
-        if (sym && !allSymbols.includes(sym)) allSymbols.push(sym);
-      }
-    }
-    // Also add VIX
-    if (!allSymbols.includes('$VIX.X')) allSymbols.push('$VIX.X');
-
-    console.log(`Streaming ${allSymbols.length - 1} option symbols (12s wait)...`);
-    const { dxToken: dxToken2, wsUrl: wsUrl2 } = await getDxLinkToken(token);
-    const streamed = await streamQuotes(dxToken2, wsUrl2, allSymbols, 12000);
-
-    for (const pos of openPositions) {
+  for (const pos of openPositions) {
       const ic = pos.ic;
       if (!ic) continue;
 
@@ -271,7 +291,6 @@ async function main() {
       const flags = [profitTargetReached && `TARGET (${targetLabel})`, isUnder21DTE && 'UNDER 21 DTE', isExpired && 'EXPIRED'].filter(Boolean).join(' | ');
       console.log(`  ${ticker} (${pos.id.slice(0, 8)}) | credit=$${(credit * 100).toFixed(0)} | P&L=${plStr} | ${dteStr}${flags ? ' | ' + flags : ''}`);
     }
-  }
 
   // Scan summary
   await db.doc(`guvid-agent/scans-${TODAY}`).set({
